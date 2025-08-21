@@ -16,7 +16,7 @@ export class WebhookServer extends EventEmitter {
     constructor(config = {}) {
         super();
         this.config = {
-            port: config.port || 0, // 0 means random available port
+            port: config.port || 45123, // Fixed port for webhook server
             host: config.host || 'localhost',
             path: config.path || '/mcp-webhook',
             authToken: config.authToken || crypto.randomBytes(32).toString('hex'),

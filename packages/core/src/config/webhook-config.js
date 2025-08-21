@@ -5,7 +5,7 @@
  */
 export const DEFAULT_WEBHOOK_CONFIG = {
     enabled: false,
-    port: 0, // Random available port
+    port: 45123, // Fixed port for webhook server
     host: 'localhost',
     authMode: 'both',
     autoStart: true,
