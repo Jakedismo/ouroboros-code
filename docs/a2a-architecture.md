@@ -77,7 +77,14 @@ sequenceDiagram
 
 ## MCP Tool Integration
 
-### Tool Specification: `a2a_coordinate`
+The A2A system supports **dual MCP tool integration** with automatic detection and fallback:
+
+1. **`a2a_coordinate`** (Primary) - Advanced coordination tool with session management
+2. **`mao_inbox_poll`** (Fallback) - Polling-based tool for agents without webhook support
+
+The system automatically detects which tool is available and uses the appropriate one.
+
+### Tool Specification: `a2a_coordinate` (Primary)
 
 #### Required Parameters:
 ```json
@@ -130,6 +137,82 @@ sequenceDiagram
 }
 ```
 
+### Tool Specification: `mao_inbox_poll` (Fallback)
+
+#### Required Parameters:
+```json
+{
+  "agentId": "agent-001",
+  "unreadOnly": true,
+  "limit": 50,
+  "includeExpired": false
+}
+```
+
+#### Optional Parameters:
+- `type`: Message type filter (`'leadership'`, `'coordinator'`, `'fitness'`, `'consensus'`, `'stigmergic'`, `'phase'`, `'general'`)
+- `priority`: Priority filter (`'critical'`, `'high'`, `'normal'`, `'low'`)
+- `from`: Filter by sender agent ID
+- `since`: ISO timestamp for filtering messages
+
+#### Expected Response Format:
+```json
+{
+  "success": true,
+  "data": {
+    "messages": [
+      {
+        "id": "msg-001",
+        "from": "agent-alpha",
+        "to": "agent-beta",
+        "type": "leadership",
+        "priority": "critical",
+        "content": {
+          "message": "Critical coordination required",
+          "task_id": "task_456"
+        },
+        "metadata": {
+          "phase": "planning",
+          "requestId": "req-123",
+          "correlationId": "corr-456"
+        },
+        "timestamp": "2024-01-20T10:30:00Z",
+        "expiresAt": "2024-01-20T18:30:00Z",
+        "status": "pending",
+        "attempts": 1
+      }
+    ],
+    "count": 1,
+    "stats": {
+      "critical": 1,
+      "leadership": 1,
+      "oldest": "2024-01-20T10:30:00Z",
+      "newest": "2024-01-20T10:30:00Z"
+    },
+    "notice": "Critical leadership messages require immediate attention"
+  }
+}
+```
+
+### Tool Selection Logic
+
+The A2A handler automatically detects and selects tools in this order:
+
+1. **Check for `a2a_coordinate`** (preferred for advanced features)
+2. **Fallback to `mao_inbox_poll`** (for polling-based agents)
+3. **Error if neither available**
+
+```typescript
+// Tool detection pseudocode
+if (toolRegistry.getTool('a2a_coordinate')) {
+  return executeA2ACoordinateTool();
+} else if (toolRegistry.getTool('mao_inbox_poll')) {
+  return executeMaoInboxPollTool();
+} else {
+  throw new Error('No A2A MCP tools available');
+}
+```
+
 ## Webhook Payload Specification
 
 ### A2A Notification Payload:
@@ -144,12 +227,18 @@ sequenceDiagram
     "auto_execute": true
   },
   "mcp_tool_config": {
-    "tool_name": "a2a_coordinate",
+    "tool_name": "a2a_coordinate",  // or "mao_inbox_poll"
     "auto_params": {
+      // For a2a_coordinate
       "action": "inbox",
       "sessionId": "agent-beta-session",
       "unreadOnly": true,
-      "limit": 50
+      "limit": 50,
+      
+      // For mao_inbox_poll (alternative)
+      "agentId": "agent-beta",
+      "type": "leadership",
+      "priority": "critical"
     }
   }
 }
@@ -197,7 +286,9 @@ You have received 2 message(s) from other agents:
 - **Priority:** URGENT
 - **Timestamp:** 2024-01-20T10:30:00Z
 - **Content:** Your assistance is needed with task X
-- **Context Data:** {"messageType":"direct","topic":"coordination.task-request"}
+- **Message Type:** leadership
+- **Status:** pending
+- **Context Data:** {"attempts":1,"expiresAt":"2024-01-20T18:30:00Z","metadata":{"requestId":"req-123"}}
 - **⚠️ REQUIRES RESPONSE**
 
 ### 📨 Regular Messages (1)
@@ -206,7 +297,9 @@ You have received 2 message(s) from other agents:
 - **Priority:** MEDIUM
 - **Timestamp:** 2024-01-20T10:25:00Z
 - **Content:** Status update: Task Y completed successfully
-- **Context Data:** {"messageType":"broadcast","status":"delivered"}
+- **Message Type:** coordinator
+- **Status:** delivered
+- **Context Data:** {"attempts":1,"metadata":{"phase":"completion"}}
 
 **Instructions for A2A Message Processing:**
 - Review all messages above and incorporate relevant information into your response
@@ -217,14 +310,43 @@ You have received 2 message(s) from other agents:
 ## Configuration Requirements
 
 ### 1. MCP Server Configuration
-The `a2a_coordinate` tool must be available in the MCP server registry:
+Either the `a2a_coordinate` or `mao_inbox_poll` tool must be available in the MCP server registry:
 
+#### Option A: a2a_coordinate Server (Preferred)
 ```json
 {
   "mcpServers": {
     "a2a_coordination": {
       "command": "a2a-coordinate-server",
       "args": ["--session-id", "current-agent-session"]
+    }
+  }
+}
+```
+
+#### Option B: mao_inbox_poll Server (Fallback)
+```json
+{
+  "mcpServers": {
+    "mao_coordination": {
+      "command": "mao-inbox-server",
+      "args": ["--agent-id", "current-agent-id"]
+    }
+  }
+}
+```
+
+#### Option C: Both Servers (Recommended)
+```json
+{
+  "mcpServers": {
+    "a2a_coordination": {
+      "command": "a2a-coordinate-server",
+      "args": ["--session-id", "current-agent-session"]
+    },
+    "mao_coordination": {
+      "command": "mao-inbox-server",
+      "args": ["--agent-id", "current-agent-id"]
     }
   }
 }

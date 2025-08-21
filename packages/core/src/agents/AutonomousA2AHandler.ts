@@ -23,17 +23,26 @@ export interface A2AWebhookPayload extends WebhookPayload {
     auto_execute: boolean;
   };
   mcp_tool_config?: {
-    tool_name: 'a2a_coordinate';
+    tool_name: 'a2a_coordinate' | 'mao_inbox_poll';
     auto_params: {
-      action: 'inbox';
+      // a2a_coordinate parameters
+      action?: 'inbox';
       sessionId?: string;
+      sortBy?: 'receivedAt' | 'priority' | 'status' | 'from';
+      sortOrder?: 'asc' | 'desc';
+      
+      // mao_inbox_poll parameters  
+      agentId?: string;
+      type?: 'leadership' | 'coordinator' | 'fitness' | 'consensus' | 'stigmergic' | 'phase' | 'general';
+      includeExpired?: boolean;
+      
+      // Common parameters
       limit?: number;
       unreadOnly?: boolean;
       since?: string;
       topic?: string;
       from?: string;
-      sortBy?: 'receivedAt' | 'priority' | 'status' | 'from';
-      sortOrder?: 'asc' | 'desc';
+      priority?: 'critical' | 'high' | 'normal' | 'low';
     };
   };
 }
@@ -217,10 +226,54 @@ export class AutonomousA2AHandler extends EventEmitter {
   }
 
   /**
-   * Auto-execute MCP tool to read A2A messages.
+   * Auto-execute MCP tool to read A2A messages with dynamic tool detection.
    */
   private async autoExecuteA2ATool(payload: A2AWebhookPayload): Promise<AgentMessage[]> {
-    // Use the a2a_coordinate tool with inbox action
+    // Detect available A2A tools and select the appropriate one
+    const availableTool = await this.detectAvailableA2ATool();
+    
+    if (!availableTool) {
+      throw new Error('No A2A MCP tools available (a2a_coordinate or mao_inbox_poll)');
+    }
+
+    this.log('Using A2A tool', { tool: availableTool });
+
+    if (availableTool === 'a2a_coordinate') {
+      return this.executeA2ACoordinateTool(payload);
+    } else if (availableTool === 'mao_inbox_poll') {
+      return this.executeMaoInboxPollTool(payload);
+    }
+
+    throw new Error(`Unknown A2A tool: ${availableTool}`);
+  }
+
+  /**
+   * Detect which A2A MCP tools are available in the tool registry.
+   */
+  private async detectAvailableA2ATool(): Promise<'a2a_coordinate' | 'mao_inbox_poll' | null> {
+    const toolRegistry = this.config.getToolRegistry();
+    
+    // Check for a2a_coordinate tool first (preferred)
+    if (toolRegistry.getTool('a2a_coordinate')) {
+      return 'a2a_coordinate';
+    }
+    
+    // Fallback to mao_inbox_poll tool
+    if (toolRegistry.getTool('mao_inbox_poll')) {
+      return 'mao_inbox_poll';
+    }
+    
+    this.log('No A2A tools detected in registry', {
+      availableTools: toolRegistry.getAllTools().map(t => t.name)
+    });
+    
+    return null;
+  }
+
+  /**
+   * Execute a2a_coordinate tool with inbox action.
+   */
+  private async executeA2ACoordinateTool(payload: A2AWebhookPayload): Promise<AgentMessage[]> {
     const toolParams = {
       action: 'inbox',
       sessionId: this.agentContext.sessionId,
@@ -234,24 +287,53 @@ export class AutonomousA2AHandler extends EventEmitter {
     
     this.log('Executing a2a_coordinate tool for A2A inbox', { params: toolParams });
 
-    // Create tool call request info for a2a_coordinate tool
     const toolCallRequest: ToolCallRequestInfo = {
-      callId: `a2a-${Date.now()}`,
+      callId: `a2a-coord-${Date.now()}`,
       name: 'a2a_coordinate',
       args: toolParams,
       isClientInitiated: false,
       prompt_id: 'autonomous-a2a'
     };
 
-    // Execute the a2a_coordinate MCP tool
     const toolResponse = await executeToolCall(this.config, toolCallRequest);
     
     if (toolResponse.error) {
-      throw new Error(`A2A tool execution failed: ${toolResponse.error.message}`);
+      throw new Error(`a2a_coordinate tool execution failed: ${toolResponse.error.message}`);
     }
     
-    // Parse the tool result into agent messages
     return this.parseA2ACoordinateResponse(toolResponse.responseParts);
+  }
+
+  /**
+   * Execute mao_inbox_poll tool for agents without webhook support.
+   */
+  private async executeMaoInboxPollTool(payload: A2AWebhookPayload): Promise<AgentMessage[]> {
+    const toolParams = {
+      agentId: this.agentContext.agentId,
+      unreadOnly: true,
+      limit: 50,
+      includeExpired: false,
+      // Include any additional parameters from payload if provided
+      ...(payload.mcp_tool_config?.auto_params || {})
+    };
+    
+    this.log('Executing mao_inbox_poll tool for A2A inbox', { params: toolParams });
+
+    const toolCallRequest: ToolCallRequestInfo = {
+      callId: `mao-poll-${Date.now()}`,
+      name: 'mao_inbox_poll',
+      args: toolParams,
+      isClientInitiated: false,
+      prompt_id: 'autonomous-a2a'
+    };
+
+    const toolResponse = await executeToolCall(this.config, toolCallRequest);
+    
+    if (toolResponse.error) {
+      throw new Error(`mao_inbox_poll tool execution failed: ${toolResponse.error.message}`);
+    }
+    
+    return this.parseMaoInboxPollResponse(toolResponse.responseParts);
   }
 
   /**
@@ -342,6 +424,116 @@ export class AutonomousA2AHandler extends EventEmitter {
       case 'low': return 'low';
       default: return 'medium';
     }
+  }
+
+  /**
+   * Parse mao_inbox_poll tool response into AgentMessage objects.
+   */
+  private parseMaoInboxPollResponse(toolResult: unknown): AgentMessage[] {
+    try {
+      // Handle different possible result formats
+      let responseData: any;
+      
+      if (typeof toolResult === 'string') {
+        responseData = JSON.parse(toolResult);
+      } else if (typeof toolResult === 'object' && toolResult !== null) {
+        responseData = toolResult;
+      } else {
+        throw new Error('Invalid tool result format');
+      }
+
+      // Check if response follows the mao_inbox_poll schema
+      if (!responseData.success) {
+        this.log('mao_inbox_poll tool returned error', { 
+          error: responseData.error,
+          response: responseData 
+        });
+        return [];
+      }
+
+      const messages = responseData.data?.messages || [];
+      
+      this.log('Parsed mao_inbox_poll response', { 
+        messageCount: messages.length,
+        stats: responseData.data?.stats,
+        notice: responseData.data?.notice
+      });
+
+      // Convert mao_inbox_poll message format to AgentMessage format
+      return messages.map((msg: any): AgentMessage => ({
+        id: msg.id,
+        sender_agent: msg.from,
+        content: this.extractMaoMessageContent(msg.content),
+        timestamp: msg.timestamp,
+        priority: this.mapMaoPriority(msg.priority),
+        context_data: {
+          type: msg.type,
+          status: msg.status,
+          attempts: msg.attempts,
+          expiresAt: msg.expiresAt,
+          metadata: msg.metadata
+        },
+        requires_response: this.determineMaoResponseRequirement(msg)
+      }));
+    } catch (error) {
+      this.log('Failed to parse mao_inbox_poll response', { 
+        error: getErrorMessage(error), 
+        toolResult 
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Extract readable content from mao message content.
+   */
+  private extractMaoMessageContent(content: any): string {
+    if (typeof content === 'string') {
+      return content;
+    } else if (typeof content === 'object' && content !== null) {
+      // If content has a 'message' or 'content' field, use that
+      if (content.message) return content.message;
+      if (content.content) return content.content;
+      if (content.text) return content.text;
+      if (content.description) return content.description;
+      // Otherwise, stringify the object
+      return JSON.stringify(content);
+    } else {
+      return String(content || '');
+    }
+  }
+
+  /**
+   * Map mao_inbox_poll priority to AgentMessage priority.
+   */
+  private mapMaoPriority(priority: string): 'low' | 'medium' | 'high' | 'urgent' {
+    switch (priority) {
+      case 'critical': return 'urgent';
+      case 'high': return 'high';
+      case 'normal': return 'medium';
+      case 'low': return 'low';
+      default: return 'medium';
+    }
+  }
+
+  /**
+   * Determine if mao message requires a response based on type, priority and metadata.
+   */
+  private determineMaoResponseRequirement(msg: any): boolean {
+    // Leadership and coordinator messages typically require response
+    if (msg.type === 'leadership' || msg.type === 'coordinator') return true;
+    
+    // Critical priority always requires response
+    if (msg.priority === 'critical') return true;
+    
+    // Check metadata for explicit response requirement
+    if (msg.metadata?.requiresResponse === true) return true;
+    if (msg.metadata?.requestId) return true; // Request messages need responses
+    
+    // Consensus and fitness messages may require response
+    if ((msg.type === 'consensus' || msg.type === 'fitness') && msg.priority === 'high') return true;
+    
+    return false;
   }
 
   /**

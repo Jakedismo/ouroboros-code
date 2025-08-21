@@ -183,8 +183,25 @@ export class A2AContextInjector implements ContentGenerator {
     formatted += `- **Timestamp:** ${message.timestamp}\n`;
     formatted += `- **Content:** ${message.content}\n`;
     
+    // Add type information if available (for mao_inbox_poll messages)
+    if (message.context_data?.['type']) {
+      formatted += `- **Message Type:** ${message.context_data['type']}\n`;
+    }
+    
+    // Add status information if available
+    if (message.context_data?.['status']) {
+      formatted += `- **Status:** ${message.context_data['status']}\n`;
+    }
+    
+    // Add additional context data
     if (message.context_data && Object.keys(message.context_data).length > 0) {
-      formatted += `- **Context Data:** ${JSON.stringify(message.context_data)}\n`;
+      const contextCopy = { ...message.context_data };
+      delete contextCopy['type']; // Already displayed above
+      delete contextCopy['status']; // Already displayed above
+      
+      if (Object.keys(contextCopy).length > 0) {
+        formatted += `- **Context Data:** ${JSON.stringify(contextCopy)}\n`;
+      }
     }
     
     if (message.requires_response) {
