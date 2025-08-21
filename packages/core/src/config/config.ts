@@ -65,6 +65,7 @@ import { LLMProviderFactory } from '../providers/factory.js';
 import { LLMProvider, LLMProviderConfig } from '../providers/types.js';
 import { BuiltinToolsIntegration, UnifiedToolCall, UnifiedToolResult } from '../providers/tools/unified-tool-interface.js';
 import { MCPToolManager } from '../providers/tools/mcp-tool-manager.js';
+import { McpClientManager } from '../tools/mcp-client-manager.js';
 
 
 export enum ApprovalMode {
@@ -576,6 +577,20 @@ export class Config {
 
   getPromptRegistry(): PromptRegistry {
     return this.promptRegistry;
+  }
+
+  /**
+   * Get or create MCP client manager for autonomous mode A2A operations
+   */
+  getMCPClientManager(): McpClientManager {
+    return new McpClientManager(
+      this.mcpServers || {},
+      this.mcpServerCommand,
+      this.getToolRegistry(),
+      this.getPromptRegistry(),
+      this.debugMode,
+      this.getWorkspaceContext()
+    );
   }
 
   getDebugMode(): boolean {

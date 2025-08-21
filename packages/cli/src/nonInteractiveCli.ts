@@ -12,6 +12,7 @@ import {
   isTelemetrySdkInitialized,
   GeminiEventType,
   parseAndFormatApiError,
+  AutonomousA2AHandler,
 } from '@ouroboros/code-cli-core';
 import { Content, Part, FunctionCall } from '@google/genai';
 
@@ -27,6 +28,9 @@ export async function runNonInteractive(
     debugMode: config.getDebugMode(),
   });
 
+  // Initialize A2A system for autonomous mode
+  let a2aHandler: AutonomousA2AHandler | undefined;
+
   try {
     consolePatcher.patch();
     // Handle EPIPE errors when the output is piped to a command that closes early.
@@ -37,6 +41,28 @@ export async function runNonInteractive(
       }
     });
 
+    // Initialize A2A handler for autonomous mode
+    const mcpClientManager = config.getMCPClientManager();
+    a2aHandler = new AutonomousA2AHandler(config, mcpClientManager);
+    
+    // TODO: Future enhancement - use A2A-aware content generation instead of legacy GeminiClient
+    // Get content generator and wrap with A2A context injector
+    // const baseContentGenerator = await config.getContentGenerator();
+    // const wrappedContentGenerator = new A2AContextInjector(
+    //   baseContentGenerator,
+    //   config,
+    //   a2aHandler,
+    // );
+
+    // Start A2A handler to listen for webhook notifications
+    a2aHandler.start();
+
+    if (config.getDebugMode()) {
+      console.debug('[A2A] Autonomous agent mode initialized with A2A support');
+    }
+
+    // Use the legacy GeminiClient approach for now, but with A2A integration
+    // TODO: Migrate to pure ContentGenerator approach in future
     const geminiClient = config.getGeminiClient();
 
     const abortController = new AbortController();
@@ -135,6 +161,14 @@ export async function runNonInteractive(
     );
     process.exit(1);
   } finally {
+    // Cleanup A2A handler
+    if (a2aHandler) {
+      a2aHandler.stop();
+      if (config.getDebugMode()) {
+        console.debug('[A2A] Autonomous A2A handler stopped');
+      }
+    }
+    
     consolePatcher.cleanup();
     if (isTelemetrySdkInitialized()) {
       await shutdownTelemetry(config);

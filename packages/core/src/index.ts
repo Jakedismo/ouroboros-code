@@ -26,6 +26,10 @@ export * from './core/turn.js';
 export * from './core/geminiRequest.js';
 export * from './core/coreToolScheduler.js';
 export * from './core/nonInteractiveToolExecutor.js';
+export * from './core/A2AContextInjector.js';
+
+// Export Agent A2A System
+export * from './agents/AutonomousA2AHandler.js';
 
 export * from './code_assist/codeAssist.js';
 export * from './code_assist/oauth2.js';
@@ -98,6 +102,9 @@ export * from './tools/mcp-tool.js';
 export * from './tools/mcp-tool-webhook.js';
 export * from './tools/mcp-client-webhook.js';
 export * from './tools/tool-registry-webhook.js';
+
+// Export MCP tools
+export * from './tools/mcp-client-manager.js';
 
 // MCP OAuth
 export { MCPOAuthProvider } from './mcp/oauth-provider.js';
