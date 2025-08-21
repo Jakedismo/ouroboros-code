@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// File for 'gemini mcp' command
+// File for 'ouroboros-code mcp' command
 import type { CommandModule, Argv } from 'yargs';
 import { addCommand } from './mcp/add.js';
 import { removeCommand } from './mcp/remove.js';
@@ -12,7 +12,7 @@ import { listCommand } from './mcp/list.js';
 
 export const mcpCommand: CommandModule = {
   command: 'mcp',
-  describe: 'Manage MCP servers',
+  describe: 'Manage MCP servers for Ouroboros Code',
   builder: (yargs: Argv) =>
     yargs
       .command(addCommand)

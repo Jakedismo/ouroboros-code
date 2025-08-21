@@ -85,33 +85,60 @@ export interface CliArgs {
 
 export async function parseArguments(): Promise<CliArgs> {
   const yargsInstance = yargs(hideBin(process.argv))
-    .scriptName('gemini')
+    .scriptName('ouroboros-code')
     .usage(
-      'Usage: gemini [options] [command]\n\nGemini CLI - Launch an interactive CLI, use -p/--prompt for non-interactive mode',
+      `
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                                                                           ║
+║   ██████╗ ██╗   ██╗██████╗  ██████╗ ██████╗  ██████╗ ██████╗  ██████╗   ║
+║  ██╔═══██╗██║   ██║██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗  ║
+║  ██║   ██║██║   ██║██████╔╝██║   ██║██████╔╝██║   ██║██████╔╝██║   ██║  ║
+║  ██║   ██║██║   ██║██╔══██╗██║   ██║██╔══██╗██║   ██║██╔══██╗██║   ██║  ║
+║  ╚██████╔╝╚██████╔╝██║  ██║╚██████╔╝██████╔╝╚██████╔╝██║  ██║╚██████╔╝  ║
+║   ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝   ║
+║                                                                           ║
+║                    🔄 NEXT-GENERATION MULTI-LLM CLI 🔄                   ║
+║                                                                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+✨ OUROBOROS CODE - The Infinite Loop of AI Intelligence ✨
+
+🚀 Features Beyond Gemini CLI:
+  • Multi-Provider Support: Seamlessly switch between Gemini, OpenAI & Anthropic
+  • Advanced Commands: /blindspot, /challenge, /compare, /converge, /race
+  • Autonomous A2A: Agent-to-Agent communication via webhooks (port 45123)
+  • MCP Integration: Advanced tool orchestration with connection pooling
+  • Unified Tools: 11 builtin tools work identically across all providers
+
+Usage: ouroboros-code [options] [command]
+
+Interactive mode: ouroboros-code
+Non-interactive: ouroboros-code -p/--prompt "your task"
+Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
     )
-    .command('$0', 'Launch Gemini CLI', (yargsInstance) =>
+    .command('$0', 'Launch Ouroboros Code - Multi-LLM Intelligence', (yargsInstance) =>
       yargsInstance
         .option('model', {
           alias: 'm',
           type: 'string',
-          description: `Model`,
+          description: `🤖 AI Model (e.g., gemini-2.0-flash-exp, gpt-4o, claude-3-5-sonnet)`,
           default: process.env['GEMINI_MODEL'],
         })
         .option('provider', {
           type: 'string',
           choices: ['gemini', 'openai', 'anthropic'],
-          description: 'LLM provider to use (gemini, openai, or anthropic)',
+          description: '🌐 LLM Provider - Switch between AI providers seamlessly',
           default: 'gemini',
         })
         .option('openai-api-key', {
           type: 'string',
           description:
-            'OpenAI API key (overrides OPENAI_API_KEY environment variable)',
+            '🔑 OpenAI API key for GPT models (overrides OPENAI_API_KEY env)',
         })
         .option('anthropic-api-key', {
           type: 'string',
           description:
-            'Anthropic API key (overrides ANTHROPIC_API_KEY environment variable)',
+            '🔑 Anthropic API key for Claude models (overrides ANTHROPIC_API_KEY env)',
         })
         .option('prompt', {
           alias: 'p',
@@ -285,13 +312,45 @@ export async function parseArguments(): Promise<CliArgs> {
         }),
     )
     // Register MCP subcommands
-    .command(mcpCommand)
+    .command({
+      ...mcpCommand,
+      describe: 'Manage MCP servers for Ouroboros Code',
+    })
     .version(await getCliVersion()) // This will enable the --version flag based on package.json
     .alias('v', 'version')
     .help()
     .alias('h', 'help')
     .strict()
-    .demandCommand(0, 0); // Allow base command to run with no subcommands
+    .demandCommand(0, 0) // Allow base command to run with no subcommands
+    .epilogue(`
+═══════════════════════════════════════════════════════════════════════════════
+                          🔄 OUROBOROS CODE 🔄
+            The Infinite Loop of Multi-LLM Intelligence
+═══════════════════════════════════════════════════════════════════════════════
+
+💡 Quick Start Examples:
+
+  Basic usage:
+    ouroboros-code                          # Interactive mode with Gemini
+    ouroboros-code --provider openai        # Use OpenAI GPT models
+    ouroboros-code --provider anthropic     # Use Anthropic Claude models
+
+  Advanced multi-provider commands:
+    ouroboros-code /blindspot               # Detect what each provider misses
+    ouroboros-code /challenge               # Adversarial debate between providers
+    ouroboros-code /compare                 # Side-by-side comparison
+    ouroboros-code /converge                # Unified synthesis from all providers
+    ouroboros-code /race                    # Performance race between providers
+
+  Autonomous agent mode:
+    ouroboros-code --prompt "continue working autonomously"
+    # Enables A2A communication on port 45123 for multi-agent coordination
+
+📚 Learn more: https://github.com/your-repo/ouroboros-code
+🐛 Report issues: https://github.com/your-repo/ouroboros-code/issues
+
+                    Powered by the eternal cycle ∞
+═══════════════════════════════════════════════════════════════════════════════`);
 
   yargsInstance.wrap(yargsInstance.terminalWidth());
   const result = await yargsInstance.parse();
