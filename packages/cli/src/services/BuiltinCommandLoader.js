@@ -1,0 +1,96 @@
+/**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { aboutCommand } from '../ui/commands/aboutCommand.js';
+import { authCommand } from '../ui/commands/authCommand.js';
+import { bugCommand } from '../ui/commands/bugCommand.js';
+import { chatCommand } from '../ui/commands/chatCommand.js';
+import { clearCommand } from '../ui/commands/clearCommand.js';
+import { compressCommand } from '../ui/commands/compressCommand.js';
+import { copyCommand } from '../ui/commands/copyCommand.js';
+import { corgiCommand } from '../ui/commands/corgiCommand.js';
+import { docsCommand } from '../ui/commands/docsCommand.js';
+import { directoryCommand } from '../ui/commands/directoryCommand.js';
+import { editorCommand } from '../ui/commands/editorCommand.js';
+import { extensionsCommand } from '../ui/commands/extensionsCommand.js';
+import { helpCommand } from '../ui/commands/helpCommand.js';
+import { ideCommand } from '../ui/commands/ideCommand.js';
+import { initCommand } from '../ui/commands/initCommand.js';
+import { mcpCommand } from '../ui/commands/mcpCommand.js';
+import { memoryCommand } from '../ui/commands/memoryCommand.js';
+import { privacyCommand } from '../ui/commands/privacyCommand.js';
+import { quitCommand } from '../ui/commands/quitCommand.js';
+import { restoreCommand } from '../ui/commands/restoreCommand.js';
+import { statsCommand } from '../ui/commands/statsCommand.js';
+import { themeCommand } from '../ui/commands/themeCommand.js';
+import { toolsCommand } from '../ui/commands/toolsCommand.js';
+import { settingsCommand } from '../ui/commands/settingsCommand.js';
+import { vimCommand } from '../ui/commands/vimCommand.js';
+import { setupGithubCommand } from '../ui/commands/setupGithubCommand.js';
+import { terminalSetupCommand } from '../ui/commands/terminalSetupCommand.js';
+import { blindspotCommand } from '../ui/commands/blindspotCommand.js';
+import { challengeCommand } from '../ui/commands/challengeCommand.js';
+import { modelCommand } from '../ui/commands/modelCommand.js';
+import { convergeCommand } from '../ui/commands/convergeCommand.js';
+import { compareCommand } from '../ui/commands/compareCommand.js';
+import { raceCommand } from '../ui/commands/raceCommand.js';
+import { switchCommand } from '../ui/commands/switchCommand.js';
+/**
+ * Loads the core, hard-coded slash commands that are an integral part
+ * of the Gemini CLI application.
+ */
+export class BuiltinCommandLoader {
+    config;
+    constructor(config) {
+        this.config = config;
+    }
+    /**
+     * Gathers all raw built-in command definitions, injects dependencies where
+     * needed (e.g., config) and filters out any that are not available.
+     *
+     * @param _signal An AbortSignal (unused for this synchronous loader).
+     * @returns A promise that resolves to an array of `SlashCommand` objects.
+     */
+    async loadCommands(_signal) {
+        const allDefinitions = [
+            aboutCommand,
+            authCommand,
+            blindspotCommand,
+            bugCommand,
+            challengeCommand,
+            chatCommand,
+            clearCommand,
+            compareCommand,
+            compressCommand,
+            convergeCommand,
+            copyCommand,
+            corgiCommand,
+            docsCommand,
+            directoryCommand,
+            editorCommand,
+            extensionsCommand,
+            helpCommand,
+            ideCommand(this.config),
+            initCommand,
+            mcpCommand,
+            memoryCommand,
+            modelCommand,
+            privacyCommand,
+            quitCommand,
+            raceCommand,
+            restoreCommand(this.config),
+            settingsCommand,
+            setupGithubCommand,
+            statsCommand,
+            switchCommand,
+            terminalSetupCommand,
+            themeCommand,
+            toolsCommand,
+            vimCommand,
+        ];
+        return allDefinitions.filter((cmd) => cmd !== null);
+    }
+}
+//# sourceMappingURL=BuiltinCommandLoader.js.map

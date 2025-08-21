@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/crates/oxc_linter/src/oxlint.schema.json",
+  "rules": {
+    "typescript": "error",
+    "react": "error",
+    "react-hooks": "error"
+  },
+  "deny": [
+    "no-debugger",
+    "prefer-const",
+    "no-var"
+  ],
+  "allow": [
+    "no-console",
+    "no-unused-vars",
+    "eslint-plugin-unicorn/no-useless-fallback-in-spread",
+    "eslint-plugin-unicorn/no-useless-spread",
+    "import"
+  ],
+  "globals": [
+    "console",
+    "process",
+    "Buffer",
+    "global",
+    "__dirname",
+    "__filename"
+  ],
+  "env": {
+    "node": true,
+    "es2021": true
+  },
+  "ignore_pattern": [
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    "bundle/**",
+    "package/bundle/**",
+    ".integration-tests/**",
+    "packages/cli/dist/**",
+    "packages/core/dist/**",
+    "packages/server/dist/**",
+    "packages/vscode-ide-companion/dist/**",
+    "packages/test-utils/dist/**",
+    "eslint.config.js",
+    "scripts/**"
+  ]
+}
