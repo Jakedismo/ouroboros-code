@@ -4,37 +4,37 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { homedir } from 'node:os';
-import yargs from 'yargs/yargs';
-import { hideBin } from 'yargs/helpers';
-import process from 'node:process';
-import { mcpCommand } from '../commands/mcp.js';
 import {
-  Config,
-  loadServerHierarchicalMemory,
-  setGeminiMdFilename as setServerGeminiMdFilename,
-  getCurrentGeminiMdFilename,
   ApprovalMode,
-  DEFAULT_GEMINI_MODEL,
+  Config,
   DEFAULT_GEMINI_EMBEDDING_MODEL,
+  DEFAULT_GEMINI_MODEL,
   DEFAULT_MEMORY_FILE_FILTERING_OPTIONS,
-  FileDiscoveryService,
-  TelemetryTarget,
-  FileFilteringOptions,
-  ShellTool,
   EditTool,
-  WriteFileTool,
+  FileDiscoveryService,
+  FileFilteringOptions,
   MCPServerConfig,
   MultiProviderMCPConfig,
+  ShellTool,
+  TelemetryTarget,
+  WriteFileTool,
+  getCurrentGeminiMdFilename,
+  loadServerHierarchicalMemory,
+  setGeminiMdFilename as setServerGeminiMdFilename,
 } from '@ouroboros/code-cli-core';
+import * as fs from 'fs';
+import { homedir } from 'node:os';
+import process from 'node:process';
+import * as path from 'path';
+import { hideBin } from 'yargs/helpers';
+import yargs from 'yargs/yargs';
+import { mcpCommand } from '../commands/mcp.js';
 import { Settings } from './settings.js';
 
-import { Extension, annotateActiveExtensions } from './extension.js';
-import { getCliVersion } from '../utils/version.js';
-import { loadSandboxConfig } from './sandboxConfig.js';
 import { resolvePath } from '../utils/resolvePath.js';
+import { getCliVersion } from '../utils/version.js';
+import { Extension, annotateActiveExtensions } from './extension.js';
+import { loadSandboxConfig } from './sandboxConfig.js';
 
 import { isWorkspaceTrusted } from './trustedFolders.js';
 
@@ -90,14 +90,14 @@ export async function parseArguments(): Promise<CliArgs> {
       `
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                               ║
-║  ██████╗ ██╗   ██╗██████╗  ██████╗ ██████╗  ██████╗ ██████╗  ██████╗ ███████╗║
-║ ██╔═══██╗██║   ██║██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗██╔════╝║
-║ ██║   ██║██║   ██║██████╔╝██║   ██║██████╔╝██║   ██║██████╔╝██║   ██║███████╗║
-║ ██║   ██║██║   ██║██╔══██╗██║   ██║██╔══██╗██║   ██║██╔══██╗██║   ██║╚════██║║
-║ ╚██████╔╝╚██████╔╝██║  ██║╚██████╔╝██████╔╝╚██████╔╝██║  ██║╚██████╔╝███████║║
-║  ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝║
+║  ██████╗ ██╗   ██╗██████╗  ██████╗ ██████╗  ██████╗ ██████╗  ██████╗ ███████╗ ║
+║ ██╔═══██╗██║   ██║██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗██╔════╝ ║
+║ ██║   ██║██║   ██║██████╔╝██║   ██║██████╔╝██║   ██║██████╔╝██║   ██║███████╗ ║
+║ ██║   ██║██║   ██║██╔══██╗██║   ██║██╔══██╗██║   ██║██╔══██╗██║   ██║╚════██║ ║
+║ ╚██████╔╝╚██████╔╝██║  ██║╚██████╔╝██████╔╝╚██████╔╝██║  ██║╚██████╔╝███████║ ║
+║  ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝ ║
 ║                                                                               ║
-║                     🔄 NEXT-GENERATION MULTI-LLM CLI 🔄                      ║
+║                     🔄 NEXT-GENERATION MULTI-LLM CLI 🔄                        ║
 ║                                                                               ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
@@ -121,7 +121,7 @@ Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
         .option('model', {
           alias: 'm',
           type: 'string',
-          description: `🤖 AI Model (e.g., gemini-2.0-flash-exp, gpt-4o, claude-3-5-sonnet)`,
+          description: `🤖 AI Model (e.g., gemini-2.5-pro, gpt-5, claude-4-1-opus-20250805)`,
           default: process.env['GEMINI_MODEL'],
         })
         .option('provider', {
@@ -333,7 +333,7 @@ Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
   Basic usage:
     ouroboros-code                          # Interactive mode with Gemini
     ouroboros-code --provider openai        # Use OpenAI GPT models
-    ouroboros-code --provider anthropic     # Use Anthropic Claude models
+    ouroboros-code --provider anthropic     # Use Anthropic Claude and Opus models
 
   Advanced multi-provider commands:
     ouroboros-code /blindspot               # Detect what each provider misses
