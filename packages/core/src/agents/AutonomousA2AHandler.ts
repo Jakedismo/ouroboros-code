@@ -19,12 +19,22 @@ export interface A2AWebhookPayload extends WebhookPayload {
     sender_agent_id: string;
     receiver_agent_id: string;
     message_count: number;
-    priority: 'low' | 'medium' | 'high' | 'urgent';
+    priority: 'low' | 'normal' | 'high' | 'urgent' | 'critical';
     auto_execute: boolean;
   };
   mcp_tool_config?: {
-    tool_name: string;
-    auto_params: Record<string, unknown>;
+    tool_name: 'a2a_coordinate';
+    auto_params: {
+      action: 'inbox';
+      sessionId?: string;
+      limit?: number;
+      unreadOnly?: boolean;
+      since?: string;
+      topic?: string;
+      from?: string;
+      sortBy?: 'receivedAt' | 'priority' | 'status' | 'from';
+      sortOrder?: 'asc' | 'desc';
+    };
   };
 }
 
@@ -41,7 +51,10 @@ export interface AgentMessage {
 
 // Agent context for managing conversation state
 export interface AgentContext {
-  agent_id: string;
+  agentId: string;
+  sessionId: string;
+  capabilities: string[];
+  priority: 'low' | 'medium' | 'high' | 'urgent';
   operating_mode: 'interactive' | 'autonomous';
   pending_messages: AgentMessage[];
   active_conversations: Map<string, AgentMessage[]>;
@@ -70,14 +83,17 @@ export class AutonomousA2AHandler extends EventEmitter {
     
     // Initialize agent context
     this.agentContext = {
-      agent_id: this.generateAgentId(),
+      agentId: this.generateAgentId(),
+      sessionId: `session-${Date.now()}`,
+      capabilities: ['mcp-tools', 'webhook-listener', 'a2a-coordinate'],
+      priority: 'medium',
       operating_mode: 'autonomous',
       pending_messages: [],
       active_conversations: new Map(),
       last_message_timestamp: new Date().toISOString(),
     };
 
-    this.log('AutonomousA2AHandler initialized', { agent_id: this.agentContext.agent_id });
+    this.log('AutonomousA2AHandler initialized', { agentId: this.agentContext.agentId, sessionId: this.agentContext.sessionId });
   }
 
   /**
@@ -204,24 +220,30 @@ export class AutonomousA2AHandler extends EventEmitter {
    * Auto-execute MCP tool to read A2A messages.
    */
   private async autoExecuteA2ATool(payload: A2AWebhookPayload): Promise<AgentMessage[]> {
-    if (!payload.mcp_tool_config) {
-      throw new Error('No MCP tool configuration in A2A payload');
-    }
-
-    const { tool_name, auto_params } = payload.mcp_tool_config;
+    // Use the a2a_coordinate tool with inbox action
+    const toolParams = {
+      action: 'inbox',
+      sessionId: this.agentContext.sessionId,
+      limit: 50,
+      unreadOnly: true,
+      sortBy: 'receivedAt',
+      sortOrder: 'desc',
+      // Include any additional parameters from payload if provided
+      ...(payload.mcp_tool_config?.auto_params || {})
+    };
     
-    this.log('Executing MCP tool for A2A', { tool_name, params: auto_params });
+    this.log('Executing a2a_coordinate tool for A2A inbox', { params: toolParams });
 
-    // Create tool call request info
+    // Create tool call request info for a2a_coordinate tool
     const toolCallRequest: ToolCallRequestInfo = {
       callId: `a2a-${Date.now()}`,
-      name: tool_name,
-      args: auto_params || {},
+      name: 'a2a_coordinate',
+      args: toolParams,
       isClientInitiated: false,
       prompt_id: 'autonomous-a2a'
     };
 
-    // Execute the MCP tool (e.g., 'ouroboros_a2a_reader')
+    // Execute the a2a_coordinate MCP tool
     const toolResponse = await executeToolCall(this.config, toolCallRequest);
     
     if (toolResponse.error) {
@@ -229,42 +251,114 @@ export class AutonomousA2AHandler extends EventEmitter {
     }
     
     // Parse the tool result into agent messages
-    return this.parseA2AMessages(toolResponse.responseParts);
+    return this.parseA2ACoordinateResponse(toolResponse.responseParts);
   }
 
   /**
-   * Parse MCP tool result into AgentMessage objects.
+   * Parse a2a_coordinate tool response into AgentMessage objects.
    */
-  private parseA2AMessages(toolResult: unknown): AgentMessage[] {
+  private parseA2ACoordinateResponse(toolResult: unknown): AgentMessage[] {
     try {
       // Handle different possible result formats
-      let messageData: any;
+      let responseData: any;
       
       if (typeof toolResult === 'string') {
-        messageData = JSON.parse(toolResult);
+        responseData = JSON.parse(toolResult);
       } else if (typeof toolResult === 'object' && toolResult !== null) {
-        messageData = toolResult;
+        responseData = toolResult;
       } else {
         throw new Error('Invalid tool result format');
       }
 
-      // Extract messages from result
-      const messages = Array.isArray(messageData) ? messageData : messageData.messages || [messageData];
-      
-      return messages.map((msg: any, index: number) => ({
-        id: msg.id || `a2a-${Date.now()}-${index}`,
-        sender_agent: msg.sender_agent || msg.sender || 'unknown',
-        content: msg.content || msg.message || String(msg),
-        timestamp: msg.timestamp || new Date().toISOString(),
-        priority: msg.priority || 'medium',
-        context_data: msg.context_data || msg.metadata,
-        requires_response: msg.requires_response || false,
-      })) as AgentMessage[];
+      // Check if response follows the a2a_coordinate schema
+      if (!responseData.success) {
+        this.log('A2A coordinate tool returned error', { 
+          error: responseData.error,
+          response: responseData 
+        });
+        return [];
+      }
 
+      const messages = responseData.data?.messages || [];
+      
+      this.log('Parsed A2A coordinate response', { 
+        messageCount: messages.length,
+        unreadCount: responseData.data?.unreadCount || 0,
+        hasMore: responseData.data?.hasMore || false
+      });
+
+      // Convert a2a_coordinate message format to AgentMessage format
+      return messages.map((msg: any): AgentMessage => ({
+        id: msg.id,
+        sender_agent: msg.from,
+        content: this.extractMessageContent(msg.payload),
+        timestamp: msg.receivedAt,
+        priority: this.mapA2APriority(msg.priority),
+        context_data: {
+          messageType: msg.messageType,
+          topic: msg.topic,
+          status: msg.status,
+          attachments: msg.attachments,
+          metadata: msg.metadata
+        },
+        requires_response: this.determineResponseRequirement(msg)
+      }));
     } catch (error) {
-      this.log('Failed to parse A2A messages', { error: getErrorMessage(error) });
+      this.log('Failed to parse A2A coordinate response', { 
+        error: getErrorMessage(error), 
+        toolResult 
+      });
       return [];
     }
+  }
+
+  /**
+   * Extract readable content from message payload.
+   */
+  private extractMessageContent(payload: any): string {
+    if (typeof payload === 'string') {
+      return payload;
+    } else if (typeof payload === 'object' && payload !== null) {
+      // If payload has a 'content' or 'message' field, use that
+      if (payload.content) return payload.content;
+      if (payload.message) return payload.message;
+      if (payload.text) return payload.text;
+      // Otherwise, stringify the object
+      return JSON.stringify(payload);
+    } else {
+      return String(payload || '');
+    }
+  }
+
+  /**
+   * Map a2a_coordinate priority to AgentMessage priority.
+   */
+  private mapA2APriority(priority: string): 'low' | 'medium' | 'high' | 'urgent' {
+    switch (priority) {
+      case 'critical': return 'urgent';
+      case 'urgent': return 'urgent';
+      case 'high': return 'high';
+      case 'normal': return 'medium';
+      case 'low': return 'low';
+      default: return 'medium';
+    }
+  }
+
+  /**
+   * Determine if message requires a response based on content and metadata.
+   */
+  private determineResponseRequirement(msg: any): boolean {
+    // Check if message explicitly requires response
+    if (msg.metadata?.requires_response === true) return true;
+    if (msg.metadata?.requiresResponse === true) return true;
+    
+    // High priority messages typically require response
+    if (msg.priority === 'urgent' || msg.priority === 'critical') return true;
+    
+    // Direct messages (non-broadcast) may require response
+    if (msg.messageType === 'direct' && msg.priority !== 'low') return true;
+    
+    return false;
   }
 
   /**
