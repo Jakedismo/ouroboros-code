@@ -17,7 +17,35 @@ const __dirname = path.dirname(__filename);
  */
 export enum SystemPromptFlavour {
   DEFAULT = 'default',
+  CLAUDE_CODE = 'claude-code',
   // Additional flavours to be added
+}
+
+/**
+ * Get the flavours directory path
+ * Handles both development (src) and production (dist) scenarios
+ */
+function getFlavoursDirectory(): string {
+  // Try compiled location first (dist)
+  const distPath = path.join(__dirname, 'flavours');
+  if (fs.existsSync(distPath)) {
+    return distPath;
+  }
+  
+  // Try source location for development
+  const srcPath = path.join(__dirname.replace('/dist/', '/src/'), 'flavours');
+  if (fs.existsSync(srcPath)) {
+    return srcPath;
+  }
+  
+  // If __dirname doesn't contain /dist/, try direct source path
+  const directSrcPath = path.join(process.cwd(), 'packages/core/src/core/prompts/flavours');
+  if (fs.existsSync(directSrcPath)) {
+    return directSrcPath;
+  }
+  
+  // Default to dist path
+  return distPath;
 }
 
 /**
@@ -27,7 +55,8 @@ export enum SystemPromptFlavour {
  */
 export function loadFlavour(flavour: string): string | null {
   try {
-    const flavourPath = path.join(__dirname, 'flavours', `${flavour}.md`);
+    const flavoursDir = getFlavoursDirectory();
+    const flavourPath = path.join(flavoursDir, `${flavour}.md`);
     
     // Check if flavour file exists
     if (!fs.existsSync(flavourPath)) {
@@ -49,7 +78,7 @@ export function loadFlavour(flavour: string): string | null {
  */
 export function listAvailableFlavours(): string[] {
   try {
-    const flavoursDir = path.join(__dirname, 'flavours');
+    const flavoursDir = getFlavoursDirectory();
     
     if (!fs.existsSync(flavoursDir)) {
       return ['default'];
@@ -82,7 +111,8 @@ export function isFlavourValid(flavour: string): boolean {
     return true; // Default is always valid (built-in)
   }
   
-  const flavourPath = path.join(__dirname, 'flavours', `${flavour}.md`);
+  const flavoursDir = getFlavoursDirectory();
+  const flavourPath = path.join(flavoursDir, `${flavour}.md`);
   return fs.existsSync(flavourPath);
 }
 
@@ -96,7 +126,12 @@ export function getFlavourDescription(flavour: string): string | null {
       return 'Comprehensive system prompt with full instructions';
     }
     
-    const flavourPath = path.join(__dirname, 'flavours', `${flavour}.md`);
+    if (flavour === 'claude-code') {
+      return 'Claude Code style prompt adapted for Ouroboros - concise and direct';
+    }
+    
+    const flavoursDir = getFlavoursDirectory();
+    const flavourPath = path.join(flavoursDir, `${flavour}.md`);
     
     if (!fs.existsSync(flavourPath)) {
       return null;
