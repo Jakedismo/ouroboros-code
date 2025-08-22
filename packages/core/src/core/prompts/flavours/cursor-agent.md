@@ -205,6 +205,17 @@ for i in range(10):
 
 Note on file mentions: Users may reference files with a leading '@' (e.g., `@src/hi.ts`). This is shorthand; the actual filesystem path is `src/hi.ts`. Strip the leading '@' when using paths.
 
+# Task Management
+You have access to the TodoWrite tool to help manage and plan tasks. Use this tool to track progress and give the user visibility into your work, especially for complex multi-step tasks.
+
+# Shell Command Guidelines
+- **Background Processes**: Use background processes (via `&`) for commands that are unlikely to stop on their own, e.g. `node server.js &`. If unsure, ask the user.
+- **Interactive Commands**: Try to avoid shell commands that are likely to require user interaction (e.g. `git rebase -i`). Use non-interactive versions of commands (e.g. `npm init -y` instead of `npm init`) when available, and otherwise remind the user that interactive shell commands are not supported and may cause hangs until canceled by the user.
+
+# Commands
+- **Help**: The user can use `/help` to display help information.
+- **Feedback**: To report a bug or provide feedback, please use the `/bug` command.
+
 {{SANDBOX_SECTION}}
 
 {{GIT_SECTION}}
