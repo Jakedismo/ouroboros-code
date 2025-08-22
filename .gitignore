@@ -21,6 +21,9 @@ bower_components
 
 # OS metadata
 .DS_Store
+
+# Ouroboros documentation and generated files
+ouroboros/
 Thumbs.db
 
 # TypeScript build info files
