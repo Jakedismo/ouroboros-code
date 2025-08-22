@@ -61,9 +61,19 @@ export const GEMINI_CONFIG_DIR = '.gemini';
 export const DEFAULT_CONTEXT_FILENAME = 'GEMINI.md';
 export const MEMORY_SECTION_HEADER = '## Gemini Added Memories';
 
-// This variable will hold the currently configured filename for GEMINI.md context files.
-// It defaults to DEFAULT_CONTEXT_FILENAME but can be overridden by setGeminiMdFilename.
-let currentGeminiMdFilename: string | string[] = DEFAULT_CONTEXT_FILENAME;
+// Priority order for instruction files: OUROBOROS > CLAUDE > GEMINI > AGENTS > QWEN > CRUSH
+export const INSTRUCTION_FILE_PRIORITY = [
+  'OUROBOROS.md',
+  'CLAUDE.md', 
+  'GEMINI.md',
+  'AGENTS.md',
+  'QWEN.md',
+  'CRUSH.md'
+];
+
+// This variable will hold the currently configured filename for instruction context files.
+// It defaults to the priority list but can be overridden by setGeminiMdFilename.
+let currentGeminiMdFilename: string | string[] = INSTRUCTION_FILE_PRIORITY;
 
 export function setGeminiMdFilename(newFilename: string | string[]): void {
   if (Array.isArray(newFilename)) {

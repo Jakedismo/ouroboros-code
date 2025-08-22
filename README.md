@@ -1,19 +1,26 @@
-# Gemini CLI
+# Ouroboros Code 🐍
 
-[![Gemini CLI CI](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml)
+[![Ouroboros Code CI](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/npm/v/@google/gemini-cli)](https://www.npmjs.com/package/@google/gemini-cli)
 [![License](https://img.shields.io/github/license/google-gemini/gemini-cli)](https://github.com/google-gemini/gemini-cli/blob/main/LICENSE)
 
-![Gemini CLI Screenshot](./docs/assets/gemini-screenshot.png)
+![Ouroboros Code Screenshot](./docs/assets/gemini-screenshot.png)
 
-Gemini CLI is an open-source AI agent that brings the power of Gemini directly into your terminal. It provides lightweight access to Gemini, giving you the most direct path from your prompt to our model.
+**Ouroboros Code** is an advanced multi-agent AI framework that brings the power of **multiple LLM providers** (Gemini, OpenAI, Anthropic) directly into your terminal. Built on the foundation of Gemini CLI, it extends the capabilities with unified tool architecture, seamless provider migration, and innovative convergence analysis—all while maintaining full compatibility with Gemini's powerful features.
 
-## 🚀 Why Gemini CLI?
+## 🚀 Why Ouroboros Code?
 
+### Multi-LLM Provider Architecture
+- **🔄 Provider Flexibility**: Seamlessly switch between Gemini, OpenAI (GPT-5), and Anthropic (Claude 4)
+- **⚡ Unified Tools**: All 11 builtin tools work identically across every provider
+- **🎯 Zero Migration Cost**: Switch providers without losing any functionality
+- **🧬 Convergence Analysis**: Compare and synthesize responses from multiple providers
+
+### Inherited Gemini Power
 - **🎯 Free tier**: 60 requests/min and 1,000 requests/day with personal Google account
 - **🧠 Powerful Gemini 2.5 Pro**: Access to 1M token context window
 - **🔧 Built-in tools**: Google Search grounding, file operations, shell commands, web fetching
-- **🔌 Extensible**: MCP (Model Context Protocol) support for custom integrations
+- **🔌 Extensible**: Advanced MCP (Model Context Protocol) with connection pooling
 - **💻 Terminal-first**: Designed for developers who live in the command line
 - **🛡️ Open source**: Apache 2.0 licensed
 
@@ -25,19 +32,19 @@ Gemini CLI is an open-source AI agent that brings the power of Gemini directly i
 
 ```bash
 # Using npx (no installation required)
-npx https://github.com/google-gemini/gemini-cli
+npx https://github.com/google-gemini/gemini-cli  # Still works!
 ```
 
 #### Install globally with npm
 
 ```bash
-npm install -g @google/gemini-cli
+npm install -g @google/gemini-cli  # Includes Ouroboros features
 ```
 
 #### Install globally with Homebrew (macOS/Linux)
 
 ```bash
-brew install gemini-cli
+brew install gemini-cli  # Enhanced with Ouroboros
 ```
 
 #### System Requirements
@@ -73,7 +80,35 @@ npm install -g @google/gemini-cli@latest
 npm install -g @google/gemini-cli@nightly
 ```
 
-## 📋 Key Features
+## 🐍 Ouroboros-Specific Features
+
+### Advanced Multi-Provider Commands
+
+- **`/compare`** - Get parallel solutions from multiple providers for comprehensive analysis
+- **`/converge`** - Synthesize responses from all providers into unified insights
+- **`/challenge`** - Create adversarial dialogues between providers for critical analysis
+- **`/blindspot`** - Identify what each provider might be missing in their responses
+- **`/race`** - Performance-optimized provider racing for fastest responses
+
+### Unified Tool Architecture
+
+All 11 builtin tools work identically across every provider:
+- **File Operations**: `read_file`, `write_file`, `edit_file`, `read_many_files`
+- **Search & Discovery**: `ls`, `glob`, `grep`
+- **Web Operations**: `web_fetch`, `google_web_search`
+- **System Operations**: `run_shell_command`, `save_memory`
+
+### Smart Instruction Files
+
+Priority-based instruction file system:
+1. **OUROBOROS.md** - Primary configuration (highest priority)
+2. **CLAUDE.md** - Claude-specific instructions
+3. **GEMINI.md** - Gemini-specific instructions (backward compatible)
+4. **AGENTS.md** - Multi-agent configurations
+5. **QWEN.md** - Qwen model instructions
+6. **CRUSH.md** - Custom configurations
+
+## 📋 Core Features (Inherited from Gemini CLI)
 
 ### Code Understanding & Generation
 
@@ -91,7 +126,7 @@ npm install -g @google/gemini-cli@nightly
 
 - Ground your queries with built-in [Google Search](https://ai.google.dev/gemini-api/docs/grounding) for real-time information
 - Conversation checkpointing to save and resume complex sessions
-- Custom context files (GEMINI.md) to tailor behavior for your projects
+- Multi-file instruction system (OUROBOROS.md, CLAUDE.md, GEMINI.md, etc.) with priority loading
 
 ### GitHub Integration
 
@@ -117,10 +152,12 @@ Choose the authentication method that best fits your needs:
 - **No API key management** - just sign in with your Google account
 - **Automatic updates** to latest models
 
-#### Start Gemini CLI, then choose OAuth and follow the browser authentication flow when prompted
+#### Start Ouroboros Code, then choose OAuth and follow the browser authentication flow when prompted
 
 ```bash
-gemini
+ouroboros-code  # Primary command
+# or
+gemini          # Still works for compatibility
 ```
 
 #### If you are using a paid Code Assist License from your organization, remember to set the Google Cloud Project
@@ -131,7 +168,7 @@ export GOOGLE_CLOUD_PROJECT="YOUR_PROJECT_NAME"
 gemini
 ```
 
-### Option 2: Gemini API Key
+### Option 2: API Keys (Gemini, OpenAI, Anthropic)
 
 **✨ Best for:** Developers who need specific model control or paid tier access
 
@@ -142,9 +179,16 @@ gemini
 - **Usage-based billing**: Upgrade for higher limits when needed
 
 ```bash
-# Get your key from https://aistudio.google.com/apikey
-export GEMINI_API_KEY="YOUR_API_KEY"
-gemini
+# Gemini (default provider)
+export GEMINI_API_KEY="YOUR_API_KEY"  # From https://aistudio.google.com/apikey
+
+# OpenAI GPT-5
+export OPENAI_API_KEY="YOUR_API_KEY"  # From https://platform.openai.com/api-keys
+
+# Anthropic Claude 4
+export ANTHROPIC_API_KEY="YOUR_API_KEY"  # From https://console.anthropic.com/
+
+ouroboros-code --provider gemini  # or openai, anthropic
 ```
 
 ### Option 3: Vertex AI
@@ -173,42 +217,54 @@ For Google Workspace accounts and other authentication methods, see the [authent
 #### Start in current directory
 
 ```bash
-gemini
+ouroboros-code  # Uses default provider (Gemini)
+```
+
+#### Use different providers
+
+```bash
+ouroboros-code --provider openai    # Use GPT-5
+ouroboros-code --provider anthropic # Use Claude 4
+ouroboros-code --provider gemini    # Use Gemini (default)
 ```
 
 #### Include multiple directories
 
 ```bash
-gemini --include-directories ../lib,../docs
+ouroboros-code --include-directories ../lib,../docs
 ```
 
 #### Use specific model
 
 ```bash
-gemini -m gemini-2.5-flash
+ouroboros-code -m gemini-2.5-flash        # Gemini model
+ouroboros-code -m gpt-5 --provider openai # OpenAI model
+ouroboros-code -m claude-4-opus --provider anthropic # Anthropic model
 ```
 
 #### Non-interactive mode for scripts
 
 ```bash
-gemini -p "Explain the architecture of this codebase"
+ouroboros-code -p "Explain the architecture of this codebase"
 ```
 
 ### Quick Examples
 
-#### Start a new project
+#### Start a new project with provider comparison
 
 ````bash
 cd new-project/
-gemini
-> Write me a Discord bot that answers questions using a FAQ.md file I will provide
+ouroboros-code
+> /compare Write me a Discord bot that answers questions using a FAQ.md file
+# Compares solutions from multiple providers side-by-side
 
-#### Analyze existing code
+#### Analyze existing code with convergence
 ```bash
 git clone https://github.com/google-gemini/gemini-cli
 cd gemini-cli
-gemini
-> Give me a summary of all of the changes that went in yesterday
+ouroboros-code
+> /converge Analyze this codebase architecture and suggest improvements
+# Synthesizes insights from all providers into unified recommendations
 ````
 
 ## 📚 Documentation
@@ -224,7 +280,7 @@ gemini
 
 - [**Commands Reference**](./docs/cli/commands.md) - All slash commands (`/help`, `/chat`, `/mcp`, etc.)
 - [**Checkpointing**](./docs/checkpointing.md) - Save and resume conversations
-- [**Memory Management**](./docs/tools/memory.md) - Using GEMINI.md context files
+- [**Memory Management**](./docs/tools/memory.md) - Multi-file instruction system (OUROBOROS.md, CLAUDE.md, etc.)
 - [**Token Caching**](./docs/cli/token-caching.md) - Optimize token usage
 
 ### Tools & Extensions

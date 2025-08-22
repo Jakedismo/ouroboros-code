@@ -12,6 +12,7 @@ import { bfsFileSearch } from './bfsFileSearch.js';
 import {
   GEMINI_CONFIG_DIR,
   getAllGeminiMdFilenames,
+  INSTRUCTION_FILE_PRIORITY,
 } from '../tools/memoryTool.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { processImports } from './memoryImportProcessor.js';
@@ -36,6 +37,38 @@ const logger = {
 interface GeminiFileContent {
   filePath: string;
   content: string | null;
+}
+
+/**
+ * Filters a list of file paths to return only the highest priority instruction file
+ * based on the INSTRUCTION_FILE_PRIORITY order.
+ * @param filePaths Array of absolute file paths
+ * @returns Array with only the highest priority file path, or empty array if none found
+ */
+function selectHighestPriorityFile(filePaths: string[]): string[] {
+  if (filePaths.length === 0) return [];
+  
+  // Create a map of filename to paths for quick lookup
+  const filePathsByName = new Map<string, string[]>();
+  
+  for (const filePath of filePaths) {
+    const filename = path.basename(filePath);
+    if (!filePathsByName.has(filename)) {
+      filePathsByName.set(filename, []);
+    }
+    filePathsByName.get(filename)!.push(filePath);
+  }
+  
+  // Find the highest priority file that exists
+  for (const priorityFilename of INSTRUCTION_FILE_PRIORITY) {
+    if (filePathsByName.has(priorityFilename)) {
+      // Return the first path found for this filename (closest to CWD)
+      return [filePathsByName.get(priorityFilename)![0]];
+    }
+  }
+  
+  // If no priority files found, return empty array
+  return [];
 }
 
 async function findProjectRoot(startDir: string): Promise<string | null> {
@@ -305,7 +338,7 @@ export async function loadServerHierarchicalMemory(
   // For the server, homedir() refers to the server process's home.
   // This is consistent with how MemoryTool already finds the global path.
   const userHomePath = homedir();
-  const filePaths = await getGeminiMdFilePathsInternal(
+  const allFilePaths = await getGeminiMdFilePathsInternal(
     currentWorkingDirectory,
     includeDirectoriesToReadGemini,
     userHomePath,
@@ -315,10 +348,19 @@ export async function loadServerHierarchicalMemory(
     fileFilteringOptions || DEFAULT_MEMORY_FILE_FILTERING_OPTIONS,
     maxDirs,
   );
+  
+  // Select only the highest priority instruction file
+  const filePaths = selectHighestPriorityFile(allFilePaths);
+  
   if (filePaths.length === 0) {
     if (debugMode)
-      logger.debug('No GEMINI.md files found in hierarchy of the workspace.');
+      logger.debug('No instruction files (OUROBOROS.md, CLAUDE.md, etc.) found in hierarchy of the workspace.');
     return { memoryContent: '', fileCount: 0 };
+  }
+  
+  if (debugMode) {
+    const selectedFile = path.basename(filePaths[0]);
+    logger.debug(`Selected highest priority instruction file: ${selectedFile} at ${filePaths[0]}`);
   }
   const contentsWithPaths = await readGeminiMdFiles(
     filePaths,
