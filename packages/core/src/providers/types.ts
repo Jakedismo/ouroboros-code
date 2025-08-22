@@ -189,6 +189,34 @@ export const DEFAULT_MODELS: Record<LLMProvider, string> = {
 };
 
 /**
+ * Thinking/reasoning content for streaming
+ */
+export interface ThinkingContent {
+  type: 'thinking' | 'response';
+  content: string;
+  isComplete: boolean;
+  metadata?: {
+    thinkingTime?: number;
+    effortLevel?: string;
+    tokenCount?: number;
+    modelType?: string;
+    usedThinking?: boolean;
+    summaryMode?: boolean;
+  };
+}
+
+/**
+ * Thinking capabilities for each provider
+ */
+export interface ThinkingCapabilities {
+  supportsThinking: boolean;
+  supportsThinkingStream: boolean;
+  thinkingParameterName?: string; // 'budget_tokens' | 'reasoning_effort'
+  maxThinkingTokens?: number;
+  defaultThinkingConfig?: any;
+}
+
+/**
  * Provider capability matrix
  */
 export interface ProviderCapabilities {
@@ -201,6 +229,8 @@ export interface ProviderCapabilities {
   maxContextTokens: number;
   supportsSystemMessage: boolean;
   supportsToolChoice: boolean;
+  // Thinking capabilities
+  thinking?: ThinkingCapabilities;
 }
 
 export const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
@@ -225,6 +255,15 @@ export const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = 
     maxContextTokens: 256000, // 256K tokens for GPT-5
     supportsSystemMessage: true,
     supportsToolChoice: true,
+    thinking: {
+      supportsThinking: true,
+      supportsThinkingStream: false, // GPT-5 doesn't expose thinking tokens
+      thinkingParameterName: 'reasoning_effort',
+      defaultThinkingConfig: {
+        reasoning_effort: 'high',
+        verbosity: 'medium'
+      }
+    },
   },
   [LLMProvider.ANTHROPIC]: {
     supportsStreaming: true,
@@ -236,6 +275,15 @@ export const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = 
     maxContextTokens: 500000, // 500K tokens for Claude Opus 4.1
     supportsSystemMessage: true,
     supportsToolChoice: false,
+    thinking: {
+      supportsThinking: true,
+      supportsThinkingStream: true, // Claude 4/Opus 4.1 support full thinking stream
+      thinkingParameterName: 'budget_tokens',
+      maxThinkingTokens: 64000, // Max 64k thinking tokens
+      defaultThinkingConfig: {
+        budget_tokens: 64000 // Maximum performance as requested
+      }
+    },
   },
 };
 

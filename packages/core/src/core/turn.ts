@@ -50,6 +50,7 @@ export enum GeminiEventType {
   Error = 'error',
   ChatCompressed = 'chat_compressed',
   Thought = 'thought',
+  ThinkingContent = 'thinking_content',
   MaxSessionTurns = 'max_session_turns',
   Finished = 'finished',
   LoopDetected = 'loop_detected',
@@ -98,6 +99,23 @@ export type ServerGeminiContentEvent = {
 export type ServerGeminiThoughtEvent = {
   type: GeminiEventType.Thought;
   value: ThoughtSummary;
+};
+
+export type ServerGeminiThinkingContentEvent = {
+  type: GeminiEventType.ThinkingContent;
+  value: {
+    content: string;
+    isComplete: boolean;
+    provider?: string;
+    metadata?: {
+      thinkingTime?: number;
+      effortLevel?: string;
+      tokenCount?: number;
+      modelType?: string;
+      usedThinking?: boolean;
+      summaryMode?: boolean;
+    };
+  };
 };
 
 export type ServerGeminiToolCallRequestEvent = {
@@ -157,6 +175,7 @@ export type ServerGeminiStreamEvent =
   | ServerGeminiErrorEvent
   | ServerGeminiChatCompressedEvent
   | ServerGeminiThoughtEvent
+  | ServerGeminiThinkingContentEvent
   | ServerGeminiMaxSessionTurnsEvent
   | ServerGeminiFinishedEvent
   | ServerGeminiLoopDetectedEvent;

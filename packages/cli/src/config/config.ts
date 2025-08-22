@@ -87,6 +87,9 @@ export interface CliArgs {
   // System prompt customization
   systemPrompt: string | undefined;
   systemPromptFlavour: string | undefined;
+  // Thinking output control
+  enableThinking: boolean | undefined;
+  enable_thinking: boolean | undefined;
 }
 
 /**
@@ -336,6 +339,12 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
           coerce: (dirs: string[]) =>
             // Handle comma-separated values
             dirs.flatMap((dir) => dir.split(',').map((d) => d.trim())),
+        })
+        .option('enable-thinking', {
+          type: 'boolean',
+          description:
+            '🧠 Enable thinking output for supported providers (GPT-5, Claude 4/Opus 4.1)',
+          default: false,
         })
 
         .check((argv) => {

@@ -22,6 +22,8 @@ import {
   ProviderAuthError,
   ProviderRateLimitError,
   ProviderQuotaError,
+  ThinkingContent,
+  PROVIDER_CAPABILITIES,
 } from '../types.js';
 
 // OpenAI SDK types (will be imported dynamically)
@@ -407,6 +409,177 @@ export class OpenAIProvider extends BaseLLMProvider {
       );
       return null;
     }
+  }
+
+  /**
+   * Generate content with thinking capabilities (GPT-5 specific)
+   */
+  async generateContentWithThinking(
+    request: UnifiedGenerateRequest,
+    onThinking?: (thinkingContent: ThinkingContent) => void,
+  ): Promise<UnifiedGenerateResponse> {
+    if (!this.client) {
+      throw new Error('OpenAI provider not initialized');
+    }
+
+    const capabilities = PROVIDER_CAPABILITIES[LLMProvider.OPENAI];
+    if (!capabilities.thinking?.supportsThinking) {
+      return this.generateUnifiedContent(request, 'thinking-fallback');
+    }
+
+    try {
+      // For GPT-5, thinking happens internally with reasoning_effort
+      // We provide progress indicators since thinking tokens aren't exposed
+      if (onThinking) {
+        onThinking({
+          type: 'thinking',
+          content: 'Engaging high-effort reasoning mode...',
+          isComplete: false,
+          metadata: {
+            effortLevel: 'high',
+            modelType: 'gpt-5',
+            usedThinking: true,
+          },
+        });
+      }
+
+      // Convert to OpenAI format (reasoning_effort will be added automatically)
+      const openaiRequest = this.converter.toProviderFormat(request);
+      openaiRequest.model = this.config.model;
+
+      // Simulate thinking progress for GPT-5
+      if (onThinking) {
+        setTimeout(() => {
+          onThinking({
+            type: 'thinking',
+            content: 'Processing complex reasoning patterns...',
+            isComplete: false,
+            metadata: {
+              effortLevel: 'high',
+              modelType: 'gpt-5',
+              usedThinking: true,
+            },
+          });
+        }, 500);
+      }
+
+      const startTime = Date.now();
+      const response = await this.client.chat.completions.create(openaiRequest);
+      const thinkingTime = Date.now() - startTime;
+
+      // Final thinking indicator
+      if (onThinking) {
+        onThinking({
+          type: 'thinking',
+          content: 'Reasoning complete - generating response...',
+          isComplete: true,
+          metadata: {
+            thinkingTime,
+            effortLevel: 'high',
+            modelType: 'gpt-5',
+            usedThinking: true,
+          },
+        });
+      }
+
+      return this.converter.fromProviderResponse(response);
+    } catch (error: any) {
+      throw this.handleOpenAIError(error);
+    }
+  }
+
+  /**
+   * Generate streaming content with thinking progress indicators
+   */
+  async *generateContentStreamWithThinking(
+    request: UnifiedGenerateRequest,
+    onThinking?: (thinkingContent: ThinkingContent) => void,
+  ): AsyncGenerator<UnifiedGenerateResponse> {
+    if (!this.client) {
+      throw new Error('OpenAI provider not initialized');
+    }
+
+    const capabilities = PROVIDER_CAPABILITIES[LLMProvider.OPENAI];
+    if (!capabilities.thinking?.supportsThinking) {
+      yield* this.generateUnifiedContentStream(request, 'thinking-fallback');
+      return;
+    }
+
+    try {
+      // Initial thinking indicator
+      if (onThinking) {
+        onThinking({
+          type: 'thinking',
+          content: 'Initializing high-effort reasoning...',
+          isComplete: false,
+          metadata: {
+            effortLevel: 'high',
+            modelType: 'gpt-5',
+            usedThinking: true,
+          },
+        });
+      }
+
+      // Convert to OpenAI format and enable streaming
+      const openaiRequest = this.converter.toProviderFormat(request);
+      openaiRequest.model = this.config.model;
+      openaiRequest.stream = true;
+
+      const startTime = Date.now();
+      const stream = await this.client.chat.completions.create(openaiRequest);
+
+      // Progress tracking
+      let hasStartedResponse = false;
+      
+      for await (const chunk of stream) {
+        const converter = this.converter as OpenAIFormatConverter;
+        const unifiedChunk = converter.convertStreamChunk(chunk);
+
+        // If this is the first response chunk, indicate thinking is complete
+        if (!hasStartedResponse && (unifiedChunk.content || unifiedChunk.functionCalls)) {
+          hasStartedResponse = true;
+          if (onThinking) {
+            onThinking({
+              type: 'thinking',
+              content: 'Reasoning complete - streaming response...',
+              isComplete: true,
+              metadata: {
+                thinkingTime: Date.now() - startTime,
+                effortLevel: 'high',
+                modelType: 'gpt-5',
+                usedThinking: true,
+              },
+            });
+          }
+        }
+
+        // Only yield chunks with actual content
+        if (
+          unifiedChunk.content ||
+          unifiedChunk.functionCalls ||
+          unifiedChunk.finishReason
+        ) {
+          yield unifiedChunk;
+        }
+      }
+    } catch (error: any) {
+      throw this.handleOpenAIError(error);
+    }
+  }
+
+  /**
+   * Check if thinking mode is enabled for this provider
+   */
+  isThinkingEnabled(): boolean {
+    const capabilities = PROVIDER_CAPABILITIES[LLMProvider.OPENAI];
+    return capabilities.thinking?.supportsThinking || false;
+  }
+
+  /**
+   * Get thinking capabilities for this provider
+   */
+  getThinkingCapabilities() {
+    return PROVIDER_CAPABILITIES[LLMProvider.OPENAI].thinking;
   }
 
   /**

@@ -73,6 +73,7 @@ interface OpenAIRequest {
     | 'required'
     | { type: 'function'; function: { name: string } };
   stream?: boolean;
+  reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high';
 }
 
 interface OpenAIResponse {
@@ -230,6 +231,11 @@ export class OpenAIFormatConverter implements FormatConverter {
     // Set streaming
     if (request.stream) {
       openaiRequest.stream = true;
+    }
+
+    // Set thinking/reasoning effort for GPT-5 (default: high for maximum performance)
+    if (openaiRequest.model === 'gpt-5' || openaiRequest.model.startsWith('gpt-5')) {
+      openaiRequest.reasoning_effort = 'high';
     }
 
     return openaiRequest;

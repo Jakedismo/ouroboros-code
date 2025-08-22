@@ -23,6 +23,8 @@ import {
   ProviderAuthError,
   ProviderRateLimitError,
   ProviderQuotaError,
+  ThinkingContent,
+  PROVIDER_CAPABILITIES,
 } from '../types.js';
 
 /**
@@ -433,5 +435,171 @@ export class AnthropicProvider extends BaseLLMProvider {
       'claude-3-haiku-20240307': 4096,
     };
     return knownModels[this.config.model] || 4096;
+  }
+
+  /**
+   * Generate content with thinking capabilities (Claude 4/Opus 4.1 specific)
+   */
+  async generateContentWithThinking(
+    request: UnifiedGenerateRequest,
+    onThinking?: (thinkingContent: ThinkingContent) => void,
+  ): Promise<UnifiedGenerateResponse> {
+    const capabilities = PROVIDER_CAPABILITIES[LLMProvider.ANTHROPIC];
+    if (!capabilities.thinking?.supportsThinking) {
+      return this.generateUnifiedContent(request, 'thinking-fallback');
+    }
+
+    try {
+      // For Claude models, thinking happens with budget_tokens
+      // The converter will automatically set budget_tokens: 64000
+      if (onThinking) {
+        onThinking({
+          type: 'thinking',
+          content: 'Activating extended thinking mode (64k tokens)...',
+          isComplete: false,
+          metadata: {
+            modelType: this.config.model,
+            usedThinking: true,
+            tokenCount: 64000,
+          },
+        });
+      }
+
+      // Convert to Anthropic format (budget_tokens will be added automatically)
+      const anthropicRequest = this.converter.toProviderFormat(request);
+      anthropicRequest.model = this.config.model;
+
+      const startTime = Date.now();
+      const response = await this.client.messages.create(anthropicRequest);
+      const thinkingTime = Date.now() - startTime;
+
+      // Final thinking indicator
+      if (onThinking) {
+        onThinking({
+          type: 'thinking',
+          content: 'Extended thinking complete - presenting response...',
+          isComplete: true,
+          metadata: {
+            thinkingTime,
+            modelType: this.config.model,
+            usedThinking: true,
+            tokenCount: 64000,
+          },
+        });
+      }
+
+      return this.converter.fromProviderResponse(response);
+    } catch (error: unknown) {
+      throw this.handleAnthropicError(error);
+    }
+  }
+
+  /**
+   * Generate streaming content with thinking_delta support
+   */
+  async *generateContentStreamWithThinking(
+    request: UnifiedGenerateRequest,
+    onThinking?: (thinkingContent: ThinkingContent) => void,
+  ): AsyncGenerator<UnifiedGenerateResponse> {
+    const capabilities = PROVIDER_CAPABILITIES[LLMProvider.ANTHROPIC];
+    if (!capabilities.thinking?.supportsThinking) {
+      yield* this.generateUnifiedContentStream(request, 'thinking-fallback');
+      return;
+    }
+
+    try {
+      // Initial thinking indicator
+      if (onThinking) {
+        onThinking({
+          type: 'thinking',
+          content: 'Initializing extended thinking (64k token budget)...',
+          isComplete: false,
+          metadata: {
+            modelType: this.config.model,
+            usedThinking: true,
+            tokenCount: 64000,
+          },
+        });
+      }
+
+      // Convert to Anthropic format and enable streaming
+      const anthropicRequest = this.converter.toProviderFormat(request);
+      anthropicRequest.model = this.config.model;
+      anthropicRequest.stream = true;
+
+      const startTime = Date.now();
+      const stream = await this.client.messages.stream(anthropicRequest);
+      
+      let isThinking = true;
+      let hasStartedResponse = false;
+
+      // Process stream events
+      for await (const event of stream) {
+        const converter = this.converter as AnthropicFormatConverter;
+        const unifiedChunk = converter.convertStreamEvent(event);
+
+        // Handle thinking_delta events (if supported by Anthropic SDK)
+        if ((event as any).type === 'thinking_delta') {
+          if (onThinking) {
+            onThinking({
+              type: 'thinking',
+              content: (event as any).delta?.content || '',
+              isComplete: false,
+              metadata: {
+                modelType: this.config.model,
+                usedThinking: true,
+                tokenCount: 64000,
+              },
+            });
+          }
+          continue;
+        }
+
+        // If this is the first response chunk after thinking, indicate completion
+        if (isThinking && (unifiedChunk.content || unifiedChunk.functionCalls) && !hasStartedResponse) {
+          isThinking = false;
+          hasStartedResponse = true;
+          if (onThinking) {
+            onThinking({
+              type: 'thinking',
+              content: 'Thinking complete - streaming response...',
+              isComplete: true,
+              metadata: {
+                thinkingTime: Date.now() - startTime,
+                modelType: this.config.model,
+                usedThinking: true,
+                tokenCount: 64000,
+              },
+            });
+          }
+        }
+
+        // Only yield chunks with actual content
+        if (
+          unifiedChunk.content ||
+          unifiedChunk.functionCalls ||
+          unifiedChunk.finishReason
+        ) {
+          yield unifiedChunk;
+        }
+      }
+    } catch (error: unknown) {
+      throw this.handleAnthropicError(error);
+    }
+  }
+
+  /**
+   * Check if thinking mode is enabled for this provider
+   */
+  isThinkingEnabled(): boolean {
+    const capabilities = PROVIDER_CAPABILITIES[LLMProvider.ANTHROPIC];
+    return capabilities.thinking?.supportsThinking || false;
+  }
+
+  /**
+   * Get thinking capabilities for this provider
+   */
+  getThinkingCapabilities() {
+    return PROVIDER_CAPABILITIES[LLMProvider.ANTHROPIC].thinking;
   }
 }

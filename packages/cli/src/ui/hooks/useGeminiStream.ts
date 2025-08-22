@@ -463,6 +463,35 @@ export const useGeminiStream = (
     [addItem, pendingHistoryItemRef, setPendingHistoryItem, config, setThought],
   );
 
+  const handleThinkingContentEvent = useCallback(
+    (eventValue: {
+      content: string;
+      isComplete: boolean;
+      provider?: string;
+      metadata?: {
+        thinkingTime?: number;
+        effortLevel?: string;
+        tokenCount?: number;
+        modelType?: string;
+        usedThinking?: boolean;
+        summaryMode?: boolean;
+      };
+    }, userMessageTimestamp: number) => {
+      // Add thinking message to history for display
+      addItem(
+        {
+          type: 'thinking',
+          content: eventValue.content,
+          isComplete: eventValue.isComplete,
+          provider: eventValue.provider,
+          metadata: eventValue.metadata,
+        } as any,
+        userMessageTimestamp,
+      );
+    },
+    [addItem],
+  );
+
   const handleFinishedEvent = useCallback(
     (event: ServerGeminiFinishedEvent, userMessageTimestamp: number) => {
       const finishReason = event.value;
@@ -556,6 +585,9 @@ export const useGeminiStream = (
           case ServerGeminiEventType.Thought:
             setThought(event.value);
             break;
+          case ServerGeminiEventType.ThinkingContent:
+            handleThinkingContentEvent(event.value, userMessageTimestamp);
+            break;
           case ServerGeminiEventType.Content:
             geminiMessageBuffer = handleContentEvent(
               event.value,
@@ -609,6 +641,7 @@ export const useGeminiStream = (
       handleContentEvent,
       handleUserCancelledEvent,
       handleErrorEvent,
+      handleThinkingContentEvent,
       scheduleToolCalls,
       handleChatCompressionEvent,
       handleFinishedEvent,

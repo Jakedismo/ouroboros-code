@@ -65,6 +65,7 @@ interface AnthropicRequest {
   top_p?: number;
   tools?: AnthropicTool[];
   stream?: boolean;
+  budget_tokens?: number;
 }
 
 interface AnthropicResponse {
@@ -183,6 +184,11 @@ export class AnthropicFormatConverter implements FormatConverter {
     // Set streaming
     if (request.stream) {
       anthropicRequest.stream = true;
+    }
+
+    // Set thinking budget for Claude models (64k tokens for maximum performance)
+    if (anthropicRequest.model.includes('claude-4') || anthropicRequest.model.includes('opus')) {
+      anthropicRequest.budget_tokens = 64000;
     }
 
     return anthropicRequest;
@@ -469,6 +475,13 @@ export class AnthropicFormatConverter implements FormatConverter {
 
       case 'message_stop':
         // Message finished
+        break;
+
+      case 'thinking_delta':
+        // Claude thinking content - this is used for thinking streaming
+        if (event.delta?.content) {
+          unifiedResponse.content = event.delta.content;
+        }
         break;
 
       default:

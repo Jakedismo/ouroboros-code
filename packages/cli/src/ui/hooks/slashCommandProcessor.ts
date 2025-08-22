@@ -150,6 +150,14 @@ export const useSlashCommandProcessor = (
           type: 'compression',
           compression: message.compression,
         };
+      } else if (message.type === MessageType.THINKING) {
+        historyItemContent = {
+          type: 'thinking',
+          content: message.content,
+          isComplete: message.isComplete,
+          provider: message.provider,
+          metadata: message.metadata,
+        };
       } else {
         historyItemContent = {
           type: message.type,

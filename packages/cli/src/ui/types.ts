@@ -136,6 +136,21 @@ export type HistoryItemCompression = HistoryItemBase & {
   compression: CompressionProps;
 };
 
+export type HistoryItemThinking = HistoryItemBase & {
+  type: 'thinking';
+  content: string;
+  isComplete: boolean;
+  provider?: string;
+  metadata?: {
+    thinkingTime?: number;
+    effortLevel?: string;
+    tokenCount?: number;
+    modelType?: string;
+    usedThinking?: boolean;
+    summaryMode?: boolean;
+  };
+};
+
 // Using Omit<HistoryItem, 'id'> seems to have some issues with typescript's
 // type inference e.g. historyItem.type === 'tool_group' isn't auto-inferring that
 // 'tools' in historyItem.
@@ -154,7 +169,8 @@ export type HistoryItemWithoutId =
   | HistoryItemModelStats
   | HistoryItemToolStats
   | HistoryItemQuit
-  | HistoryItemCompression;
+  | HistoryItemCompression
+  | HistoryItemThinking;
 
 export type HistoryItem = HistoryItemWithoutId & { id: number };
 
@@ -171,6 +187,7 @@ export enum MessageType {
   QUIT = 'quit',
   GEMINI = 'gemini',
   COMPRESSION = 'compression',
+  THINKING = 'thinking',
 }
 
 // Simplified message structure for internal feedback
@@ -222,6 +239,21 @@ export type Message =
   | {
       type: MessageType.COMPRESSION;
       compression: CompressionProps;
+      timestamp: Date;
+    }
+  | {
+      type: MessageType.THINKING;
+      content: string;
+      isComplete: boolean;
+      provider?: string;
+      metadata?: {
+        thinkingTime?: number;
+        effortLevel?: string;
+        tokenCount?: number;
+        modelType?: string;
+        usedThinking?: boolean;
+        summaryMode?: boolean;
+      };
       timestamp: Date;
     };
 
