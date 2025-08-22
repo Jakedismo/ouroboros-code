@@ -18,6 +18,7 @@ const __dirname = path.dirname(__filename);
 export enum SystemPromptFlavour {
   DEFAULT = 'default',
   CLAUDE_CODE = 'claude-code',
+  CURSOR_AGENT = 'cursor-agent',
   // Additional flavours to be added
 }
 
@@ -128,6 +129,10 @@ export function getFlavourDescription(flavour: string): string | null {
     
     if (flavour === 'claude-code') {
       return 'Claude Code style prompt adapted for Ouroboros - concise and direct';
+    }
+    
+    if (flavour === 'cursor-agent') {
+      return 'Cursor Agent style prompt - autonomous pair programming with parallel tool execution';
     }
     
     const flavoursDir = getFlavoursDirectory();
