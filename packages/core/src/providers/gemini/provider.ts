@@ -125,7 +125,7 @@ export class GeminiProvider extends BaseLLMProvider {
         thinkingBudget: -1, // Dynamic thinking
         includeThoughts: true,
       };
-      console.log(`[GEMINI THINKING] Enabled with dynamic budget for prompt: ${userPromptId}`);
+      console.log(`[GEMINI THINKING ${this.config.model || 'gemini-2.5-pro'}] Enabled with dynamic budget for prompt: ${userPromptId}`);
     }
 
     // Convert unified request back to Gemini format
@@ -158,7 +158,7 @@ export class GeminiProvider extends BaseLLMProvider {
         thinkingBudget: -1, // Dynamic thinking
         includeThoughts: true,
       };
-      console.log(`[GEMINI THINKING STREAM] Enabled with dynamic budget for prompt: ${userPromptId}`);
+      console.log(`[GEMINI THINKING STREAM ${this.config.model || 'gemini-2.5-pro'}] Enabled with dynamic budget for prompt: ${userPromptId}`);
     }
 
     // Convert unified request back to Gemini format
@@ -185,7 +185,7 @@ export class GeminiProvider extends BaseLLMProvider {
                 content: (part as any).text || 'Thinking...',
                 isComplete: false,
                 metadata: {
-                  modelType: 'gemini-2.5',
+                  modelType: this.config.model || 'gemini-2.5-pro',
                   usedThinking: true,
                 }
               });
@@ -394,10 +394,10 @@ export class GeminiProvider extends BaseLLMProvider {
     if (onThinking) {
       onThinking({
         type: 'thinking',
-        content: 'Activating Gemini 2.5 thinking mode...',
+        content: `Activating ${this.config.model || 'gemini-2.5-pro'} thinking mode...`,
         isComplete: false,
         metadata: {
-          modelType: 'gemini-2.5',
+          modelType: this.config.model || 'gemini-2.5-pro',
           usedThinking: true,
         }
       });
@@ -424,10 +424,10 @@ export class GeminiProvider extends BaseLLMProvider {
       // Initial thinking notification
       onThinking({
         type: 'thinking',
-        content: 'Initializing Gemini 2.5 thinking stream...',
+        content: `Initializing ${this.config.model || 'gemini-2.5-pro'} thinking stream...`,
         isComplete: false,
         metadata: {
-          modelType: 'gemini-2.5',
+          modelType: this.config.model || 'gemini-2.5-pro',
           usedThinking: true,
         }
       });
