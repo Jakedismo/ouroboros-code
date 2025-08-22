@@ -1,10 +1,6 @@
 # Ouroboros Code 🐍
 
-[![Ouroboros Code CI](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/npm/v/@google/gemini-cli)](https://www.npmjs.com/package/@google/gemini-cli)
-[![License](https://img.shields.io/github/license/google-gemini/gemini-cli)](https://github.com/google-gemini/gemini-cli/blob/main/LICENSE)
-
-![Ouroboros Code Screenshot](./docs/assets/gemini-screenshot.png)
+![Ouroboros Code Screenshot](./docs/assets/image.png)
 
 **Ouroboros Code** is an advanced multi-agent AI framework that brings the power of **multiple LLM providers** (Gemini, OpenAI, Anthropic) directly into your terminal. Built on the foundation of Gemini CLI, it extends the capabilities with unified tool architecture, seamless provider migration, and innovative convergence analysis—all while maintaining full compatibility with Gemini's powerful features.
 
@@ -102,11 +98,11 @@ All 11 builtin tools work identically across every provider:
 
 Priority-based instruction file system:
 1. **OUROBOROS.md** - Primary configuration (highest priority)
-2. **CLAUDE.md** - Claude-specific instructions
-3. **GEMINI.md** - Gemini-specific instructions (backward compatible)
-4. **AGENTS.md** - Multi-agent configurations
-5. **QWEN.md** - Qwen model instructions
-6. **CRUSH.md** - Custom configurations
+2. **CLAUDE.md** - Claude Code support
+3. **GEMINI.md** - Gemini cli support
+4. **AGENTS.md** - OpenAI Codex cli support
+5. **QWEN.md** - Qwen-Code support
+6. **CRUSH.md** - Crush cli support
 
 ## 📋 Core Features (Inherited from Gemini CLI)
 

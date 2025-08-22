@@ -13,6 +13,7 @@ import {
 import { MultiProviderMCPConfig } from '../config/multi-provider-mcp-config.js';
 import { UnifiedTool, UnifiedToolCall, UnifiedToolResult } from './tools/unified-tool-interface.js';
 import { MCPToolManager } from './tools/mcp-tool-manager.js';
+import { AuthType } from '../core/contentGenerator.js';
 
 /**
  * Supported LLM providers for multi-provider architecture
@@ -38,6 +39,7 @@ export interface LLMProviderConfig {
   enableBuiltinTools?: boolean;
   configInstance?: any; // Reference to Config instance for tool integration
   mcpConfig?: Partial<MultiProviderMCPConfig>; // Advanced MCP configuration
+  authType?: AuthType; // Authentication type for OAuth vs API key handling
 }
 
 /**

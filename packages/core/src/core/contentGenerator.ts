@@ -122,10 +122,11 @@ export async function createContentGenerator(
     'User-Agent': userAgent,
   };
 
-  // Handle traditional Gemini auth methods (cloud-based authentication)
+  // Handle OAuth authentication - use original flow when no explicit provider or when authType explicitly requires OAuth
   if (
-    config.authType === AuthType.LOGIN_WITH_GOOGLE ||
-    config.authType === AuthType.CLOUD_SHELL
+    (config.authType === AuthType.LOGIN_WITH_GOOGLE ||
+     config.authType === AuthType.CLOUD_SHELL) &&
+    !config.provider // Use original OAuth flow only when no explicit provider is set
   ) {
     const httpOptions = { headers: baseHeaders };
     return new LoggingContentGenerator(
@@ -139,10 +140,12 @@ export async function createContentGenerator(
     );
   }
 
-  // Handle multi-provider configuration (API key-based authentication)
+  // Handle multi-provider configuration (supports both OAuth and API key authentication)
   if (
     config.authType === AuthType.USE_GEMINI ||
     config.authType === AuthType.USE_VERTEX_AI ||
+    config.authType === AuthType.LOGIN_WITH_GOOGLE ||
+    config.authType === AuthType.CLOUD_SHELL ||
     config.provider // Support multi-provider configuration
   ) {
     // Determine the provider to use
@@ -159,6 +162,7 @@ export async function createContentGenerator(
                 Object.keys(gcConfig.getMultiProviderMCPConfig().mcpServers).length > 0, // Enable MCP if servers are configured
       mcpConfig: gcConfig.getMultiProviderMCPConfig(), // Pass MCP configuration
       configInstance: gcConfig, // Pass config instance for tool integration
+      authType: config.authType, // 🔑 Pass authType so provider can handle OAuth vs API key
     };
 
     // Set API key based on provider

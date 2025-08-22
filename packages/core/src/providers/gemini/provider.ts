@@ -187,7 +187,12 @@ export class GeminiProvider extends BaseLLMProvider {
    * Determine authentication type based on configuration and environment
    */
   private determineAuthType(): AuthType {
-    // Check for explicit auth type in config
+    // Check for explicit auth type in provider config first (highest priority)
+    if (this.config.authType) {
+      return this.config.authType;
+    }
+
+    // Check for explicit auth type in config instance
     if (this.config.configInstance?.getAuthType) {
       const configAuthType = this.config.configInstance.getAuthType();
       if (configAuthType) {
