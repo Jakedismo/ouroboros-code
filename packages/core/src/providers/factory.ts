@@ -271,31 +271,27 @@ export class LLMProviderFactory {
     switch (config.provider) {
       case LLMProvider.OPENAI:
         try {
-          const { OpenAICompleteProvider } = await import('./openai/provider-complete.js');
-          return new OpenAICompleteProvider({
-            apiKey: config.apiKey || process.env['OPENAI_API_KEY'] || '',
-            model: config.model || 'gpt-4o',
-            configInstance: config.configInstance!,
-            baseURL: config.baseUrl,
-          });
+          // For now, use the basic OpenAI provider since complete provider doesn't exist yet
+          const { OpenAIProvider } = await import('./openai/provider.js');
+          const provider = new OpenAIProvider(config);
+          await provider.initialize();
+          return provider;
         } catch (error) {
           throw new Error(
-            `Failed to load OpenAI complete provider: ${error instanceof Error ? error.message : String(error)}`,
+            `Failed to load OpenAI provider: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
 
       case LLMProvider.ANTHROPIC:
         try {
-          const { AnthropicCompleteProvider } = await import('./anthropic/provider-complete.js');
-          return new AnthropicCompleteProvider({
-            apiKey: config.apiKey || process.env['ANTHROPIC_API_KEY'] || '',
-            model: config.model || 'claude-opus-4-1-20250805',
-            configInstance: config.configInstance!,
-            baseURL: config.baseUrl,
-          });
+          // For now, use the basic Anthropic provider since complete provider doesn't exist yet
+          const { AnthropicProvider } = await import('./anthropic/provider.js');
+          const provider = new AnthropicProvider(config);
+          await provider.initialize();
+          return provider;
         } catch (error) {
           throw new Error(
-            `Failed to load Anthropic complete provider: ${error instanceof Error ? error.message : String(error)}`,
+            `Failed to load Anthropic provider: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
 
