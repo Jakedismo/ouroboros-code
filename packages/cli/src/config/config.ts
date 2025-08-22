@@ -168,7 +168,7 @@ Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
         .option('system-prompt-flavour', {
           type: 'string',
           description:
-            '🎨 System prompt flavour/variant (e.g., default, technical, creative)',
+            '🎨 System prompt flavour/variant (available: default, claude-code, cursor-agent, augment-openai, augment-claude)',
         })
         .option('sandbox', {
           alias: 's',
