@@ -19,6 +19,7 @@ export enum SystemPromptFlavour {
   DEFAULT = 'default',
   CLAUDE_CODE = 'claude-code',
   CURSOR_AGENT = 'cursor-agent',
+  AUGMENT_OPENAI = 'augment-openai',
   // Additional flavours to be added
 }
 
@@ -133,6 +134,10 @@ export function getFlavourDescription(flavour: string): string | null {
     
     if (flavour === 'cursor-agent') {
       return 'Cursor Agent style prompt - autonomous pair programming with parallel tool execution';
+    }
+    
+    if (flavour === 'augment-openai') {
+      return 'Augment Agent style prompt - systematic approach with structured planning and validation';
     }
     
     const flavoursDir = getFlavoursDirectory();
