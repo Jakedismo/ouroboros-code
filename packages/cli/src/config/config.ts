@@ -8,8 +8,9 @@ import {
   ApprovalMode,
   Config,
   DEFAULT_GEMINI_EMBEDDING_MODEL,
-  DEFAULT_GEMINI_MODEL,
   DEFAULT_MEMORY_FILE_FILTERING_OPTIONS,
+  DEFAULT_MODELS,
+  LLMProvider,
   EditTool,
   FileDiscoveryService,
   FileFilteringOptions,
@@ -86,6 +87,21 @@ export interface CliArgs {
   // System prompt customization
   systemPrompt: string | undefined;
   systemPromptFlavour: string | undefined;
+}
+
+/**
+ * Get the default model for a given provider
+ */
+function getProviderDefaultModel(provider: string): string {
+  switch (provider) {
+    case 'openai':
+      return DEFAULT_MODELS[LLMProvider.OPENAI];
+    case 'anthropic':
+      return DEFAULT_MODELS[LLMProvider.ANTHROPIC];
+    case 'gemini':
+    default:
+      return DEFAULT_MODELS[LLMProvider.GEMINI];
+  }
 }
 
 export async function parseArguments(): Promise<CliArgs> {
@@ -684,7 +700,7 @@ export async function loadCliConfig(
     cwd,
     fileDiscoveryService: fileService,
     bugCommand: settings.bugCommand,
-    model: argv.model || settings.model || DEFAULT_GEMINI_MODEL,
+    model: argv.model || settings.model || getProviderDefaultModel((argv.provider as string) || 'gemini'),
     extensionContextFilePaths,
     maxSessionTurns: argv.maxSessionTurns ?? settings.maxSessionTurns ?? -1,
     experimentalZedIntegration: argv.experimentalAcp || false,
