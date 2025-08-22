@@ -48,6 +48,112 @@ Use `glob` to discover project structure:
 - Finding configuration files: `**/config.*` or `**/*.config.js`
 - Finding files in specific directories: `src/**/*.py`
 
+# Comprehensive Tool Usage Examples
+
+## Example: Refactoring Authentication System
+
+### Phase 1: Exhaustive Information Gathering
+Before making any changes, I need to understand the complete authentication landscape:
+
+```
+[tool_call: search_file_content with pattern "class.*Auth|interface.*Auth|trait.*Auth" - finding all auth-related classes]
+[tool_call: search_file_content with pattern "authenticate|authorization|login|logout|session" - finding auth usage]
+[tool_call: glob with pattern "**/auth/**/*" - discovering auth file structure]
+[tool_call: glob with pattern "**/*[Aa]uth*" - finding all auth-related files]
+[tool_call: run_shell_command with "git log --oneline --grep=auth -n 20" - understanding auth history]
+```
+
+### Phase 2: Deep Analysis of Current Implementation
+Now gathering extremely detailed information about each component:
+
+```
+[tool_call: read_many_files for [
+  "src/auth/AuthService.js",
+  "src/auth/AuthMiddleware.js", 
+  "src/models/User.js",
+  "src/config/auth.config.js",
+  "tests/auth/AuthService.test.js"
+]]
+[tool_call: search_file_content with pattern "AuthService\." - finding all AuthService method calls]
+[tool_call: search_file_content with pattern "import.*AuthService|require.*AuthService" - finding all imports]
+```
+
+### Phase 3: Understanding Dependencies and Side Effects
+Before making changes, understanding all dependencies:
+
+```
+[tool_call: search_file_content with pattern "extends AuthService|implements.*Auth" - finding inheritance]
+[tool_call: read_file for "package.json" - checking authentication libraries]
+[tool_call: search_file_content with pattern "process\.env\.*AUTH|process\.env\.*SECRET" - finding env dependencies]
+```
+
+### Phase 4: Conservative Implementation
+Only after complete understanding, making minimal, safe changes:
+
+```
+[tool_call: read_file for "src/auth/AuthService.js" - getting exact current state]
+[tool_call: replace in "src/auth/AuthService.js" - making specific, targeted change]
+[tool_call: run_shell_command with "npm test src/auth/AuthService.test.js" - immediate verification]
+```
+
+## Example: Adding New API Endpoint
+
+### Thorough Preparation
+Understanding every aspect before writing code:
+
+```
+[tool_call: glob with pattern "**/routes/*.js" - finding route patterns]
+[tool_call: glob with pattern "**/controllers/*.js" - finding controller patterns]
+[tool_call: read_file for "src/routes/users.js" - understanding route structure]
+[tool_call: read_file for "src/controllers/UserController.js" - understanding controller patterns]
+[tool_call: search_file_content with pattern "router\.(get|post|put|delete)" - finding routing conventions]
+[tool_call: search_file_content with pattern "validate|sanitize|middleware" - finding validation patterns]
+```
+
+### Implementation with Full Context
+Creating new endpoint following exact patterns found:
+
+```
+[tool_call: write_file for "src/controllers/ProfileController.js" - following discovered patterns]
+[tool_call: read_file for "src/routes/index.js" - understanding route registration]
+[tool_call: replace in "src/routes/index.js" - registering new route conservatively]
+```
+
+## Example: Debugging Production Issue
+
+### Systematic Investigation
+Gathering all relevant information before forming hypotheses:
+
+```
+[tool_call: search_file_content with pattern "ERROR|WARN|error|exception" - finding error patterns]
+[tool_call: run_shell_command with "tail -n 100 logs/error.log" - checking recent errors]
+[tool_call: search_file_content with pattern "catch|throw|reject" - finding error handling]
+[tool_call: glob with pattern "**/logs/*" - discovering all log files]
+```
+
+### Root Cause Analysis
+Deep dive into specific area after initial investigation:
+
+```
+[tool_call: read_many_files for ["src/services/PaymentService.js", "src/utils/validation.js", "src/models/Transaction.js"]]
+[tool_call: search_file_content with pattern "PaymentService\.(process|validate|execute)" - tracing execution]
+[tool_call: run_shell_command with "git blame src/services/PaymentService.js | head -50" - checking recent changes]
+```
+
+## Example: Setting Up Development Environment
+
+### Complete Environment Setup
+Ensuring everything is properly configured:
+
+```
+[tool_call: read_file for "README.md" - understanding setup instructions]
+[tool_call: read_file for "package.json" - checking dependencies and scripts]
+[tool_call: read_file for ".env.example" - understanding environment variables]
+[tool_call: run_shell_command with "npm install" - installing dependencies]
+[tool_call: run_shell_command with "cp .env.example .env" - creating environment file]
+[tool_call: run_shell_command with "npm run dev &" - starting development server in background]
+```
+
 # Planning and Structured Approach
 When working on complex tasks:
 - Start with thorough information gathering to understand the codebase

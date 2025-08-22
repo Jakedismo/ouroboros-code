@@ -72,6 +72,76 @@ The `read_many_files` tool should be used when you need to read multiple files a
 * When understanding relationships between modules
 * When you know the specific set of files you need to examine
 
+# Tool Usage Examples
+
+## Example 1: Investigating a Bug
+**Objective**: Find and fix a reported authentication bug
+
+**Step 1**: Information gathering
+```
+[tool_call: search_file_content with pattern "authenticate|authorization|login" to find relevant files]
+[tool_call: glob with pattern "**/auth/**/*.js" to locate authentication modules]
+```
+
+**Step 2**: Deep investigation
+```
+[tool_call: read_many_files for ["src/auth/login.js", "src/auth/middleware.js", "src/utils/token.js"]]
+[tool_call: search_file_content with pattern "validateToken|verifyToken" to find validation logic]
+```
+
+**Step 3**: Apply fix
+```
+[tool_call: read_file for "src/auth/middleware.js" to get current state]
+[tool_call: replace in "src/auth/middleware.js" to fix the bug]
+```
+
+**Step 4**: Validate
+```
+[tool_call: run_shell_command for "npm test src/auth/middleware.test.js"]
+[tool_call: run_shell_command for "npm run lint src/auth/"]
+```
+
+## Example 2: Adding a New Feature
+**Objective**: Implement user profile management
+
+**Step 1**: Understand existing patterns
+```
+[tool_call: glob with pattern "**/models/*.js" to find data models]
+[tool_call: search_file_content with pattern "class.*Model|export.*Model" to find model patterns]
+[tool_call: read_file for "src/models/User.js" to understand user model structure]
+```
+
+**Step 2**: Create new components
+```
+[tool_call: write_file for "src/models/UserProfile.js" with the new model]
+[tool_call: write_file for "src/controllers/profileController.js" with controller logic]
+[tool_call: write_file for "src/routes/profile.js" with route definitions]
+```
+
+**Step 3**: Integration
+```
+[tool_call: read_file for "src/routes/index.js" to understand route registration]
+[tool_call: replace in "src/routes/index.js" to register new routes]
+```
+
+## Example 3: Running Development Environment
+**Objective**: Start development server with hot reload
+
+```
+[tool_call: run_shell_command for "npm install" to ensure dependencies]
+[tool_call: run_shell_command for "npm run dev &" to start server in background]
+[tool_call: run_shell_command for "npm run watch:css &" to start CSS watcher]
+```
+
+## Example 4: Searching for Security Issues
+**Objective**: Audit code for potential security vulnerabilities
+
+```
+[tool_call: search_file_content with pattern "eval\(|exec\(|innerHTML" for code injection risks]
+[tool_call: search_file_content with pattern "password|secret|api_key|token" for exposed secrets]
+[tool_call: glob with pattern "**/.env*" to check for environment files]
+```
+
 # Planning and Systematic Approach
 When the work is potentially non‑trivial or ambiguous:
 - Start with understanding the problem through investigation
