@@ -23,6 +23,7 @@ import {
   ProviderError,
   ProviderAuthError,
   ProviderRateLimitError,
+  ThinkingContent,
   PROVIDER_CAPABILITIES,
 } from './types.js';
 
@@ -34,6 +35,7 @@ export abstract class BaseLLMProvider implements ContentGenerator {
   protected config: LLMProviderConfig;
   protected converter: FormatConverter;
   userTier?: UserTierId;
+  private thinkingEventQueue: ThinkingContent[] = [];
 
   constructor(config: LLMProviderConfig) {
     this.config = config;
@@ -62,14 +64,25 @@ export abstract class BaseLLMProvider implements ContentGenerator {
       // Convert to unified format
       const unifiedRequest = this.converter.fromGeminiFormat(request);
 
-      // Call provider-specific implementation
-      const unifiedResponse = await this.generateUnifiedContent(
-        unifiedRequest,
-        userPromptId,
-      );
-
-      // Convert back to Gemini format
-      return this.converter.toGeminiFormat(unifiedResponse);
+      // Check if thinking mode is enabled and supported by this provider
+      const enableThinking = this.config.configInstance?.getEnableThinking?.();
+      const supportsThinking = this.supportsThinkingMode();
+      
+      if (enableThinking && supportsThinking && this.generateContentWithThinking) {
+        // Use thinking-enabled generation
+        const unifiedResponse = await this.generateContentWithThinking(
+          unifiedRequest,
+          this.createThinkingCallback(userPromptId),
+        );
+        return this.converter.toGeminiFormat(unifiedResponse);
+      } else {
+        // Call standard provider-specific implementation
+        const unifiedResponse = await this.generateUnifiedContent(
+          unifiedRequest,
+          userPromptId,
+        );
+        return this.converter.toGeminiFormat(unifiedResponse);
+      }
     } catch (error) {
       throw this.wrapProviderError(error, 'generateContent');
     }
@@ -86,12 +99,25 @@ export abstract class BaseLLMProvider implements ContentGenerator {
       const unifiedRequest = this.converter.fromGeminiFormat(request);
       unifiedRequest.stream = true;
 
-      const unifiedStream = this.generateUnifiedContentStream(
-        unifiedRequest,
-        userPromptId,
-      );
-
-      return this.convertStreamToGemini(unifiedStream);
+      // Check if thinking mode is enabled and supported by this provider
+      const enableThinking = this.config.configInstance?.getEnableThinking?.();
+      const supportsThinking = this.supportsThinkingMode();
+      
+      if (enableThinking && supportsThinking && this.generateContentStreamWithThinking) {
+        // Use thinking-enabled streaming generation
+        const unifiedStream = this.generateContentStreamWithThinking(
+          unifiedRequest,
+          this.createThinkingCallback(userPromptId),
+        );
+        return this.convertStreamToGemini(unifiedStream);
+      } else {
+        // Call standard streaming implementation
+        const unifiedStream = this.generateUnifiedContentStream(
+          unifiedRequest,
+          userPromptId,
+        );
+        return this.convertStreamToGemini(unifiedStream);
+      }
     } catch (error) {
       throw this.wrapProviderError(error, 'generateContentStream');
     }
@@ -153,13 +179,124 @@ export abstract class BaseLLMProvider implements ContentGenerator {
   ): Promise<EmbedContentResponse>;
 
   /**
-   * Helper method to convert unified stream back to Gemini format
+   * Thinking mode support methods - providers can override these
+   */
+  protected supportsThinkingMode(): boolean {
+    const capabilities = PROVIDER_CAPABILITIES[this.config.provider];
+    return capabilities.thinking?.supportsThinking || false;
+  }
+
+  protected createThinkingCallback(userPromptId: string): ((thinkingContent: ThinkingContent) => void) | undefined {
+    return (thinkingContent: ThinkingContent) => {
+      // Enhanced thinking event with provider and prompt context
+      const enhancedEvent: ThinkingContent = {
+        ...thinkingContent,
+        metadata: thinkingContent.metadata,
+      };
+      
+      // Queue the thinking event for emission in the stream
+      this.thinkingEventQueue.push(enhancedEvent);
+      
+      // Also log for debugging
+      console.log(`[THINKING ${userPromptId}] ${thinkingContent.type}: ${thinkingContent.content} (complete: ${thinkingContent.isComplete})`);
+      if (thinkingContent.metadata) {
+        console.log(`[THINKING ${userPromptId}] Metadata:`, thinkingContent.metadata);
+      }
+    };
+  }
+
+  // Optional thinking methods that providers can override
+  protected async generateContentWithThinking?(
+    request: UnifiedGenerateRequest,
+    onThinking?: (thinkingContent: ThinkingContent) => void,
+  ): Promise<UnifiedGenerateResponse> {
+    // Default implementation falls back to non-thinking mode
+    return this.generateUnifiedContent(request, 'thinking-fallback');
+  }
+
+  protected async *generateContentStreamWithThinking?(
+    request: UnifiedGenerateRequest,
+    onThinking?: (thinkingContent: ThinkingContent) => void,
+  ): AsyncGenerator<UnifiedGenerateResponse> {
+    // Default implementation falls back to non-thinking mode
+    yield* this.generateUnifiedContentStream(request, 'thinking-fallback');
+  }
+
+  /**
+   * Helper method to convert unified stream back to Gemini format with thinking event interleaving
    */
   private async *convertStreamToGemini(
     unifiedStream: AsyncGenerator<UnifiedGenerateResponse>,
   ): AsyncGenerator<GenerateContentResponse> {
     for await (const unifiedResponse of unifiedStream) {
+      // First, emit any queued thinking events before the content
+      while (this.thinkingEventQueue.length > 0) {
+        const thinkingEvent = this.thinkingEventQueue.shift()!;
+        
+        // Convert thinking event to a special GenerateContentResponse for the stream
+        const thinkingResponse: GenerateContentResponse = {
+          candidates: [{
+            content: {
+              role: 'model',
+              parts: [{
+                text: '', // No regular content
+                functionCall: undefined,
+                functionResponse: undefined,
+                executableCode: undefined,
+                codeExecutionResult: undefined,
+                thought: undefined, // This is for Gemini's thought format
+              }]
+            },
+            finishReason: undefined,
+            citationMetadata: undefined,
+            safetyRatings: undefined,
+            tokenCount: undefined,
+            logprobs: undefined,
+            avgLogprobs: undefined
+          }],
+          promptFeedback: undefined,
+          usageMetadata: undefined,
+          // Add thinking event as custom property for Turn class detection
+          thinkingContent: thinkingEvent
+        } as any; // Use 'as any' to allow custom thinkingContent property
+        
+        yield thinkingResponse;
+      }
+      
+      // Then yield the regular content response
       yield this.converter.toGeminiFormat(unifiedResponse);
+    }
+    
+    // After the stream ends, emit any remaining thinking events
+    while (this.thinkingEventQueue.length > 0) {
+      const thinkingEvent = this.thinkingEventQueue.shift()!;
+      
+      const thinkingResponse: GenerateContentResponse = {
+        candidates: [{
+          content: {
+            role: 'model',
+            parts: [{
+              text: '',
+              functionCall: undefined,
+              functionResponse: undefined,
+              executableCode: undefined,
+              codeExecutionResult: undefined,
+              thought: undefined,
+            }]
+          },
+          finishReason: undefined,
+          citationMetadata: undefined,
+          safetyRatings: undefined,
+          tokenCount: undefined,
+          logprobs: undefined,
+          avgLogprobs: undefined
+        }],
+        promptFeedback: undefined,
+        usageMetadata: undefined,
+        thinkingContent: thinkingEvent
+      } as any; // Use 'as any' to allow custom thinkingContent property
+      
+      yield thinkingResponse;
     }
   }
 

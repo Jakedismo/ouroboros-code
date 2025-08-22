@@ -85,6 +85,10 @@ export interface UnifiedGenerateRequest {
   tools?: UnifiedTool[];
   toolChoice?: 'auto' | 'none' | 'required';
   stream?: boolean;
+  thinkingConfig?: {
+    thinkingBudget?: number;
+    includeThoughts?: boolean;
+  };
 }
 
 /**
@@ -244,6 +248,16 @@ export const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = 
     maxContextTokens: 2097152, // 2M tokens for Gemini 2.5
     supportsSystemMessage: true,
     supportsToolChoice: true,
+    // Gemini 2.5 supports thinking mode
+    thinking: {
+      supportsThinking: true,
+      supportsThinkingStream: true,
+      thinkingParameterName: 'thinkingBudget',
+      defaultThinkingConfig: {
+        thinkingBudget: -1, // Dynamic thinking by default
+        includeThoughts: true // Include thought summaries
+      }
+    },
   },
   [LLMProvider.OPENAI]: {
     supportsStreaming: true,

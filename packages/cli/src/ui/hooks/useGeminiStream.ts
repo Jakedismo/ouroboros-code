@@ -101,6 +101,19 @@ export const useGeminiStream = (
   const turnCancelledRef = useRef(false);
   const [isResponding, setIsResponding] = useState<boolean>(false);
   const [thought, setThought] = useState<ThoughtSummary | null>(null);
+  const [thinkingState, setThinkingState] = useState<{
+    isThinking: boolean;
+    content?: string;
+    provider?: string;
+    metadata?: {
+      thinkingTime?: number;
+      effortLevel?: string;
+      tokenCount?: number;
+      modelType?: string;
+      usedThinking?: boolean;
+      summaryMode?: boolean;
+    };
+  }>({ isThinking: false });
   const [pendingHistoryItemRef, setPendingHistoryItem] =
     useStateAndRef<HistoryItemWithoutId | null>(null);
   const processedMemoryToolsRef = useRef<Set<string>>(new Set());
@@ -441,6 +454,9 @@ export const useGeminiStream = (
 
   const handleErrorEvent = useCallback(
     (eventValue: ErrorEvent['value'], userMessageTimestamp: number) => {
+      // Clear thinking state on error
+      setThinkingState({ isThinking: false });
+      
       if (pendingHistoryItemRef.current) {
         addItem(pendingHistoryItemRef.current, userMessageTimestamp);
         setPendingHistoryItem(null);
@@ -477,6 +493,14 @@ export const useGeminiStream = (
         summaryMode?: boolean;
       };
     }, userMessageTimestamp: number) => {
+      // Update thinking state for status bar
+      setThinkingState({
+        isThinking: !eventValue.isComplete,
+        content: eventValue.content,
+        provider: eventValue.provider,
+        metadata: eventValue.metadata,
+      });
+
       // Add thinking message to history for display
       addItem(
         {
@@ -495,6 +519,9 @@ export const useGeminiStream = (
   const handleFinishedEvent = useCallback(
     (event: ServerGeminiFinishedEvent, userMessageTimestamp: number) => {
       const finishReason = event.value;
+      
+      // Clear thinking state when response finishes
+      setThinkingState({ isThinking: false });
 
       const finishReasonMessages: Record<FinishReason, string | undefined> = {
         [FinishReason.FINISH_REASON_UNSPECIFIED]: undefined,
@@ -1010,6 +1037,7 @@ export const useGeminiStream = (
     initError,
     pendingHistoryItems,
     thought,
+    thinkingState,
     cancelOngoingRequest,
   };
 };

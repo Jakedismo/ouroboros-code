@@ -440,7 +440,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   /**
    * Generate content with thinking capabilities (Claude 4/Opus 4.1 specific)
    */
-  async generateContentWithThinking(
+  override async generateContentWithThinking(
     request: UnifiedGenerateRequest,
     onThinking?: (thinkingContent: ThinkingContent) => void,
   ): Promise<UnifiedGenerateResponse> {
@@ -497,7 +497,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   /**
    * Generate streaming content with thinking_delta support
    */
-  async *generateContentStreamWithThinking(
+  override async *generateContentStreamWithThinking(
     request: UnifiedGenerateRequest,
     onThinking?: (thinkingContent: ThinkingContent) => void,
   ): AsyncGenerator<UnifiedGenerateResponse> {

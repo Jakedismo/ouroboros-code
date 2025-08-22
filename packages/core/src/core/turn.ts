@@ -218,6 +218,28 @@ export class Turn {
         }
         this.debugResponses.push(resp);
 
+        // Check for thinking events first (from provider thinking event queue)
+        if ((resp as any).thinkingContent) {
+          const thinkingEvent = (resp as any).thinkingContent;
+          yield {
+            type: GeminiEventType.ThinkingContent,
+            value: {
+              content: thinkingEvent.content,
+              isComplete: thinkingEvent.isComplete,
+              provider: thinkingEvent.metadata?.provider,
+              metadata: {
+                thinkingTime: thinkingEvent.metadata?.thinkingTime,
+                effortLevel: thinkingEvent.metadata?.effortLevel,
+                tokenCount: thinkingEvent.metadata?.tokenCount,
+                modelType: thinkingEvent.metadata?.modelType,
+                usedThinking: thinkingEvent.metadata?.usedThinking,
+                summaryMode: thinkingEvent.metadata?.summaryMode,
+              }
+            }
+          };
+          continue; // Don't process as regular content
+        }
+
         const thoughtPart = resp.candidates?.[0]?.content?.parts?.[0];
         if (thoughtPart?.thought) {
           // Thought always has a bold "subject" part enclosed in double asterisks

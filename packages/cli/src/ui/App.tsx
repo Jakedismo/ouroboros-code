@@ -94,6 +94,7 @@ import { useKittyKeyboardProtocol } from './hooks/useKittyKeyboardProtocol.js';
 import { keyMatchers, Command } from './keyMatchers.js';
 import * as fs from 'fs';
 import { UpdateNotification } from './components/UpdateNotification.js';
+import { ThinkingStatusBar } from './components/ThinkingStatusBar.js';
 import {
   isProQuotaExceededError,
   isGenericQuotaExceededError,
@@ -579,6 +580,7 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
     initError,
     pendingHistoryItems: pendingGeminiHistoryItems,
     thought,
+    thinkingState,
     cancelOngoingRequest,
   } = useGeminiStream(
     config.getGeminiClient(),
@@ -1248,24 +1250,32 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
               )}
 
               {isInputActive && (
-                <InputPrompt
-                  buffer={buffer}
-                  inputWidth={inputWidth}
-                  suggestionsWidth={suggestionsWidth}
-                  onSubmit={handleFinalSubmit}
-                  onSubmitWithImages={handleFinalSubmitWithImages}
-                  userMessages={userMessages}
-                  onClearScreen={handleClearScreen}
-                  config={config}
-                  slashCommands={slashCommands}
-                  commandContext={commandContext}
-                  shellModeActive={shellModeActive}
-                  setShellModeActive={setShellModeActive}
-                  onEscapePromptChange={handleEscapePromptChange}
-                  focus={isFocused}
-                  vimHandleInput={vimHandleInput}
-                  placeholder={placeholder}
-                />
+                <>
+                  <InputPrompt
+                    buffer={buffer}
+                    inputWidth={inputWidth}
+                    suggestionsWidth={suggestionsWidth}
+                    onSubmit={handleFinalSubmit}
+                    onSubmitWithImages={handleFinalSubmitWithImages}
+                    userMessages={userMessages}
+                    onClearScreen={handleClearScreen}
+                    config={config}
+                    slashCommands={slashCommands}
+                    commandContext={commandContext}
+                    shellModeActive={shellModeActive}
+                    setShellModeActive={setShellModeActive}
+                    onEscapePromptChange={handleEscapePromptChange}
+                    focus={isFocused}
+                    vimHandleInput={vimHandleInput}
+                    placeholder={placeholder}
+                  />
+                  <ThinkingStatusBar
+                    isThinking={thinkingState.isThinking}
+                    thinkingContent={thinkingState.content}
+                    provider={thinkingState.provider}
+                    metadata={thinkingState.metadata}
+                  />
+                </>
               )}
             </>
           )}

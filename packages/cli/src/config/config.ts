@@ -733,6 +733,8 @@ export async function loadCliConfig(
     // System prompt customization
     systemPrompt: argv.systemPrompt,
     systemPromptFlavour: argv.systemPromptFlavour,
+    // Thinking mode configuration
+    enableThinking: argv.enableThinking || argv.enable_thinking,
   });
 }
 

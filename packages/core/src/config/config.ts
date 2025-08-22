@@ -268,6 +268,8 @@ export interface ConfigParameters {
   // System prompt customization
   systemPrompt?: string;
   systemPromptFlavour?: string;
+  // Thinking mode configuration
+  enableThinking?: boolean;
 }
 
 export class Config {
@@ -346,6 +348,8 @@ export class Config {
   // System prompt customization
   private readonly systemPrompt: string | undefined;
   private readonly systemPromptFlavour: string | undefined;
+  // Thinking mode configuration
+  private readonly enableThinking: boolean;
 
   constructor(params: ConfigParameters) {
     this.sessionId = params.sessionId;
@@ -430,6 +434,8 @@ export class Config {
     // System prompt customization
     this.systemPrompt = params.systemPrompt;
     this.systemPromptFlavour = params.systemPromptFlavour;
+    // Thinking mode configuration
+    this.enableThinking = params.enableThinking ?? false;
 
     if (params.contextFileName) {
       setGeminiMdFilename(params.contextFileName);
@@ -669,6 +675,10 @@ export class Config {
       customPrompt: this.systemPrompt,
       flavour: this.systemPromptFlavour,
     };
+  }
+
+  getEnableThinking(): boolean {
+    return this.enableThinking;
   }
 
   getGeminiMdFileCount(): number {

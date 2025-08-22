@@ -414,7 +414,7 @@ export class OpenAIProvider extends BaseLLMProvider {
   /**
    * Generate content with thinking capabilities (GPT-5 specific)
    */
-  async generateContentWithThinking(
+  override async generateContentWithThinking(
     request: UnifiedGenerateRequest,
     onThinking?: (thinkingContent: ThinkingContent) => void,
   ): Promise<UnifiedGenerateResponse> {
@@ -491,7 +491,7 @@ export class OpenAIProvider extends BaseLLMProvider {
   /**
    * Generate streaming content with thinking progress indicators
    */
-  async *generateContentStreamWithThinking(
+  override async *generateContentStreamWithThinking(
     request: UnifiedGenerateRequest,
     onThinking?: (thinkingContent: ThinkingContent) => void,
   ): AsyncGenerator<UnifiedGenerateResponse> {

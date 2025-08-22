@@ -117,7 +117,8 @@ export class GeminiFormatConverter implements FormatConverter {
       request.maxTokens ||
       request.temperature ||
       request.topP ||
-      request.topK
+      request.topK ||
+      request.thinkingConfig
     ) {
       extendedRequest.generationConfig = {
         maxOutputTokens: request.maxTokens,
@@ -125,6 +126,14 @@ export class GeminiFormatConverter implements FormatConverter {
         topP: request.topP,
         topK: request.topK,
       };
+      
+      // Add thinking configuration if present
+      if (request.thinkingConfig) {
+        extendedRequest.generationConfig.thinkingConfig = {
+          thinkingBudget: request.thinkingConfig.thinkingBudget ?? -1,
+          includeThoughts: request.thinkingConfig.includeThoughts ?? true,
+        };
+      }
     }
 
     // Convert tools (use type assertion for extended properties)

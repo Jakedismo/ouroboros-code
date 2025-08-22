@@ -2,7 +2,7 @@
   "name": "ouroboros-multi-agent-cli-vscode-ide-companion",
   "displayName": "Ouroboros Multi-Agent CLI Companion",
   "description": "Enable Ouroboros Multi-Agent CLI with direct access to your IDE workspace.",
-  "version": "1.0.0-alpha.3",
+  "version": "1.0.0-alpha.4",
   "publisher": "ouroboros-ai",
   "icon": "assets/icon.png",
   "repository": {

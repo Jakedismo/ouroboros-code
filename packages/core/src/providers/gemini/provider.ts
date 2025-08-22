@@ -18,6 +18,7 @@ import {
   UnifiedGenerateRequest,
   UnifiedGenerateResponse,
   FormatConverter,
+  ThinkingContent,
 } from '../types.js';
 import { ContentGenerator, AuthType } from '../../core/contentGenerator.js';
 import { createCodeAssistContentGenerator } from '../../code_assist/codeAssist.js';
@@ -118,6 +119,15 @@ export class GeminiProvider extends BaseLLMProvider {
       throw new Error('Gemini provider not initialized');
     }
 
+    // Add thinking configuration if enabled
+    if (this.config.configInstance?.getEnableThinking?.() && this.supportsThinkingMode()) {
+      request.thinkingConfig = {
+        thinkingBudget: -1, // Dynamic thinking
+        includeThoughts: true,
+      };
+      console.log(`[GEMINI THINKING] Enabled with dynamic budget for prompt: ${userPromptId}`);
+    }
+
     // Convert unified request back to Gemini format
     const geminiRequest = this.converter.toProviderFormat(request);
 
@@ -142,6 +152,15 @@ export class GeminiProvider extends BaseLLMProvider {
       throw new Error('Gemini provider not initialized');
     }
 
+    // Add thinking configuration if enabled
+    if (this.config.configInstance?.getEnableThinking?.() && this.supportsThinkingMode()) {
+      request.thinkingConfig = {
+        thinkingBudget: -1, // Dynamic thinking
+        includeThoughts: true,
+      };
+      console.log(`[GEMINI THINKING STREAM] Enabled with dynamic budget for prompt: ${userPromptId}`);
+    }
+
     // Convert unified request back to Gemini format
     const geminiRequest = this.converter.toProviderFormat(request);
 
@@ -153,6 +172,28 @@ export class GeminiProvider extends BaseLLMProvider {
 
     // Yield each response after conversion
     for await (const geminiResponse of streamGenerator) {
+      // Check if response contains thinking/thought parts
+      if (geminiResponse.candidates?.[0]?.content?.parts) {
+        for (const part of geminiResponse.candidates[0].content.parts) {
+          // Check for thought parts (Gemini's thinking format)
+          if ((part as any).thought) {
+            // Emit thinking event through the callback
+            const thinkingCallback = this.createThinkingCallback?.(userPromptId);
+            if (thinkingCallback) {
+              thinkingCallback({
+                type: 'thinking',
+                content: (part as any).text || 'Thinking...',
+                isComplete: false,
+                metadata: {
+                  modelType: 'gemini-2.5',
+                  usedThinking: true,
+                }
+              });
+            }
+          }
+        }
+      }
+      
       yield this.converter.fromProviderResponse(geminiResponse);
     }
   }
@@ -334,5 +375,64 @@ export class GeminiProvider extends BaseLLMProvider {
       default:
         return false;
     }
+  }
+
+  /**
+   * Override thinking methods for Gemini-specific implementation
+   */
+  protected override async generateContentWithThinking(
+    request: UnifiedGenerateRequest,
+    onThinking?: (thinkingContent: ThinkingContent) => void,
+  ): Promise<UnifiedGenerateResponse> {
+    // Add thinking configuration
+    request.thinkingConfig = {
+      thinkingBudget: -1, // Dynamic thinking
+      includeThoughts: true,
+    };
+    
+    // Log thinking activation
+    if (onThinking) {
+      onThinking({
+        type: 'thinking',
+        content: 'Activating Gemini 2.5 thinking mode...',
+        isComplete: false,
+        metadata: {
+          modelType: 'gemini-2.5',
+          usedThinking: true,
+        }
+      });
+    }
+    
+    return this.generateUnifiedContent(request, 'thinking-mode');
+  }
+
+  protected override async *generateContentStreamWithThinking(
+    request: UnifiedGenerateRequest,
+    onThinking?: (thinkingContent: ThinkingContent) => void,
+  ): AsyncGenerator<UnifiedGenerateResponse> {
+    // Add thinking configuration
+    request.thinkingConfig = {
+      thinkingBudget: -1, // Dynamic thinking
+      includeThoughts: true,
+    };
+    
+    // Store the callback for use in stream processing
+    if (onThinking) {
+      // Store callback temporarily for stream processing
+      (this as any)._thinkingCallback = onThinking;
+      
+      // Initial thinking notification
+      onThinking({
+        type: 'thinking',
+        content: 'Initializing Gemini 2.5 thinking stream...',
+        isComplete: false,
+        metadata: {
+          modelType: 'gemini-2.5',
+          usedThinking: true,
+        }
+      });
+    }
+    
+    yield* this.generateUnifiedContentStream(request, 'thinking-stream');
   }
 }
