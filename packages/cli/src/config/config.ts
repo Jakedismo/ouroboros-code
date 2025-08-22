@@ -73,6 +73,7 @@ export interface CliArgs {
   toolTimeout: number | undefined;
   maxConcurrentTools: number | undefined;
   confirmationMode: string | undefined;
+  maxSessionTurns: number | undefined;
   experimentalAcp: boolean | undefined;
   extensions: string[] | undefined;
   listExtensions: boolean | undefined;
@@ -118,7 +119,7 @@ Usage: ouroboros-code [options] [command]
 
 Interactive mode: ouroboros-code
 Non-interactive: ouroboros-code -p/--prompt "your task"
-Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
+Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
     )
     .command('$0', 'Launch Ouroboros Code - Multi-LLM Intelligence', (yargsInstance) =>
       yargsInstance
@@ -158,7 +159,7 @@ Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
         .option('autonomous', {
           type: 'string',
           description:
-            '🤖 Autonomous mode: Execute prompt and continue running for follow-up tasks',
+            '🤖 Autonomous mode: Execute prompt and continue running for follow-up tasks (enables A2A communication on port 45123)',
         })
         .option('system-prompt', {
           type: 'string',
@@ -289,6 +290,11 @@ Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
           description: 'Tool confirmation mode: always, never, or smart (default: smart)',
           default: 'smart',
         })
+        .option('max-session-turns', {
+          type: 'number',
+          description: 'Maximum number of conversation turns in autonomous mode (default: unlimited)',
+          default: -1,
+        })
         .option('extensions', {
           alias: 'e',
           type: 'array',
@@ -367,8 +373,12 @@ Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
     ouroboros-code /race                    # Performance race between providers
 
   Autonomous agent mode:
-    ouroboros-code --prompt "continue working autonomously"
+    ouroboros-code --autonomous "continue working autonomously"
     # Enables A2A communication on port 45123 for multi-agent coordination
+    
+    # With autonomous mode configuration:
+    ouroboros-code --autonomous "continue autonomously" --max-session-turns 50 --confirmation-mode never --max-concurrent-tools 5
+    # Advanced autonomous mode with unlimited tool confirmations and higher concurrency
 
 📚 Learn more: https://github.com/your-repo/ouroboros-code
 🐛 Report issues: https://github.com/your-repo/ouroboros-code/issues
@@ -676,7 +686,7 @@ export async function loadCliConfig(
     bugCommand: settings.bugCommand,
     model: argv.model || settings.model || DEFAULT_GEMINI_MODEL,
     extensionContextFilePaths,
-    maxSessionTurns: settings.maxSessionTurns ?? -1,
+    maxSessionTurns: argv.maxSessionTurns ?? settings.maxSessionTurns ?? -1,
     experimentalZedIntegration: argv.experimentalAcp || false,
     listExtensions: argv.listExtensions || false,
     extensions: allExtensions,
