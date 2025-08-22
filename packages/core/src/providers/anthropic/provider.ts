@@ -438,9 +438,17 @@ export class AnthropicProvider extends BaseLLMProvider {
   }
 
   /**
+   * Check if provider supports thinking mode
+   */
+  protected override supportsThinkingMode(): boolean {
+    const capabilities = PROVIDER_CAPABILITIES[LLMProvider.ANTHROPIC];
+    return capabilities.thinking?.supportsThinking || false;
+  }
+
+  /**
    * Generate content with thinking capabilities (Claude 4/Opus 4.1 specific)
    */
-  override async generateContentWithThinking(
+  protected override async generateContentWithThinking(
     request: UnifiedGenerateRequest,
     onThinking?: (thinkingContent: ThinkingContent) => void,
   ): Promise<UnifiedGenerateResponse> {
@@ -497,7 +505,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   /**
    * Generate streaming content with thinking_delta support
    */
-  override async *generateContentStreamWithThinking(
+  protected override async *generateContentStreamWithThinking(
     request: UnifiedGenerateRequest,
     onThinking?: (thinkingContent: ThinkingContent) => void,
   ): AsyncGenerator<UnifiedGenerateResponse> {

@@ -89,6 +89,12 @@ export class OpenAIProvider extends BaseLLMProvider {
       throw new Error('OpenAI provider not initialized');
     }
 
+    // Debug logging for thinking mode
+    const enableThinking = this.config.configInstance?.getEnableThinking?.();
+    console.log(`[OPENAI DEBUG ${userPromptId}] enableThinking from config: ${enableThinking}`);
+    console.log(`[OPENAI DEBUG ${userPromptId}] supportsThinkingMode: ${this.supportsThinkingMode()}`);
+    console.log(`[OPENAI DEBUG ${userPromptId}] model: ${this.config.model}`);
+
     try {
       // Convert to OpenAI format
       const openaiRequest = this.converter.toProviderFormat(request);
@@ -414,7 +420,7 @@ export class OpenAIProvider extends BaseLLMProvider {
   /**
    * Generate content with thinking capabilities (GPT-5 specific)
    */
-  override async generateContentWithThinking(
+  protected override async generateContentWithThinking(
     request: UnifiedGenerateRequest,
     onThinking?: (thinkingContent: ThinkingContent) => void,
   ): Promise<UnifiedGenerateResponse> {
@@ -491,7 +497,7 @@ export class OpenAIProvider extends BaseLLMProvider {
   /**
    * Generate streaming content with thinking progress indicators
    */
-  override async *generateContentStreamWithThinking(
+  protected override async *generateContentStreamWithThinking(
     request: UnifiedGenerateRequest,
     onThinking?: (thinkingContent: ThinkingContent) => void,
   ): AsyncGenerator<UnifiedGenerateResponse> {
@@ -580,6 +586,14 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   getThinkingCapabilities() {
     return PROVIDER_CAPABILITIES[LLMProvider.OPENAI].thinking;
+  }
+
+  /**
+   * Check if provider supports thinking mode
+   */
+  protected override supportsThinkingMode(): boolean {
+    const capabilities = PROVIDER_CAPABILITIES[LLMProvider.OPENAI];
+    return capabilities.thinking?.supportsThinking || false;
   }
 
   /**
