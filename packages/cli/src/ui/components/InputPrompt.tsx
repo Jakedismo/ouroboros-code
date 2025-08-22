@@ -19,17 +19,13 @@ import { useCommandCompletion } from '../hooks/useCommandCompletion.js';
 import { useKeypress, Key } from '../hooks/useKeypress.js';
 import { keyMatchers, Command } from '../keyMatchers.js';
 import { CommandContext, SlashCommand } from '../commands/types.js';
-import { Config } from '@ouroboros/code-cli-core';
-import {
-  clipboardHasImage,
-  saveClipboardImage,
-  cleanupOldClipboardImages,
-} from '../utils/clipboardUtils.js';
-import * as path from 'path';
+import { Config, ImagePart } from '@ouroboros/code-cli-core';
+import { useImagePaste } from '../hooks/useImagePaste.js';
 
 export interface InputPromptProps {
   buffer: TextBuffer;
   onSubmit: (value: string) => void;
+  onSubmitWithImages?: (value: string, images: ImagePart[]) => void;
   userMessages: readonly string[];
   onClearScreen: () => void;
   config: Config;
@@ -48,12 +44,13 @@ export interface InputPromptProps {
 export const InputPrompt: React.FC<InputPromptProps> = ({
   buffer,
   onSubmit,
+  onSubmitWithImages,
   userMessages,
   onClearScreen,
   config,
   slashCommands,
   commandContext,
-  placeholder = '  Type your message or @path/to/file',
+  placeholder = '  Type your message or @path/to/image.png',
   focus = true,
   inputWidth,
   suggestionsWidth,
@@ -66,6 +63,21 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
   const [escPressCount, setEscPressCount] = useState(0);
   const [showEscapePrompt, setShowEscapePrompt] = useState(false);
   const escapeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Image paste management
+  const {
+    attachedImages,
+    checkAndAttachClipboardImage,
+    attachImagesFromText,
+    removeImage: _removeImage, // May be needed for future UI to remove individual images
+    clearImages,
+    createImageParts,
+    hasImages,
+    totalSize,
+  } = useImagePaste({
+    maxImages: 10,
+    autoCleanup: true,
+  });
 
   const [dirs, setDirs] = useState<readonly string[]>(
     config.getWorkspaceContext().getDirectories(),
@@ -130,24 +142,42 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
   );
 
   const handleSubmitAndClear = useCallback(
-    (submittedValue: string) => {
+    async (submittedValue: string) => {
+      // Extract and attach images from text paths
+      const { cleanedText } = await attachImagesFromText(submittedValue);
+      
       if (shellModeActive) {
-        shellHistory.addCommandToHistory(submittedValue);
+        shellHistory.addCommandToHistory(cleanedText);
       }
+      
       // Clear the buffer *before* calling onSubmit to prevent potential re-submission
       // if onSubmit triggers a re-render while the buffer still holds the old value.
       buffer.setText('');
-      onSubmit(submittedValue);
+      
+      // Submit with images if we have any
+      if (hasImages && onSubmitWithImages) {
+        const imageParts = createImageParts();
+        onSubmitWithImages(cleanedText, imageParts);
+        clearImages(); // Clear images after submission
+      } else {
+        onSubmit(cleanedText);
+      }
+      
       resetCompletionState();
       resetReverseSearchCompletionState();
     },
     [
       onSubmit,
+      onSubmitWithImages,
       buffer,
       resetCompletionState,
       shellModeActive,
       shellHistory,
       resetReverseSearchCompletionState,
+      attachImagesFromText,
+      hasImages,
+      createImageParts,
+      clearImages,
     ],
   );
 
@@ -186,51 +216,12 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
 
   // Handle clipboard image pasting with Ctrl+V
   const handleClipboardImage = useCallback(async () => {
-    try {
-      if (await clipboardHasImage()) {
-        const imagePath = await saveClipboardImage(config.getTargetDir());
-        if (imagePath) {
-          // Clean up old images
-          cleanupOldClipboardImages(config.getTargetDir()).catch(() => {
-            // Ignore cleanup errors
-          });
-
-          // Get relative path from current directory
-          const relativePath = path.relative(config.getTargetDir(), imagePath);
-
-          // Insert @path reference at cursor position
-          const insertText = `@${relativePath}`;
-          const currentText = buffer.text;
-          const [row, col] = buffer.cursor;
-
-          // Calculate offset from row/col
-          let offset = 0;
-          for (let i = 0; i < row; i++) {
-            offset += buffer.lines[i].length + 1; // +1 for newline
-          }
-          offset += col;
-
-          // Add spaces around the path if needed
-          let textToInsert = insertText;
-          const charBefore = offset > 0 ? currentText[offset - 1] : '';
-          const charAfter =
-            offset < currentText.length ? currentText[offset] : '';
-
-          if (charBefore && charBefore !== ' ' && charBefore !== '\n') {
-            textToInsert = ' ' + textToInsert;
-          }
-          if (!charAfter || (charAfter !== ' ' && charAfter !== '\n')) {
-            textToInsert = textToInsert + ' ';
-          }
-
-          // Insert at cursor position
-          buffer.replaceRangeByOffset(offset, offset, textToInsert);
-        }
-      }
-    } catch (error) {
-      console.error('Error handling clipboard image:', error);
+    const attached = await checkAndAttachClipboardImage();
+    if (attached) {
+      // Provide visual feedback that image was attached
+      // The image indicator will show automatically via the UI update below
     }
-  }, [buffer, config]);
+  }, [checkAndAttachClipboardImage]);
 
   const handleInput = useCallback(
     (key: Key) => {
@@ -242,6 +233,12 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       if (key.paste) {
         // Ensure we never accidentally interpret paste as regular input.
         buffer.handleInput(key);
+        return;
+      }
+
+      // Handle Cmd+V / Ctrl+V for clipboard image pasting
+      if ((key.meta || key.ctrl) && key.name === 'v') {
+        handleClipboardImage();
         return;
       }
 
@@ -499,12 +496,6 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
         return;
       }
 
-      // Ctrl+V for clipboard image paste
-      if (keyMatchers[Command.PASTE_CLIPBOARD_IMAGE](key)) {
-        handleClipboardImage();
-        return;
-      }
-
       // Fall back to the text buffer's default input handling for all other keys
       buffer.handleInput(key);
     },
@@ -542,6 +533,20 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
 
   return (
     <>
+      {/* Image attachment indicator */}
+      {hasImages && (
+        <Box marginBottom={1}>
+          <Text color={theme.text.accent}>
+            📎 {attachedImages.length} image{attachedImages.length > 1 ? 's' : ''} attached
+            {totalSize > 0 && ` (${Math.round(totalSize / 1024)}KB)`}
+          </Text>
+          {attachedImages.map((img, idx) => (
+            <Text key={img.id} color={theme.text.secondary}>
+              {'  '}- {img.displayName}
+            </Text>
+          ))}
+        </Box>
+      )}
       <Box
         borderStyle="round"
         borderColor={

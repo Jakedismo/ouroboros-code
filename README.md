@@ -7,10 +7,11 @@
 ## 🚀 Why Ouroboros Code?
 
 ### Multi-LLM Provider Architecture
-- **🔄 Provider Flexibility**: Seamlessly switch between Gemini, OpenAI (GPT-5), and Anthropic (Claude 4)
+- **🔄 Provider Flexibility**: Seamlessly switch between Gemini, OpenAI (GPT-5), and Anthropic (Opus 4.1, Claude 4)
 - **⚡ Unified Tools**: All 11 builtin tools work identically across every provider
 - **🎯 Zero Migration Cost**: Switch providers without losing any functionality
 - **🧬 Convergence Analysis**: Compare and synthesize responses from multiple providers
+- **💻  Image inputs:** Copy paste images from your clipboard and use them as input for increased contextual understanding
 
 ### Inherited Gemini Power
 - **🎯 Free tier**: 60 requests/min and 1,000 requests/day with personal Google account
@@ -96,12 +97,12 @@ All 11 builtin tools work identically across every provider:
 
 ### Smart Instruction Files
 
-Priority-based instruction file system:
+Seamlessly migrate from the agent of your choice to Ouroboros-code:
 1. **OUROBOROS.md** - Primary configuration (highest priority)
 2. **CLAUDE.md** - Claude Code support
 3. **GEMINI.md** - Gemini cli support
 4. **AGENTS.md** - OpenAI Codex cli support
-5. **QWEN.md** - Qwen-Code support
+5. **QWEN.md** - Qwen-Code cli support
 6. **CRUSH.md** - Crush cli support
 
 ## 📋 Core Features (Inherited from Gemini CLI)

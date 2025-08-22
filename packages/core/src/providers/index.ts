@@ -13,7 +13,7 @@ export type { BlindspotAnalysis } from './blindspot-detector.js';
 
 // Export provider types
 export { LLMProvider } from './types.js';
-export type { LLMProviderConfig } from './types.js';
+export type { LLMProviderConfig, ImagePart } from './types.js';
 
 // Export orchestrator
 export { MultiProviderOrchestrator } from './multi-provider-orchestrator.js';

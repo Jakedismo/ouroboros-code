@@ -69,6 +69,7 @@ import {
   AuthType,
   type IdeContext,
   ideContext,
+  type ImagePart,
 } from '@ouroboros/code-cli-core';
 import {
   IdeIntegrationNudge,
@@ -626,6 +627,37 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
       addMessage(submittedValue);
     },
     [addMessage],
+  );
+
+  // Handle submission with images
+  const handleFinalSubmitWithImages = useCallback(
+    (submittedValue: string, images: ImagePart[]) => {
+      // Convert ImagePart[] to Google Genai Part[] format
+      const parts: any[] = [];
+      
+      // Add text part if present
+      if (submittedValue.trim()) {
+        parts.push({ text: submittedValue });
+      }
+      
+      // Add image parts - they already have the correct structure
+      images.forEach(image => {
+        if (image.inlineData) {
+          parts.push({
+            inlineData: {
+              mimeType: image.inlineData.mimeType,
+              data: image.inlineData.data,
+            },
+          });
+        }
+      });
+      
+      // Submit the parts array directly to submitQuery
+      if (parts.length > 0) {
+        submitQuery(parts);
+      }
+    },
+    [submitQuery],
   );
 
   const handleIdePromptComplete = useCallback(
@@ -1221,6 +1253,7 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
                   inputWidth={inputWidth}
                   suggestionsWidth={suggestionsWidth}
                   onSubmit={handleFinalSubmit}
+                  onSubmitWithImages={handleFinalSubmitWithImages}
                   userMessages={userMessages}
                   onClearScreen={handleClearScreen}
                   config={config}
