@@ -265,6 +265,9 @@ export interface ConfigParameters {
   provider?: 'gemini' | 'openai' | 'anthropic';
   openaiApiKey?: string;
   anthropicApiKey?: string;
+  // System prompt customization
+  systemPrompt?: string;
+  systemPromptFlavour?: string;
 }
 
 export class Config {
@@ -340,6 +343,9 @@ export class Config {
   private provider: 'gemini' | 'openai' | 'anthropic';
   private readonly openaiApiKey: string | undefined;
   private readonly anthropicApiKey: string | undefined;
+  // System prompt customization
+  private readonly systemPrompt: string | undefined;
+  private readonly systemPromptFlavour: string | undefined;
 
   constructor(params: ConfigParameters) {
     this.sessionId = params.sessionId;
@@ -421,6 +427,9 @@ export class Config {
     this.provider = params.provider ?? 'gemini'; // Default to Gemini for backward compatibility
     this.openaiApiKey = params.openaiApiKey;
     this.anthropicApiKey = params.anthropicApiKey;
+    // System prompt customization
+    this.systemPrompt = params.systemPrompt;
+    this.systemPromptFlavour = params.systemPromptFlavour;
 
     if (params.contextFileName) {
       setGeminiMdFilename(params.contextFileName);
@@ -653,6 +662,13 @@ export class Config {
 
   setUserMemory(newUserMemory: string): void {
     this.userMemory = newUserMemory;
+  }
+
+  getSystemPromptOptions(): { customPrompt?: string; flavour?: string } {
+    return {
+      customPrompt: this.systemPrompt,
+      flavour: this.systemPromptFlavour,
+    };
   }
 
   getGeminiMdFileCount(): number {

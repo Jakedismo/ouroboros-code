@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getCoreSystemPrompt } from './prompts.js';
+import { getCoreSystemPrompt, SystemPromptOptions } from './prompts.js';
 import { isGitRepository } from '../utils/gitUtils.js';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -267,6 +267,120 @@ describe('Core System Prompt (prompts.ts)', () => {
         path.resolve(expectedPath),
         expect.any(String),
       );
+    });
+  });
+
+  describe('System Prompt Customization with new options', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.stubEnv('GEMINI_SYSTEM_MD', undefined);
+      vi.stubEnv('SANDBOX', undefined);
+      vi.mocked(isGitRepository).mockReturnValue(false);
+    });
+
+    it('should use custom prompt from direct string', () => {
+      const options: SystemPromptOptions = {
+        customPrompt: 'This is a custom system prompt',
+      };
+
+      const result = getCoreSystemPrompt('', options);
+
+      expect(result).toContain('This is a custom system prompt');
+      // Should still apply dynamic sections
+      expect(result).toContain('Outside of Sandbox');
+    });
+
+    it('should load custom prompt from file path', () => {
+      const mockFileContent = 'Custom prompt from file';
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockFileContent);
+
+      const options: SystemPromptOptions = {
+        customPrompt: './custom-prompt.md',
+      };
+
+      const result = getCoreSystemPrompt('', options);
+
+      expect(fs.existsSync).toHaveBeenCalled();
+      expect(fs.readFileSync).toHaveBeenCalled();
+      expect(result).toContain(mockFileContent);
+    });
+
+    it('should throw error if custom prompt file does not exist', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const options: SystemPromptOptions = {
+        customPrompt: './non-existent.md',
+      };
+
+      expect(() => getCoreSystemPrompt('', options)).toThrow(
+        'Custom system prompt file not found'
+      );
+    });
+
+    it('should append user memory to custom prompt', () => {
+      const options: SystemPromptOptions = {
+        customPrompt: 'Custom prompt',
+      };
+      const userMemory = 'Remember this important fact';
+
+      const result = getCoreSystemPrompt(userMemory, options);
+
+      expect(result).toContain('Custom prompt');
+      expect(result).toContain('---');
+      expect(result).toContain('Remember this important fact');
+    });
+
+    it('should prioritize custom prompt over environment variable', () => {
+      vi.stubEnv('GEMINI_SYSTEM_MD', 'true');
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('Env var prompt');
+
+      const options: SystemPromptOptions = {
+        customPrompt: 'Custom prompt wins',
+      };
+
+      const result = getCoreSystemPrompt('', options);
+
+      expect(result).toContain('Custom prompt wins');
+      expect(result).not.toContain('Env var prompt');
+    });
+
+    it('should use environment variable when no custom prompt provided', () => {
+      vi.stubEnv('GEMINI_SYSTEM_MD', 'true');
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('Env var prompt');
+
+      const options: SystemPromptOptions = {};
+
+      const result = getCoreSystemPrompt('', options);
+
+      expect(result).toContain('Env var prompt');
+    });
+
+    it('should detect file path vs direct string correctly', () => {
+      // Direct string should not trigger file operations
+      vi.clearAllMocks();
+      const options1: SystemPromptOptions = {
+        customPrompt: 'Just a string with no path indicators',
+      };
+
+      getCoreSystemPrompt('', options1);
+      // For a direct string, existsSync should not be called for the custom prompt
+      // (might still be called for env var check)
+      const callCount = vi.mocked(fs.existsSync).mock.calls.length;
+
+      // Path-like string should trigger file operations
+      vi.clearAllMocks();
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('File content');
+
+      const options2: SystemPromptOptions = {
+        customPrompt: './path/to/prompt.md',
+      };
+
+      getCoreSystemPrompt('', options2);
+      expect(vi.mocked(fs.existsSync).mock.calls.length).toBeGreaterThan(callCount);
     });
   });
 });

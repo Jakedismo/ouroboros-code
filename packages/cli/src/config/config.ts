@@ -82,6 +82,9 @@ export interface CliArgs {
   provider: string | undefined;
   openaiApiKey: string | undefined;
   anthropicApiKey: string | undefined;
+  // System prompt customization
+  systemPrompt: string | undefined;
+  systemPromptFlavour: string | undefined;
 }
 
 export async function parseArguments(): Promise<CliArgs> {
@@ -156,6 +159,16 @@ Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
           type: 'string',
           description:
             '🤖 Autonomous mode: Execute prompt and continue running for follow-up tasks',
+        })
+        .option('system-prompt', {
+          type: 'string',
+          description:
+            '📝 Custom system prompt (file path or direct string)',
+        })
+        .option('system-prompt-flavour', {
+          type: 'string',
+          description:
+            '🎨 System prompt flavour/variant (e.g., default, technical, creative)',
         })
         .option('sandbox', {
           alias: 's',
@@ -575,6 +588,11 @@ export async function loadCliConfig(
 
   const sandboxConfig = await loadSandboxConfig(settings, argv);
 
+  // Validate system prompt options
+  if (argv.systemPrompt && argv.systemPromptFlavour) {
+    logger.warn('Both --system-prompt and --system-prompt-flavour specified. --system-prompt will take precedence.');
+  }
+
   // Create multi-provider MCP configuration with tool settings from CLI
   const multiProviderMCPConfig: Partial<MultiProviderMCPConfig> = {};
   if (argv.toolTimeout !== undefined || argv.maxConcurrentTools !== undefined || argv.confirmationMode !== undefined) {
@@ -677,6 +695,9 @@ export async function loadCliConfig(
     provider: (argv.provider as 'gemini' | 'openai' | 'anthropic') || 'gemini',
     openaiApiKey: argv.openaiApiKey,
     anthropicApiKey: argv.anthropicApiKey,
+    // System prompt customization
+    systemPrompt: argv.systemPrompt,
+    systemPromptFlavour: argv.systemPromptFlavour,
   });
 }
 
