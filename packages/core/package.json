@@ -1,6 +1,6 @@
 {
   "name": "@ouroboros/code-cli-core",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Gemini CLI Core",
   "repository": {
     "type": "git",

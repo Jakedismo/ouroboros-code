@@ -5,6 +5,17 @@ All notable changes to Ouroboros Code will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-alpha.2] - 2025-08-22
+
+### Changed
+- Updated all package versions to 1.0.0-alpha.2
+- Enhanced ASCII art with 3D shading effects for better visual impact
+- Fixed Tips component to properly display updated branding
+
+### Fixed
+- Resolved issue where old text was showing due to uncompiled TypeScript files
+- Ensured all JavaScript files are properly generated from TypeScript sources
+
 ## [1.0.0-alpha.1] - 2025-08-22
 
 ### 🎉 Major Release: Ouroboros Code Multi-Agent Framework

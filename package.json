@@ -1,6 +1,6 @@
 {
   "name": "@ouroboros/multi-agent-cli",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -14,7 +14,7 @@
     "url": "git+https://github.com/ouroboros-ai/multi-agent-cli.git"
   },
   "config": {
-    "sandboxImageUri": "us-docker.pkg.dev/ouroboros-dev/multi-agent-cli/sandbox:1.0.0-alpha.1"
+    "sandboxImageUri": "us-docker.pkg.dev/ouroboros-dev/multi-agent-cli/sandbox:1.0.0-alpha.2"
   },
   "scripts": {
     "start": "node scripts/start.js",
