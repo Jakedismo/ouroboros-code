@@ -24,7 +24,7 @@ import { themeManager } from './ui/themes/theme-manager.js';
 import { getStartupWarnings } from './utils/startupWarnings.js';
 import { getUserStartupWarnings } from './utils/userStartupWarnings.js';
 import { ConsolePatcher } from './ui/utils/ConsolePatcher.js';
-import { runNonInteractive } from './nonInteractiveCli.js';
+import { runNonInteractive, runAutonomous } from './nonInteractiveCli.js';
 import { loadExtensions } from './config/extension.js';
 import { cleanupCheckpoints, registerCleanup } from './utils/cleanup.js';
 import { getCliVersion } from './utils/version.js';
@@ -332,8 +332,15 @@ export async function main() {
     config,
   );
 
-  await runNonInteractive(nonInteractiveConfig, input, prompt_id);
-  process.exit(0);
+  // Check if autonomous mode is requested
+  if (argv.autonomous) {
+    console.log('🚀 Launching Ouroboros Code in Autonomous Mode...');
+    await runAutonomous(nonInteractiveConfig, input, prompt_id);
+    // runAutonomous handles its own lifecycle - no process.exit needed
+  } else {
+    await runNonInteractive(nonInteractiveConfig, input, prompt_id);
+    process.exit(0);
+  }
 }
 
 function setWindowTitle(title: string, settings: LoadedSettings) {

@@ -55,6 +55,7 @@ export interface CliArgs {
   debug: boolean | undefined;
   prompt: string | undefined;
   promptInteractive: string | undefined;
+  autonomous: string | undefined;
   allFiles: boolean | undefined;
   all_files: boolean | undefined;
   showMemoryUsage: boolean | undefined;
@@ -150,6 +151,11 @@ Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
           type: 'string',
           description:
             'Execute the provided prompt and continue in interactive mode',
+        })
+        .option('autonomous', {
+          type: 'string',
+          description:
+            '🤖 Autonomous mode: Execute prompt and continue running for follow-up tasks',
         })
         .option('sandbox', {
           alias: 's',
@@ -301,6 +307,11 @@ Autonomous agent: ouroboros-code --prompt "continue autonomously"`,
           if (argv.prompt && argv['promptInteractive']) {
             throw new Error(
               'Cannot use both --prompt (-p) and --prompt-interactive (-i) together',
+            );
+          }
+          if (argv.autonomous && (argv.prompt || argv['promptInteractive'])) {
+            throw new Error(
+              'Cannot use --autonomous with --prompt or --prompt-interactive. --autonomous includes prompt execution.',
             );
           }
           if (argv.yolo && argv['approvalMode']) {
@@ -478,7 +489,7 @@ export async function loadCliConfig(
   );
 
   let mcpServers = mergeMcpServers(settings, activeExtensions);
-  const question = argv.promptInteractive || argv.prompt || '';
+  const question = argv.promptInteractive || argv.prompt || argv.autonomous || '';
 
   // Determine approval mode with backward compatibility
   let approvalMode: ApprovalMode;
@@ -506,7 +517,7 @@ export async function loadCliConfig(
   }
 
   const interactive =
-    !!argv.promptInteractive || (process.stdin.isTTY && question.length === 0);
+    !!argv.promptInteractive || (process.stdin.isTTY && question.length === 0 && !argv.autonomous);
   // In non-interactive mode, exclude tools that require a prompt.
   const extraExcludes: string[] = [];
   if (!interactive && !argv.experimentalAcp) {
