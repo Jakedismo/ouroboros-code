@@ -109,10 +109,8 @@ export const Footer: React.FC<FooterProps> = ({
         )}
         {isThinking && (
           <Text color={theme.text.accent}>
-            {' '}
             <Text color={theme.status.warning}>
-              🤔 {thinkingProvider ? `${thinkingProvider} thinking` : 'Thinking'}
-              {'.'.repeat(dotsCount)}
+              {' '}🤔 {thinkingProvider ? `${thinkingProvider} thinking` : 'Thinking'}{'.'.repeat(dotsCount)}
             </Text>
           </Text>
         )}
