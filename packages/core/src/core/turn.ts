@@ -114,6 +114,7 @@ export type ServerGeminiThinkingContentEvent = {
       modelType?: string;
       usedThinking?: boolean;
       summaryMode?: boolean;
+      thinkingTokens?: number;
     };
   };
 };

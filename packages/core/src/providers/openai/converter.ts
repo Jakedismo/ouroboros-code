@@ -426,6 +426,16 @@ export class OpenAIFormatConverter implements FormatConverter {
       const choice = chunk.choices[0];
       const delta = choice.delta;
 
+      // Check for reasoning/thinking content (GPT-5 with reasoning_effort)
+      // This might come in a different field or as metadata
+      if (delta.reasoning_content || delta.thinking_content) {
+        unifiedResponse.thinkingContent = {
+          type: 'thinking',
+          content: delta.reasoning_content || delta.thinking_content,
+          isComplete: false,
+        };
+      }
+
       // Extract content from delta
       if (delta.content) {
         unifiedResponse.content = delta.content;

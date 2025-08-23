@@ -99,6 +99,11 @@ export interface UnifiedGenerateResponse {
   functionCalls?: FunctionCall[];
   finishReason?: string;
   usage?: UsageMetadata;
+  thinkingContent?: {
+    type: 'thinking';
+    content: string;
+    isComplete: boolean;
+  };
 }
 
 // Re-export the unified tool types from unified-tool-interface
@@ -206,6 +211,7 @@ export interface ThinkingContent {
     modelType?: string;
     usedThinking?: boolean;
     summaryMode?: boolean;
+    thinkingTokens?: number;
   };
 }
 

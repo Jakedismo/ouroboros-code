@@ -423,11 +423,25 @@ export class OpenAIProvider extends BaseLLMProvider {
 
     try {
       // For GPT-5, thinking happens internally with reasoning_effort
-      // We provide progress indicators since thinking tokens aren't exposed
+      // Send initial thinking indicator before the API call
       if (onThinking) {
         onThinking({
           type: 'thinking',
           content: 'Engaging high-effort reasoning mode...',
+          isComplete: false,
+          metadata: {
+            effortLevel: 'high',
+            modelType: 'gpt-5',
+            usedThinking: true,
+          },
+        });
+        
+        // Give UI time to render the thinking indicator
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        onThinking({
+          type: 'thinking',
+          content: 'Processing complex reasoning patterns...',
           isComplete: false,
           metadata: {
             effortLevel: 'high',
@@ -440,22 +454,6 @@ export class OpenAIProvider extends BaseLLMProvider {
       // Convert to OpenAI format (reasoning_effort will be added automatically)
       const openaiRequest = this.converter.toProviderFormat(request);
       openaiRequest.model = this.config.model;
-
-      // Simulate thinking progress for GPT-5
-      if (onThinking) {
-        setTimeout(() => {
-          onThinking({
-            type: 'thinking',
-            content: 'Processing complex reasoning patterns...',
-            isComplete: false,
-            metadata: {
-              effortLevel: 'high',
-              modelType: 'gpt-5',
-              usedThinking: true,
-            },
-          });
-        }, 500);
-      }
 
       const startTime = Date.now();
       const response = await this.client.chat.completions.create(openaiRequest);
@@ -524,10 +522,28 @@ export class OpenAIProvider extends BaseLLMProvider {
 
       // Progress tracking
       let hasStartedResponse = false;
+      let thinkingTokens = '';
       
       for await (const chunk of stream) {
         const converter = this.converter as OpenAIFormatConverter;
         const unifiedChunk = converter.convertStreamChunk(chunk);
+
+        // Handle thinking content if present
+        if (unifiedChunk.thinkingContent && onThinking) {
+          thinkingTokens += unifiedChunk.thinkingContent.content;
+          onThinking({
+            type: 'thinking',
+            content: unifiedChunk.thinkingContent.content,
+            isComplete: false,
+            metadata: {
+              effortLevel: 'high',
+              modelType: 'gpt-5',
+              usedThinking: true,
+              thinkingTokens: thinkingTokens.length,
+            },
+          });
+          continue; // Don't yield thinking chunks to the main stream
+        }
 
         // If this is the first response chunk, indicate thinking is complete
         if (!hasStartedResponse && (unifiedChunk.content || unifiedChunk.functionCalls)) {
@@ -542,6 +558,7 @@ export class OpenAIProvider extends BaseLLMProvider {
                 effortLevel: 'high',
                 modelType: 'gpt-5',
                 usedThinking: true,
+                thinkingTokens: thinkingTokens.length,
               },
             });
           }
