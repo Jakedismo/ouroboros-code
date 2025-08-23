@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
 
@@ -28,12 +28,27 @@ export const ThinkingStatusBar: React.FC<ThinkingStatusBarProps> = ({
   provider,
   metadata,
 }) => {
+  const [dotsCount, setDotsCount] = useState(0);
+  
+  useEffect(() => {
+    if (!isThinking) {
+      setDotsCount(0);
+      return;
+    }
+    
+    const interval = setInterval(() => {
+      setDotsCount((prev) => (prev + 1) % 4);
+    }, 500);
+    
+    return () => clearInterval(interval);
+  }, [isThinking]);
+  
   if (!isThinking) {
     return null;
   }
 
   // Create animated thinking dots
-  const dots = '⋯';
+  const dots = '.'.repeat(dotsCount || 1);
   const statusText = thinkingContent 
     ? thinkingContent.length > 60 
       ? `${thinkingContent.substring(0, 57)}...` 

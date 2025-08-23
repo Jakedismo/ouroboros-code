@@ -95,11 +95,14 @@ export class OpenAIProvider extends BaseLLMProvider {
       throw new Error('OpenAI provider not initialized');
     }
 
-    // Debug logging for thinking mode
+    // Debug logging for thinking mode (only if debug mode is enabled)
     const enableThinking = this.config.configInstance?.getEnableThinking?.();
-    console.log(`[OPENAI DEBUG ${userPromptId}] enableThinking from config: ${enableThinking}`);
-    console.log(`[OPENAI DEBUG ${userPromptId}] supportsThinkingMode: ${this.supportsThinkingMode()}`);
-    console.log(`[OPENAI DEBUG ${userPromptId}] model: ${this.config.model}`);
+    const debugMode = this.config.configInstance?.getDebugMode?.() || false;
+    if (debugMode) {
+      console.log(`[OPENAI DEBUG ${userPromptId}] enableThinking from config: ${enableThinking}`);
+      console.log(`[OPENAI DEBUG ${userPromptId}] supportsThinkingMode: ${this.supportsThinkingMode()}`);
+      console.log(`[OPENAI DEBUG ${userPromptId}] model: ${this.config.model}`);
+    }
 
     try {
       // Convert to OpenAI format

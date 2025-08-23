@@ -369,6 +369,10 @@ export const useGeminiStream = (
         // Prevents additional output after a user initiated cancel.
         return '';
       }
+      
+      // Clear thinking state when actual content starts
+      setThinkingState({ isThinking: false });
+      
       let newGeminiMessageBuffer = currentGeminiMessageBuffer + eventValue;
       if (
         pendingHistoryItemRef.current?.type !== 'gemini' &&
@@ -494,8 +498,9 @@ export const useGeminiStream = (
       };
     }, userMessageTimestamp: number) => {
       // Update thinking state for status bar
+      // Keep thinking indicator visible during entire thinking phase
       setThinkingState({
-        isThinking: !eventValue.isComplete,
+        isThinking: true, // Always show during thinking phase
         content: eventValue.content,
         provider: eventValue.provider,
         metadata: eventValue.metadata,
@@ -723,6 +728,21 @@ export const useGeminiStream = (
 
       setIsResponding(true);
       setInitError(null);
+
+      // Show thinking indicator immediately when query is sent
+      if (config.getEnableThinking?.()) {
+        const provider = config.getProvider?.() || 'gemini';
+        const model = config.getModel?.();
+        setThinkingState({
+          isThinking: true,
+          content: 'Initializing reasoning...',
+          provider: provider,
+          metadata: {
+            modelType: model,
+            usedThinking: true,
+          },
+        });
+      }
 
       try {
         const stream = geminiClient.sendMessageStream(

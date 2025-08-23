@@ -197,10 +197,13 @@ export abstract class BaseLLMProvider implements ContentGenerator {
       // Queue the thinking event for emission in the stream
       this.thinkingEventQueue.push(enhancedEvent);
       
-      // Also log for debugging
-      console.log(`[THINKING ${userPromptId}] ${thinkingContent.type}: ${thinkingContent.content} (complete: ${thinkingContent.isComplete})`);
-      if (thinkingContent.metadata) {
-        console.log(`[THINKING ${userPromptId}] Metadata:`, thinkingContent.metadata);
+      // Also log for debugging (only if debug mode is enabled)
+      const debugMode = this.config.configInstance?.getDebugMode?.() || false;
+      if (debugMode) {
+        console.log(`[THINKING ${userPromptId}] ${thinkingContent.type}: ${thinkingContent.content} (complete: ${thinkingContent.isComplete})`);
+        if (thinkingContent.metadata) {
+          console.log(`[THINKING ${userPromptId}] Metadata:`, thinkingContent.metadata);
+        }
       }
     };
   }
