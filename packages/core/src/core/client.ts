@@ -613,6 +613,12 @@ export class GeminiClient {
       });
 
       let text = getResponseText(result);
+      
+      // Handle edge case where result might be a string directly (from error responses)
+      if (!text && typeof result === 'string') {
+        text = result;
+      }
+      
       if (!text) {
         const error = new Error(
           'API returned an empty response for generateJson.',
@@ -640,6 +646,16 @@ export class GeminiClient {
       try {
         return JSON.parse(text);
       } catch (parseError) {
+        // Check if the response is a simple string like "user" or "model"
+        // This can happen when the provider returns an error or non-JSON response
+        const trimmedText = text.trim().toLowerCase();
+        if (trimmedText === 'user' || trimmedText === 'model') {
+          console.debug(
+            `generateJson received plain text response "${trimmedText}", treating as next_speaker value`
+          );
+          return { next_speaker: trimmedText, reasoning: 'Provider returned plain text response' };
+        }
+        
         await reportError(
           parseError,
           'Failed to parse JSON response from generateJson.',
