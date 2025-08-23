@@ -150,6 +150,7 @@ export async function createContentGenerator(
   ) {
     // Determine the provider to use
     const effectiveProvider = config.provider || 'gemini';
+    console.log(`[createContentGenerator] Provider requested: ${config.provider}, effective: ${effectiveProvider}`);
 
     // Create provider configuration with MCP support
     const providerConfig: LLMProviderConfig = {
@@ -192,7 +193,14 @@ export async function createContentGenerator(
 
     try {
       // Use the new provider factory for multi-provider support
+      console.log(`[createContentGenerator] Creating provider with config:`, {
+        provider: providerConfig.provider,
+        model: providerConfig.model,
+        hasApiKey: !!providerConfig.apiKey,
+        enableBuiltinTools: providerConfig.enableBuiltinTools,
+      });
       const provider = await LLMProviderFactory.create(providerConfig);
+      console.log(`[createContentGenerator] Provider created successfully:`, provider.constructor.name);
       return new LoggingContentGenerator(provider, gcConfig);
     } catch (error) {
       // Fallback to Gemini if other providers fail and no explicit provider was requested

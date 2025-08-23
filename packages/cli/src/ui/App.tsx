@@ -980,7 +980,12 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
           items={[
             <Box flexDirection="column" key="header">
               {!settings.merged.hideBanner && (
-                <Header version={version} nightly={nightly} />
+                <Header
+                  version={version}
+                  nightly={nightly}
+                  provider={config.getProvider?.()}
+                  model={config.getModel?.()}
+                />
               )}
               {!settings.merged.hideTips && <Tips config={config} />}
             </Box>,

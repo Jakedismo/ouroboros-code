@@ -964,6 +964,7 @@ export class Config {
    * Initialize ContentGenerator with current provider configuration
    */
   private async initializeContentGenerator(): Promise<void> {
+    console.log(`[Config.initializeContentGenerator] Provider: ${this.provider}, Model: ${this.getModel()}`);
     const providerConfig: LLMProviderConfig = {
       provider: this.provider as LLMProvider,
       model: this.getModel(),

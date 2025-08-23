@@ -16,12 +16,16 @@ interface HeaderProps {
   customAsciiArt?: string; // For user-defined ASCII art
   version: string;
   nightly: boolean;
+  provider?: string;
+  model?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   customAsciiArt,
   version,
   nightly,
+  provider,
+  model,
 }) => {
   const { columns: terminalWidth } = useTerminalSize();
   let displayTitle;
@@ -54,17 +58,26 @@ export const Header: React.FC<HeaderProps> = ({
       ) : (
         <Text>{displayTitle}</Text>
       )}
-      {nightly && (
-        <Box width="100%" flexDirection="row" justifyContent="flex-end">
-          {Colors.GradientColors ? (
-            <Gradient colors={Colors.GradientColors}>
+      <Box width="100%" flexDirection="row" justifyContent="space-between">
+        {provider && (
+          <Box>
+            <Text color={Colors.AccentCyan}>
+              Provider: {provider.toUpperCase()} {model && `(${model})`}
+            </Text>
+          </Box>
+        )}
+        {nightly && (
+          <Box>
+            {Colors.GradientColors ? (
+              <Gradient colors={Colors.GradientColors}>
+                <Text>v{version}</Text>
+              </Gradient>
+            ) : (
               <Text>v{version}</Text>
-            </Gradient>
-          ) : (
-            <Text>v{version}</Text>
-          )}
-        </Box>
-      )}
+            )}
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 };

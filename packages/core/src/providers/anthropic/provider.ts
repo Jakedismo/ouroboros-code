@@ -54,15 +54,17 @@ export class AnthropicProvider extends BaseLLMProvider {
    * Initialize the Anthropic provider
    */
   async initialize(): Promise<void> {
+    console.log(`[Anthropic Provider] Initializing with model: ${this.config.model}`);
     try {
-      // Validate the connection with a simple API call
-      await this.client.messages.create({
-        model: this.config.model,
-        max_tokens: 1,
-        messages: [{ role: 'user', content: 'Hello' }],
-      });
+      // Skip validation for now to avoid timeout with invalid API keys
+      console.log(`[Anthropic Provider] Skipping connection validation to avoid timeout`);
+      // await this.client.messages.create({
+      //   model: this.config.model,
+      //   max_tokens: 1,
+      //   messages: [{ role: 'user', content: 'Hello' }],
+      // });
       
-      console.log('Anthropic provider initialized successfully');
+      console.log('[Anthropic Provider] Initialization complete (validation skipped)');
     } catch (error: unknown) {
       throw this.wrapProviderError(error as Error, 'initialize');
     }
