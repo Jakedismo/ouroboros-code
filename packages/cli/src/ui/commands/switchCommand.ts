@@ -180,7 +180,7 @@ async function switchToProvider(config: Config, provider: string): Promise<Messa
   
   // Get provider details
   const providerDetails: Record<string, { icon: string; name: string; defaultModel: string }> = {
-    gemini: { icon: '🔷', name: 'Google Gemini', defaultModel: 'gemini-2.0-flash-exp' },
+    gemini: { icon: '🔷', name: 'Google Gemini', defaultModel: 'gemini-2.5-pro' },
     openai: { icon: '🟢', name: 'OpenAI', defaultModel: 'gpt-5' },
     anthropic: { icon: '🟣', name: 'Anthropic Claude', defaultModel: 'claude-4-1-opus-20250805' },
   };

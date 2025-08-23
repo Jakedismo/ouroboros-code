@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
 import { shortenPath, tildeifyPath } from '@ouroboros/code-cli-core';
@@ -33,6 +33,9 @@ interface FooterProps {
   nightly: boolean;
   vimMode?: string;
   isTrustedFolder?: boolean;
+  isThinking?: boolean;
+  thinkingContent?: string;
+  thinkingProvider?: string;
 }
 
 export const Footer: React.FC<FooterProps> = ({
@@ -49,10 +52,29 @@ export const Footer: React.FC<FooterProps> = ({
   nightly,
   vimMode,
   isTrustedFolder,
+  isThinking,
+  thinkingContent,
+  thinkingProvider,
 }) => {
   const { columns: terminalWidth } = useTerminalSize();
 
   const isNarrow = isNarrowWidth(terminalWidth);
+
+  // Animated dots for thinking indicator
+  const [dotsCount, setDotsCount] = useState(0);
+  
+  useEffect(() => {
+    if (!isThinking) {
+      setDotsCount(0);
+      return;
+    }
+    
+    const interval = setInterval(() => {
+      setDotsCount((prev) => (prev + 1) % 4);
+    }, 500);
+    
+    return () => clearInterval(interval);
+  }, [isThinking]);
 
   // Adjust path length based on terminal width
   const pathLength = Math.max(20, Math.floor(terminalWidth * 0.4));
@@ -83,6 +105,15 @@ export const Footer: React.FC<FooterProps> = ({
             {branchName && (
               <Text color={theme.text.secondary}> ({branchName}*)</Text>
             )}
+          </Text>
+        )}
+        {isThinking && (
+          <Text color={theme.text.accent}>
+            {' '}
+            <Text color={theme.status.warning}>
+              🤔 {thinkingProvider ? `${thinkingProvider} thinking` : 'Thinking'}
+              {'.'.repeat(dotsCount)}
+            </Text>
           </Text>
         )}
         {debugMode && (

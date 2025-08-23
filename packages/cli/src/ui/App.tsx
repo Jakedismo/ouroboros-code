@@ -94,7 +94,6 @@ import { useKittyKeyboardProtocol } from './hooks/useKittyKeyboardProtocol.js';
 import { keyMatchers, Command } from './keyMatchers.js';
 import * as fs from 'fs';
 import { UpdateNotification } from './components/UpdateNotification.js';
-import { ThinkingStatusBar } from './components/ThinkingStatusBar.js';
 import {
   isProQuotaExceededError,
   isGenericQuotaExceededError,
@@ -1274,12 +1273,6 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
                     vimHandleInput={vimHandleInput}
                     placeholder={placeholder}
                   />
-                  <ThinkingStatusBar
-                    isThinking={thinkingState.isThinking}
-                    thinkingContent={thinkingState.content}
-                    provider={thinkingState.provider}
-                    metadata={thinkingState.metadata}
-                  />
                 </>
               )}
             </>
@@ -1336,6 +1329,9 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
               nightly={nightly}
               vimMode={vimModeEnabled ? vimMode : undefined}
               isTrustedFolder={isTrustedFolderState}
+              isThinking={thinkingState.isThinking}
+              thinkingContent={thinkingState.content}
+              thinkingProvider={thinkingState.provider}
             />
           )}
         </Box>

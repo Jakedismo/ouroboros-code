@@ -119,6 +119,11 @@ export class GeminiProvider extends BaseLLMProvider {
       throw new Error('Gemini provider not initialized');
     }
 
+    // Ensure model is set from config
+    if (!request.model) {
+      request.model = this.config.model || 'gemini-2.5-pro';
+    }
+
     // Add thinking configuration if enabled
     if (this.config.configInstance?.getEnableThinking?.() && this.supportsThinkingMode()) {
       request.thinkingConfig = {
@@ -150,6 +155,11 @@ export class GeminiProvider extends BaseLLMProvider {
   ): AsyncGenerator<UnifiedGenerateResponse> {
     if (!this.actualGenerator) {
       throw new Error('Gemini provider not initialized');
+    }
+
+    // Ensure model is set from config
+    if (!request.model) {
+      request.model = this.config.model || 'gemini-2.5-pro';
     }
 
     // Add thinking configuration if enabled

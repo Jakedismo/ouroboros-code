@@ -33,6 +33,7 @@ export class GeminiFormatConverter implements FormatConverter {
   fromGeminiFormat(request: GenerateContentParameters): UnifiedGenerateRequest {
     const unifiedRequest: UnifiedGenerateRequest = {
       messages: [],
+      model: request.model, // Preserve the model from the original request
     };
 
     // Convert contents to messages (use type assertion for array handling)
@@ -98,7 +99,7 @@ export class GeminiFormatConverter implements FormatConverter {
    */
   toProviderFormat(request: UnifiedGenerateRequest): GenerateContentParameters {
     const geminiRequest: GenerateContentParameters = {
-      model: 'gemini-1.5-pro', // Add required model field
+      model: request.model || 'gemini-2.5-pro', // Use the actual model from request
       contents: request.messages.map((message) =>
         this.convertMessageToContent(message),
       ),

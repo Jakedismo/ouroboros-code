@@ -77,6 +77,7 @@ export interface FunctionCallPart {
  */
 export interface UnifiedGenerateRequest {
   messages: UnifiedMessage[];
+  model?: string;
   systemInstruction?: string;
   maxTokens?: number;
   temperature?: number;
