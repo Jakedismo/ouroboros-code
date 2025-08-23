@@ -266,6 +266,11 @@ export interface ConfigParameters {
   provider?: 'gemini' | 'openai' | 'anthropic';
   openaiApiKey?: string;
   anthropicApiKey?: string;
+  // Claude OAuth configuration
+  claudeUseOauth?: boolean;
+  claudeAccessToken?: string;
+  claudeRefreshToken?: string;
+  claudeCredentialsPath?: string;
   // System prompt customization
   systemPrompt?: string;
   systemPromptFlavour?: string;
@@ -347,6 +352,11 @@ export class Config {
   private provider: 'gemini' | 'openai' | 'anthropic';
   private readonly openaiApiKey: string | undefined;
   private readonly anthropicApiKey: string | undefined;
+  // Claude OAuth configuration
+  private readonly claudeUseOauth: boolean;
+  private readonly claudeAccessToken: string | undefined;
+  private readonly claudeRefreshToken: string | undefined;
+  private readonly claudeCredentialsPath: string | undefined;
   // System prompt customization
   private readonly systemPrompt: string | undefined;
   private readonly systemPromptFlavour: string | undefined;
@@ -436,6 +446,11 @@ export class Config {
     this.provider = params.provider ?? 'gemini'; // Default to Gemini for backward compatibility
     this.openaiApiKey = params.openaiApiKey;
     this.anthropicApiKey = params.anthropicApiKey;
+    // Claude OAuth configuration
+    this.claudeUseOauth = params.claudeUseOauth ?? false;
+    this.claudeAccessToken = params.claudeAccessToken;
+    this.claudeRefreshToken = params.claudeRefreshToken;
+    this.claudeCredentialsPath = params.claudeCredentialsPath;
     // System prompt customization
     this.systemPrompt = params.systemPrompt;
     this.systemPromptFlavour = params.systemPromptFlavour;
@@ -944,6 +959,25 @@ export class Config {
   }
 
   /**
+   * Get Claude OAuth configuration
+   */
+  getClaudeUseOauth(): boolean {
+    return this.claudeUseOauth;
+  }
+
+  getClaudeAccessToken(): string | undefined {
+    return this.claudeAccessToken || process.env['CLAUDE_ACCESS_TOKEN'];
+  }
+
+  getClaudeRefreshToken(): string | undefined {
+    return this.claudeRefreshToken || process.env['CLAUDE_REFRESH_TOKEN'];
+  }
+
+  getClaudeCredentialsPath(): string | undefined {
+    return this.claudeCredentialsPath;
+  }
+
+  /**
    * Get the current provider's API key based on provider type
    */
   private getProviderApiKey(): string | undefined {
@@ -982,6 +1016,12 @@ export class Config {
       mcpConfig: this.getMultiProviderMCPConfig(),
       configInstance: this,
       apiKey: this.getProviderApiKey(),
+      // OAuth configuration for Anthropic
+      useOAuth: this.provider === 'anthropic' && this.getClaudeUseOauth(),
+      oauthAccessToken: this.getClaudeAccessToken(),
+      oauthRefreshToken: this.getClaudeRefreshToken(),
+      oauthCredentialsPath: this.getClaudeCredentialsPath(),
+      oauthAutoRefresh: true,
       timeout: 60000,
       maxRetries: 3,
     };

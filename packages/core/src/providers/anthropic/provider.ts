@@ -13,6 +13,7 @@ import {
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseLLMProvider } from '../base.js';
 import { AnthropicFormatConverter } from './converter.js';
+import { AnthropicOAuthManager } from './oauth-manager.js';
 import {
   LLMProviderConfig,
   LLMProvider,
@@ -32,15 +33,34 @@ import {
  */
 export class AnthropicProvider extends BaseLLMProvider {
   private client: Anthropic;
+  private oauthManager?: AnthropicOAuthManager;
 
   constructor(config: LLMProviderConfig) {
     super(config);
     
-    // Initialize Anthropic client with real SDK
-    this.client = new Anthropic({
-      apiKey: config.apiKey,
-      baseURL: config.baseUrl,
-    });
+    // Initialize OAuth manager if OAuth is configured
+    if (config.useOAuth) {
+      this.oauthManager = new AnthropicOAuthManager({
+        useOAuth: true,
+        accessToken: config.oauthAccessToken,
+        refreshToken: config.oauthRefreshToken,
+        expiresAt: config.oauthExpiresAt,
+        credentialsPath: config.oauthCredentialsPath,
+        autoRefresh: config.oauthAutoRefresh ?? true,
+      });
+      
+      // Initialize with placeholder, will be updated in initialize()
+      this.client = new Anthropic({
+        apiKey: 'oauth-pending',
+        baseURL: config.baseUrl,
+      });
+    } else {
+      // Standard API key authentication
+      this.client = new Anthropic({
+        apiKey: config.apiKey,
+        baseURL: config.baseUrl,
+      });
+    }
   }
 
   /**
@@ -55,7 +75,23 @@ export class AnthropicProvider extends BaseLLMProvider {
    */
   async initialize(): Promise<void> {
     console.log(`[Anthropic Provider] Initializing with model: ${this.config.model}`);
+    
     try {
+      // If using OAuth, initialize OAuth manager and update client
+      if (this.oauthManager) {
+        console.log('[Anthropic Provider] Initializing OAuth authentication...');
+        await this.oauthManager.initialize();
+        
+        // Get access token and create new client
+        const accessToken = await this.oauthManager.getAccessToken();
+        this.client = new Anthropic({
+          apiKey: accessToken, // Use access token as API key
+          baseURL: this.config.baseUrl,
+        });
+        
+        console.log('[Anthropic Provider] OAuth authentication successful');
+      }
+      
       // Skip validation for now to avoid timeout with invalid API keys
       console.log(`[Anthropic Provider] Skipping connection validation to avoid timeout`);
       // await this.client.messages.create({
@@ -64,8 +100,14 @@ export class AnthropicProvider extends BaseLLMProvider {
       //   messages: [{ role: 'user', content: 'Hello' }],
       // });
       
-      console.log('[Anthropic Provider] Initialization complete (validation skipped)');
+      console.log('[Anthropic Provider] Initialization complete');
     } catch (error: unknown) {
+      if (this.oauthManager && error instanceof Error && error.message.includes('OAuth')) {
+        throw new ProviderAuthError(
+          LLMProvider.ANTHROPIC,
+          new Error(`OAuth authentication failed: ${error.message}`)
+        );
+      }
       throw this.wrapProviderError(error as Error, 'initialize');
     }
   }
@@ -78,6 +120,11 @@ export class AnthropicProvider extends BaseLLMProvider {
     _userPromptId: string,
   ): Promise<UnifiedGenerateResponse> {
     try {
+      // Refresh OAuth token if needed
+      if (this.oauthManager) {
+        await this.refreshOAuthIfNeeded();
+      }
+      
       // Convert to Anthropic format
       const anthropicRequest = this.converter.toProviderFormat(request);
 
@@ -90,6 +137,12 @@ export class AnthropicProvider extends BaseLLMProvider {
       // Convert back to unified format
       return this.converter.fromProviderResponse(response);
     } catch (error: unknown) {
+      // Handle OAuth-specific errors
+      if (this.isOAuthError(error)) {
+        await this.handleOAuthError(error);
+        // Retry once after handling OAuth error
+        return this.generateUnifiedContent(request, _userPromptId);
+      }
       throw this.wrapProviderError(error as Error, 'generateUnifiedContent');
     }
   }
@@ -611,5 +664,110 @@ export class AnthropicProvider extends BaseLLMProvider {
    */
   getThinkingCapabilities() {
     return PROVIDER_CAPABILITIES[LLMProvider.ANTHROPIC].thinking;
+  }
+
+  /**
+   * Refresh OAuth token if needed
+   */
+  private async refreshOAuthIfNeeded(): Promise<void> {
+    if (!this.oauthManager) {
+      return;
+    }
+
+    try {
+      const accessToken = await this.oauthManager.getAccessToken();
+      // Update client with refreshed token if it changed
+      this.client = new Anthropic({
+        apiKey: accessToken,
+        baseURL: this.config.baseUrl,
+      });
+    } catch (error) {
+      throw new ProviderAuthError(
+        LLMProvider.ANTHROPIC,
+        new Error(`OAuth token refresh failed: ${error}`)
+      );
+    }
+  }
+
+  /**
+   * Check if error is OAuth-related
+   */
+  private isOAuthError(error: unknown): boolean {
+    if (!this.oauthManager) {
+      return false;
+    }
+
+    // Check for 401 errors or token-related messages
+    const errorMessage = (error as any)?.message?.toLowerCase() || '';
+    const statusCode = (error as any)?.status || (error as any)?.statusCode;
+    
+    return (
+      statusCode === 401 ||
+      errorMessage.includes('unauthorized') ||
+      errorMessage.includes('authentication') ||
+      errorMessage.includes('token')
+    );
+  }
+
+  /**
+   * Handle OAuth errors by refreshing token
+   */
+  private async handleOAuthError(error: unknown): Promise<void> {
+    if (!this.oauthManager) {
+      throw error;
+    }
+
+    console.log('[Anthropic Provider] OAuth error detected, attempting token refresh...');
+    
+    try {
+      // Force token refresh
+      await this.oauthManager.refreshAccessToken();
+      const newToken = await this.oauthManager.getAccessToken();
+      
+      // Update client with new token
+      this.client = new Anthropic({
+        apiKey: newToken,
+        baseURL: this.config.baseUrl,
+      });
+      
+      console.log('[Anthropic Provider] OAuth token refreshed successfully');
+    } catch (refreshError) {
+      throw new ProviderAuthError(
+        LLMProvider.ANTHROPIC,
+        new Error(`OAuth token refresh failed: ${refreshError}`)
+      );
+    }
+  }
+
+  /**
+   * Get OAuth status
+   */
+  getOAuthStatus(): { isConfigured: boolean; expiresAt?: Date | null } {
+    if (!this.oauthManager) {
+      return { isConfigured: false };
+    }
+
+    return {
+      isConfigured: this.oauthManager.isConfigured(),
+      expiresAt: this.oauthManager.getTokenExpiry(),
+    };
+  }
+
+  /**
+   * Import Claude credentials from file
+   */
+  async importClaudeCredentials(credentialsPath?: string): Promise<void> {
+    if (!this.oauthManager) {
+      throw new Error('OAuth is not configured for this provider');
+    }
+
+    await this.oauthManager.importClaudeCredentials(credentialsPath);
+    
+    // Reinitialize client with new credentials
+    const accessToken = await this.oauthManager.getAccessToken();
+    this.client = new Anthropic({
+      apiKey: accessToken,
+      baseURL: this.config.baseUrl,
+    });
   }
 }

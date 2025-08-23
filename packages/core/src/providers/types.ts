@@ -40,6 +40,14 @@ export interface LLMProviderConfig {
   configInstance?: any; // Reference to Config instance for tool integration
   mcpConfig?: Partial<MultiProviderMCPConfig>; // Advanced MCP configuration
   authType?: AuthType; // Authentication type for OAuth vs API key handling
+  
+  // OAuth configuration (for providers that support it)
+  useOAuth?: boolean; // Use OAuth instead of API key
+  oauthAccessToken?: string; // OAuth access token
+  oauthRefreshToken?: string; // OAuth refresh token
+  oauthExpiresAt?: number; // Token expiration timestamp
+  oauthCredentialsPath?: string; // Path to OAuth credentials file
+  oauthAutoRefresh?: boolean; // Auto-refresh tokens when expired
 }
 
 /**

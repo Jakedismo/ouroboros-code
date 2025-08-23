@@ -85,6 +85,11 @@ export interface CliArgs {
   provider: string | undefined;
   openaiApiKey: string | undefined;
   anthropicApiKey: string | undefined;
+  // Claude OAuth options
+  claudeUseOauth: boolean | undefined;
+  claudeAccessToken: string | undefined;
+  claudeRefreshToken: string | undefined;
+  claudeCredentialsPath: string | undefined;
   // System prompt customization
   systemPrompt: string | undefined;
   systemPromptFlavour: string | undefined;
@@ -164,6 +169,27 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
           type: 'string',
           description:
             '🔑 Anthropic API key for Claude models (overrides ANTHROPIC_API_KEY env)',
+        })
+        .option('claude-use-oauth', {
+          type: 'boolean',
+          description:
+            '🔐 Use Claude OAuth authentication instead of API key (for Claude Max subscribers)',
+          default: false,
+        })
+        .option('claude-access-token', {
+          type: 'string',
+          description:
+            '🎫 Claude OAuth access token (overrides CLAUDE_ACCESS_TOKEN env)',
+        })
+        .option('claude-refresh-token', {
+          type: 'string',
+          description:
+            '🔄 Claude OAuth refresh token (overrides CLAUDE_REFRESH_TOKEN env)',
+        })
+        .option('claude-credentials-path', {
+          type: 'string',
+          description:
+            '📁 Path to Claude credentials file (default: ~/.claude/.credentials.json)',
         })
         .option('prompt', {
           alias: 'p',
@@ -737,6 +763,11 @@ export async function loadCliConfig(
     provider: (argv.provider as 'gemini' | 'openai' | 'anthropic') || 'gemini',
     openaiApiKey: argv.openaiApiKey,
     anthropicApiKey: argv.anthropicApiKey,
+    // Claude OAuth configuration
+    claudeUseOauth: argv.claudeUseOauth || false,
+    claudeAccessToken: argv.claudeAccessToken || process.env['CLAUDE_ACCESS_TOKEN'],
+    claudeRefreshToken: argv.claudeRefreshToken || process.env['CLAUDE_REFRESH_TOKEN'],
+    claudeCredentialsPath: argv.claudeCredentialsPath,
     // System prompt customization
     systemPrompt: argv.systemPrompt,
     systemPromptFlavour: argv.systemPromptFlavour,

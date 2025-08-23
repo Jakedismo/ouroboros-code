@@ -74,6 +74,14 @@ export class Storage {
     return path.join(Storage.getGlobalGeminiDir(), 'oauth_creds.json');
   }
 
+  static getAnthropicOAuthPath(): string {
+    return path.join(Storage.getGlobalGeminiDir(), 'anthropic-oauth.json');
+  }
+
+  static getConfigDir(): string {
+    return Storage.getGlobalGeminiDir();
+  }
+
   getProjectRoot(): string {
     return this.targetDir;
   }
