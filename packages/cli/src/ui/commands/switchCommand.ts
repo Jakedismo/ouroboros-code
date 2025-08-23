@@ -130,7 +130,7 @@ function listProviders(): MessageActionReturn {
   • Status: ${hasOpenAIKey() ? '✅ Configured' : '⚠️ Needs API key'}
 
 🟣 **Anthropic** (Claude)
-  • Models: claude-opus-4-1-20250805, claude-4-sonnet-20250514
+  • Models: claude-4-1-opus-20250508, claude-4-sonnet-20250514
   • Strengths: Constitutional AI, nuanced reasoning
   • Best for: Writing, analysis, ethical considerations
   • Status: ${hasAnthropicKey() ? '✅ Configured' : '⚠️ Needs API key'}

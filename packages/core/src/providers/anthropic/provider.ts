@@ -235,6 +235,16 @@ export class AnthropicProvider extends BaseLLMProvider {
    * Handle Anthropic-specific errors
    */
   private handleAnthropicError(error: unknown): Error {
+    // Log full error details for debugging
+    console.error('[Anthropic Provider] Full error details:', {
+      error: error,
+      message: (error as any)?.message,
+      type: (error as any)?.type,
+      status: (error as any)?.status,
+      errorObj: (error as any)?.error,
+      headers: (error as any)?.headers,
+    });
+    
     // Check for specific Anthropic error types
     if ((error as any)?.error || (error as any)?.type) {
       const errorType = (error as any).type || (error as any).error?.type;
@@ -243,6 +253,11 @@ export class AnthropicProvider extends BaseLLMProvider {
 
       // Authentication errors
       if (statusCode === 401 || errorType === 'authentication_error') {
+        console.error('[Anthropic Provider] Authentication error detected:', {
+          statusCode,
+          errorType,
+          message: (error as any)?.message,
+        });
         return new ProviderAuthError(LLMProvider.ANTHROPIC, error as Error);
       }
 
@@ -367,7 +382,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   async getAvailableModels(): Promise<string[]> {
     // Anthropic doesn't have a models list endpoint, so return known models
     return [
-      'claude-opus-4-1-20250805',
+      'claude-4-1-opus-20250508',
       'claude-4-sonnet-20250514',
     ];
   }
@@ -378,8 +393,8 @@ export class AnthropicProvider extends BaseLLMProvider {
   async getModelInfo(): Promise<any> {
     // Anthropic doesn't provide detailed model info via API
     const knownModels: Record<string, any> = {
-      'claude-opus-4-1-20250805': {
-        id: 'claude-opus-4-1-20250805',
+      'claude-4-1-opus-20250508': {
+        id: 'claude-4-1-opus-20250508',
         name: 'Claude Opus 4.1',
         max_tokens: 8192,
         max_context_tokens: 500000,
@@ -472,7 +487,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   getContextWindow(): number {
     // Use known model values
     const knownModels: Record<string, number> = {
-      'claude-opus-4-1-20250805': 500000,
+      'claude-4-1-opus-20250508': 500000,
       'claude-4-sonnet-20250514': 200000,
       'claude-3-haiku-20240307': 200000,
     };
@@ -485,7 +500,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   getMaxOutputTokens(): number {
     // Use known model values
     const knownModels: Record<string, number> = {
-      'claude-opus-4-1-20250805': 8192,
+      'claude-4-1-opus-20250508': 8192,
       'claude-4-sonnet-20250514': 4096,
       'claude-3-haiku-20240307': 4096,
     };

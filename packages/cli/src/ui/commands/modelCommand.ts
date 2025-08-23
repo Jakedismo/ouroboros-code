@@ -68,11 +68,11 @@ export const modelCommand: SlashCommand = {
       'gemini-2.5-flash',
       'gpt-5',
       'o3',
-      'claude-opus-4-1-20250805',
+      'claude-4-1-opus-20250508',
       'claude-4-sonnet-20250514',
       'openai:gpt-5',
       'openai:o3',
-      'anthropic:claude-opus-4-1-20250805',
+      'anthropic:claude-4-1-opus-20250508',
       'anthropic:claude-4-sonnet-20250514',
       'gemini:gemini-2.5-pro',
       'gemini:gemini-2.5-flash',
@@ -121,7 +121,7 @@ function listAvailableModels(provider?: string): MessageActionReturn {
       { id: 'o3', name: 'O3', context: '128K tokens', description: 'Advanced reasoning model' },
     ],
     anthropic: [
-      { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1', context: '500K tokens', description: 'Most capable model' },
+      { id: 'claude-4-1-opus-20250508', name: 'Claude Opus 4.1', context: '500K tokens', description: 'Most capable model' },
       { id: 'claude-4-sonnet-20250514', name: 'Claude 4 Sonnet', context: '200K tokens', description: 'Balanced performance' },
     ],
   };
@@ -204,7 +204,7 @@ function setGlobalModel(config: Config, model: string): MessageActionReturn {
     'best': {
       gemini: 'gemini-2.5-pro',
       openai: 'gpt-5',
-      anthropic: 'claude-opus-4-1-20250805',
+      anthropic: 'claude-4-1-opus-20250508',
     },
     'fast': {
       gemini: 'gemini-2.5-flash',

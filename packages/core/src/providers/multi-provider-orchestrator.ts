@@ -262,7 +262,7 @@ export class MultiProviderOrchestrator {
       case LLMProvider.OPENAI:
         return 'gpt-5';
       case LLMProvider.ANTHROPIC:
-        return 'claude-opus-4-1-20250805';
+        return 'claude-4-1-opus-20250508';
       default:
         return 'gemini-2.5-pro';
     }

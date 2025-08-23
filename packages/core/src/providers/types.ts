@@ -203,7 +203,7 @@ export class ProviderQuotaError extends ProviderError {
 export const DEFAULT_MODELS: Record<LLMProvider, string> = {
   [LLMProvider.GEMINI]: 'gemini-2.5-pro',
   [LLMProvider.OPENAI]: 'gpt-5',
-  [LLMProvider.ANTHROPIC]: 'claude-opus-4-1-20250805',
+  [LLMProvider.ANTHROPIC]: 'claude-4-1-opus-20250508',
 };
 
 /**

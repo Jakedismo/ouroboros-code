@@ -92,6 +92,7 @@ export class AnthropicOAuthManager {
    */
   async getAccessToken(): Promise<string> {
     if (!this.tokens) {
+      console.log('[OAuth Manager] No tokens in memory, initializing...');
       await this.initialize();
     }
 
@@ -99,8 +100,17 @@ export class AnthropicOAuthManager {
       throw new Error('No OAuth access token available. Please authenticate with Claude first.');
     }
 
+    // Log token info (first 10 chars only for security)
+    console.log('[OAuth Manager] Access token found:', {
+      tokenPrefix: this.tokens.access_token.substring(0, 10) + '...',
+      hasRefreshToken: !!this.tokens.refresh_token,
+      expiresAt: this.tokens.expires_at,
+      needsRefresh: this.needsRefresh(),
+    });
+
     // Auto-refresh if enabled and needed
     if (this.config.autoRefresh && this.needsRefresh()) {
+      console.log('[OAuth Manager] Token needs refresh, refreshing...');
       await this.refreshAccessToken();
     }
 
@@ -117,10 +127,20 @@ export class AnthropicOAuthManager {
       path.join(Storage.getConfigDir(), 'anthropic-oauth.json'), // Alternative location
     ];
 
+    console.log('[OAuth Manager] Looking for credentials in:', pathsToTry);
+
     for (const credPath of pathsToTry) {
       try {
         const content = await fs.readFile(credPath, 'utf-8');
         const credentials = JSON.parse(content);
+        
+        console.log('[OAuth Manager] Found credentials file at:', credPath);
+        console.log('[OAuth Manager] Credential structure:', {
+          hasAccessToken: !!(credentials.accessToken || credentials.access_token),
+          hasRefreshToken: !!(credentials.refreshToken || credentials.refresh_token),
+          hasExpiresAt: !!(credentials.expiresAt || credentials.expires_at),
+          keys: Object.keys(credentials),
+        });
         
         // Handle different credential formats
         if (credentials.accessToken || credentials.access_token) {
@@ -130,14 +150,17 @@ export class AnthropicOAuthManager {
             expires_at: credentials.expiresAt || credentials.expires_at,
           };
           
-          console.log(`Loaded Claude OAuth credentials from ${credPath}`);
+          console.log(`[OAuth Manager] Successfully loaded Claude OAuth credentials from ${credPath}`);
           return;
         }
       } catch (error) {
+        console.log(`[OAuth Manager] Could not read ${credPath}:`, (error as Error).message);
         // Continue to next path
         continue;
       }
     }
+    
+    console.log('[OAuth Manager] No stored credentials found in any location');
   }
 
   /**

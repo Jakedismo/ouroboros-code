@@ -175,7 +175,7 @@ export class MCPEnabledProviderFactory {
 
       const providerInstance = new AnthropicProviderWithMCP({
         ...config,
-        model: config.model || 'claude-opus-4-1-20250805',
+        model: config.model || 'claude-4-1-opus-20250508',
         mcpConfig: MultiProviderMCPConfigMerger.getProviderConfig(
           mcpConfig,
           'anthropic',

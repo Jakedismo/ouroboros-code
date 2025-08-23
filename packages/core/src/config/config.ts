@@ -920,7 +920,7 @@ export class Config {
     const providerDefaultModels = {
       'gemini': 'gemini-2.5-pro',
       'openai': 'gpt-5',
-      'anthropic': 'claude-opus-4-1-20250805'
+      'anthropic': 'claude-4-1-opus-20250508'
     };
     
     // Update model to provider's default if current model is from a different provider

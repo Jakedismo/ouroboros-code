@@ -13,7 +13,7 @@ async function testProvider(providerName, apiKey) {
     contentGeneratorConfig: {
       model: providerName === 'gemini' ? 'gemini-2.5-pro' : 
              providerName === 'openai' ? 'gpt-5' : 
-             'claude-opus-4-1-20250805',
+             'claude-4-1-opus-20250508',
       authType: 'api-key',
       logLevel: 'verbose',
     },
