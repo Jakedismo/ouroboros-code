@@ -23,7 +23,7 @@ import { ShellTool } from '../tools/shell.js';
 import { WriteFileTool } from '../tools/write-file.js';
 import { WebFetchTool } from '../tools/web-fetch.js';
 import { ReadManyFilesTool } from '../tools/read-many-files.js';
-import { MemoryTool, setGeminiMdFilename } from '../tools/memoryTool.js';
+import { MemoryTool, setGeminiMdFilename, setWorkingDirectory } from '../tools/memoryTool.js';
 import { WebSearchTool } from '../tools/web-search.js';
 import { GeminiClient } from '../core/client.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
@@ -260,6 +260,7 @@ export interface ConfigParameters {
   interactive?: boolean;
   trustedFolder?: boolean;
   shouldUseNodePtyShell?: boolean;
+  experimentalA2aMode?: boolean;
   skipNextSpeakerCheck?: boolean;
   // Multi-LLM provider configuration
   provider?: 'gemini' | 'openai' | 'anthropic';
@@ -339,6 +340,7 @@ export class Config {
   private readonly trustedFolder: boolean | undefined;
   private readonly shouldUseNodePtyShell: boolean;
   private readonly skipNextSpeakerCheck: boolean;
+  private readonly experimentalA2aMode: boolean;
   private initialized: boolean = false;
   readonly storage: Storage;
   // Multi-LLM provider configuration
@@ -358,6 +360,8 @@ export class Config {
     this.fileSystemService = new StandardFileSystemService();
     this.sandbox = params.sandbox;
     this.targetDir = path.resolve(params.targetDir);
+    // Set the working directory for the MemoryTool to use for OUROBOROS.md
+    setWorkingDirectory(this.targetDir);
     this.workspaceContext = new WorkspaceContext(
       this.targetDir,
       params.includeDirectories ?? [],
@@ -426,6 +430,7 @@ export class Config {
     this.trustedFolder = params.trustedFolder;
     this.shouldUseNodePtyShell = params.shouldUseNodePtyShell ?? false;
     this.skipNextSpeakerCheck = params.skipNextSpeakerCheck ?? false;
+    this.experimentalA2aMode = params.experimentalA2aMode ?? false;
     this.storage = new Storage(this.targetDir);
     // Multi-LLM provider configuration
     this.provider = params.provider ?? 'gemini'; // Default to Gemini for backward compatibility
@@ -866,6 +871,10 @@ export class Config {
 
   isInteractive(): boolean {
     return this.interactive;
+  }
+
+  getExperimentalA2aMode(): boolean {
+    return this.experimentalA2aMode;
   }
 
   getShouldUseNodePtyShell(): boolean {

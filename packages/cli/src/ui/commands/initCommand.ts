@@ -25,7 +25,7 @@ const INSTRUCTION_FILES = [
 
 export const initCommand: SlashCommand = {
   name: 'init',
-  description: 'Analyzes the project and creates a tailored instruction file (OUROBOROS.md, CLAUDE.md, etc.).',
+  description: 'Analyzes the project and creates/recreates OUROBOROS.md by consolidating all instruction files.',
   kind: CommandKind.BUILT_IN,
   action: async (
     context: CommandContext,
@@ -40,44 +40,70 @@ export const initCommand: SlashCommand = {
     }
     const targetDir = context.services.config.getTargetDir();
     
-    // Check for existing instruction files
-    let existingFile: string | null = null;
+    // Collect content from existing instruction files (except OUROBOROS.md)
+    const existingContents: string[] = [];
+    const foundFiles: string[] = [];
+    
     for (const filename of INSTRUCTION_FILES) {
+      // Skip OUROBOROS.md as we're recreating it
+      if (filename === 'OUROBOROS.md') continue;
+      
       const filePath = path.join(targetDir, filename);
       if (fs.existsSync(filePath)) {
-        existingFile = filename;
-        break;
+        try {
+          const content = fs.readFileSync(filePath, 'utf8').trim();
+          if (content) {
+            existingContents.push(`## Content from ${filename}\n\n${content}`);
+            foundFiles.push(filename);
+          }
+        } catch (error) {
+          console.error(`Error reading ${filename}:`, error);
+        }
       }
     }
     
-    if (existingFile) {
-      return {
-        type: 'message',
-        messageType: 'info',
-        content:
-          `An instruction file (${existingFile}) already exists in this directory. No changes were made.`,
-      };
-    }
-    
-    // Create OUROBOROS.md as the default (highest priority)
+    // Always use OUROBOROS.md as the target file
     const instructionFileName = 'OUROBOROS.md';
     const instructionFilePath = path.join(targetDir, instructionFileName);
 
     // Create an empty instruction file
     fs.writeFileSync(instructionFilePath, '', 'utf8');
 
+    // Build message about what we're doing
+    let statusMessage = `Creating/recreating ${instructionFileName}.`;
+    if (foundFiles.length > 0) {
+      statusMessage += ` Consolidating content from: ${foundFiles.join(', ')}.`;
+    }
+    statusMessage += ' Now analyzing the project to populate it.';
+
     context.ui.addItem(
       {
         type: 'info',
-        text: `Empty ${instructionFileName} created. Now analyzing the project to populate it.`,
+        text: statusMessage,
       },
       Date.now(),
     );
 
+    // Build consolidated content string if we have existing files
+    let consolidatedContent = '';
+    if (existingContents.length > 0) {
+      consolidatedContent = `
+
+**Existing Instruction Files Content:**
+
+The following content was found in existing instruction files and should be consolidated into the new OUROBOROS.md:
+
+${existingContents.join('\n\n---\n\n')}
+
+---
+
+Please integrate the above existing content appropriately into the new OUROBOROS.md file.`;
+    }
+
     return {
       type: 'submit_prompt',
       content: `
-You are an AI agent assisting with Ouroboros Code. Your task is to analyze the current directory and generate a comprehensive ${instructionFileName} file to be used as instructional context for future interactions.
+You are an AI agent assisting with Ouroboros Code. Your task is to analyze the current directory and generate a comprehensive ${instructionFileName} file to be used as instructional context for future interactions.${consolidatedContent}
 
 **Analysis Process:**
 

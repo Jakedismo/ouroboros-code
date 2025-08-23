@@ -21,6 +21,7 @@ export interface WebhookPayload {
   started_at: string;
   completed_at?: string;
   metadata?: Record<string, unknown>;
+  target_pid?: number; // Optional PID for targeted messages. If omitted, message is broadcast to all clients
 }
 
 export interface WebhookServerConfig {
@@ -136,7 +137,12 @@ export class WebhookServer extends EventEmitter {
   }
   
   private handleWebhook(payload: WebhookPayload) {
-    console.debug(`[Webhook Server] Received webhook for tool ${payload.tool_id}`);
+    const isTargeted = payload.target_pid !== undefined && payload.target_pid !== null;
+    const messageType = isTargeted ? `targeted (PID: ${payload.target_pid})` : 'broadcast';
+    
+    console.debug(`[Webhook Server] Received ${messageType} webhook for tool ${payload.tool_id}`);
+    
+    // Emit to all listeners - PID filtering will be handled by individual handlers
     this.emit('tool-completion', payload);
     
     // Call specific callback if registered

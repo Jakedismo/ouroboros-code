@@ -76,6 +76,7 @@ export interface CliArgs {
   confirmationMode: string | undefined;
   maxSessionTurns: number | undefined;
   experimentalAcp: boolean | undefined;
+  experimentalA2aMode: boolean | undefined;
   extensions: string[] | undefined;
   listExtensions: boolean | undefined;
   proxy: string | undefined;
@@ -287,6 +288,11 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
         .option('experimental-acp', {
           type: 'boolean',
           description: 'Starts the agent in ACP mode',
+        })
+        .option('experimental-a2a-mode', {
+          type: 'boolean',
+          description: 'Enable Agent-to-Agent (A2A) communication via webhooks (port 45123)',
+          default: false,
         })
         .option('allowed-mcp-server-names', {
           type: 'array',
@@ -726,6 +732,7 @@ export async function loadCliConfig(
     trustedFolder,
     shouldUseNodePtyShell: settings.shouldUseNodePtyShell,
     skipNextSpeakerCheck: settings.skipNextSpeakerCheck,
+    experimentalA2aMode: argv.experimentalA2aMode || false,
     // Multi-LLM provider configuration
     provider: (argv.provider as 'gemini' | 'openai' | 'anthropic') || 'gemini',
     openaiApiKey: argv.openaiApiKey,

@@ -5,6 +5,23 @@ All notable changes to Ouroboros Code will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-alpha.5] - 2025-01-23
+
+### Added
+- **Experimental A2A Mode**: Added `--experimental-a2a-mode` flag to enable Agent-to-Agent communication via webhooks (port 45123) in interactive mode
+- **PID-Based Message Filtering**: Implemented client filtering system for targeted agent-to-agent routing
+- **Broadcast Message Support**: Messages without target PID are treated as broadcasts and processed by all agents
+- **Enhanced Webhook System**: Added target_pid field to webhook payloads for precise message routing
+
+### Enhanced
+- **Agent Communication**: A2A handlers now track their process PID for targeted message filtering
+- **Webhook Server**: Enhanced logging to distinguish between broadcast and targeted messages
+- **Debug Output**: Comprehensive logging for message routing and filtering decisions
+
+### Changed
+- A2A communication now available in interactive mode with `--experimental-a2a-mode` flag
+- Webhook payload structure extended with optional target_pid field for targeted messaging
+
 ## [1.0.0-alpha.2] - 2025-08-22
 
 ### Changed

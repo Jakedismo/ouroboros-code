@@ -37,6 +37,7 @@ import {
   logIdeConnection,
   IdeConnectionEvent,
   IdeConnectionType,
+  AutonomousA2AHandler,
 } from '@ouroboros/code-cli-core';
 import { validateAuthMethod } from './config/auth.js';
 import { setMaxSizedBoxDebugging } from './ui/components/shared/MaxSizedBox.js';
@@ -203,6 +204,31 @@ export async function main() {
     logIdeConnection(config, new IdeConnectionEvent(IdeConnectionType.START));
   }
 
+  // Initialize A2A handler if experimental mode is enabled
+  let a2aHandler: AutonomousA2AHandler | undefined;
+  
+  if (config.getDebugMode()) {
+    console.debug(`[A2A] Checking conditions: isInteractive=${config.isInteractive()}, experimentalA2aMode=${config.getExperimentalA2aMode()}`);
+  }
+  
+  if (config.getExperimentalA2aMode()) {
+    const { getWebhookServer } = await import('@ouroboros/code-cli-core');
+    const mcpClientManager = config.getMCPClientManager();
+    
+    // Start the webhook server
+    const webhookServer = getWebhookServer();
+    const webhookUrl = await webhookServer.start();
+    
+    // Initialize and start A2A handler
+    a2aHandler = new AutonomousA2AHandler(config, mcpClientManager);
+    a2aHandler.start();
+    
+    if (config.getDebugMode()) {
+      console.debug(`[A2A] Experimental A2A support enabled (interactive=${config.isInteractive()})`);
+      console.debug(`[A2A] Webhook server started at ${webhookUrl}`);
+    }
+  }
+
   // Load custom themes from settings
   themeManager.loadCustomThemes(settings.merged.customThemes);
 
@@ -300,7 +326,15 @@ export async function main() {
         }
       });
 
-    registerCleanup(() => instance.unmount());
+    registerCleanup(() => {
+      if (a2aHandler) {
+        a2aHandler.stop();
+        if (config.getDebugMode()) {
+          console.debug('[A2A] Interactive A2A handler stopped');
+        }
+      }
+      instance.unmount();
+    });
     return;
   }
   // If not a TTY, read from stdin

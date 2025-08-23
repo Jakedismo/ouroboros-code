@@ -87,6 +87,21 @@ npm install -g @google/gemini-cli@nightly
 - **`/blindspot`** - Identify what each provider might be missing in their responses
 - **`/race`** - Performance-optimized provider racing for fastest responses
 
+### 🧪 Experimental Agent-to-Agent (A2A) Communication
+
+- **`--experimental-a2a-mode`** - Enable Agent-to-Agent communication via webhooks (port 45123)
+- **Targeted Messaging** - Send messages to specific agent processes using PID-based filtering
+- **Broadcast Communication** - Send messages to all listening agents simultaneously
+- **Multi-Agent Coordination** - Enable sophisticated agent collaboration workflows
+
+```bash
+# Enable A2A communication in interactive mode
+ouroboros-code --experimental-a2a-mode
+
+# Use A2A with debug output to see message routing
+ouroboros-code --experimental-a2a-mode --debug
+```
+
 ### Unified Tool Architecture
 
 All 11 builtin tools work identically across every provider:

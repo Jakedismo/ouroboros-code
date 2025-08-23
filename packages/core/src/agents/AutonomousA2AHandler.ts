@@ -83,12 +83,14 @@ export class AutonomousA2AHandler extends EventEmitter {
   private agentContext: AgentContext;
   private isActive: boolean = false;
   private debugMode: boolean;
+  private readonly processPid: number;
 
   constructor(config: Config, _mcpClientManager?: McpClientManager) {
     super();
     this.config = config;
     // TODO: Future enhancement - use _mcpClientManager for direct MCP operations
     this.debugMode = config.getDebugMode();
+    this.processPid = process.pid;
     
     // Initialize agent context
     this.agentContext = {
@@ -102,23 +104,27 @@ export class AutonomousA2AHandler extends EventEmitter {
       last_message_timestamp: new Date().toISOString(),
     };
 
-    this.log('AutonomousA2AHandler initialized', { agentId: this.agentContext.agentId, sessionId: this.agentContext.sessionId });
+    this.log('AutonomousA2AHandler initialized', { 
+      agentId: this.agentContext.agentId, 
+      sessionId: this.agentContext.sessionId,
+      processPid: this.processPid
+    });
   }
 
   /**
    * Start listening for A2A webhook notifications.
-   * Only activates if the config indicates autonomous mode.
+   * Activates if in autonomous mode or if experimental A2A mode is enabled.
    */
   public start(): void {
-    // Only start if we're in autonomous mode (non-interactive)
-    if (this.config.isInteractive()) {
-      this.log('Skipping A2A handler activation - in interactive mode');
+    // Start if we're in autonomous mode (non-interactive) or experimental A2A mode is enabled
+    if (this.config.isInteractive() && !this.config.getExperimentalA2aMode()) {
+      this.log('Skipping A2A handler activation - in interactive mode without experimental A2A flag');
       return;
     }
 
     this.isActive = true;
     this.setupWebhookListener();
-    this.log('A2A handler activated for autonomous mode');
+    this.log(`A2A handler activated for ${this.config.isInteractive() ? 'interactive mode with experimental A2A' : 'autonomous mode'}`);
   }
 
   /**
@@ -153,6 +159,13 @@ export class AutonomousA2AHandler extends EventEmitter {
   }
 
   /**
+   * Get the current process PID for this handler.
+   */
+  public getProcessPid(): number {
+    return this.processPid;
+  }
+
+  /**
    * Setup webhook listener for A2A notifications.
    */
   private setupWebhookListener(): void {
@@ -160,6 +173,18 @@ export class AutonomousA2AHandler extends EventEmitter {
     
     webhookServer.on('tool-completion', async (payload: WebhookPayload) => {
       if (!this.isActive) {
+        return;
+      }
+
+      // PID-based filtering: Only process messages intended for this PID or broadcasts
+      if (!this.shouldProcessMessage(payload)) {
+        if (this.debugMode) {
+          this.log('Skipping message not targeted for this PID', {
+            target_pid: payload.target_pid,
+            current_pid: this.processPid,
+            tool_id: payload.tool_id
+          });
+        }
         return;
       }
 
@@ -172,7 +197,34 @@ export class AutonomousA2AHandler extends EventEmitter {
       }
     });
 
-    this.log('Webhook listener setup complete');
+    this.log('Webhook listener setup complete', { processPid: this.processPid });
+  }
+
+  /**
+   * Determine if this handler should process the incoming message based on PID targeting.
+   * Messages without target_pid are broadcast messages and processed by all clients.
+   * Messages with target_pid are only processed if they match this process's PID.
+   */
+  private shouldProcessMessage(payload: WebhookPayload): boolean {
+    // If no target_pid is specified, this is a broadcast message - process it
+    if (payload.target_pid === undefined || payload.target_pid === null) {
+      if (this.debugMode) {
+        this.log('Processing broadcast message', { tool_id: payload.tool_id });
+      }
+      return true;
+    }
+
+    // If target_pid is specified, only process if it matches our PID
+    const shouldProcess = payload.target_pid === this.processPid;
+    if (this.debugMode && shouldProcess) {
+      this.log('Processing targeted message', {
+        tool_id: payload.tool_id,
+        target_pid: payload.target_pid,
+        current_pid: this.processPid
+      });
+    }
+    
+    return shouldProcess;
   }
 
   /**

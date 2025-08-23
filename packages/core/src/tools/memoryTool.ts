@@ -15,7 +15,6 @@ import {
 import { FunctionDeclaration } from '@google/genai';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { Storage } from '../config/storage.js';
 import * as Diff from 'diff';
 import { DEFAULT_DIFF_OPTIONS } from './diffOptions.js';
 import { tildeifyPath } from '../utils/paths.js';
@@ -58,8 +57,8 @@ Do NOT use this tool:
 `;
 
 export const GEMINI_CONFIG_DIR = '.gemini';
-export const DEFAULT_CONTEXT_FILENAME = 'GEMINI.md';
-export const MEMORY_SECTION_HEADER = '## Gemini Added Memories';
+export const DEFAULT_CONTEXT_FILENAME = 'OUROBOROS.md';
+export const MEMORY_SECTION_HEADER = '## Added Memories';
 
 // Priority order for instruction files: OUROBOROS > CLAUDE > GEMINI > AGENTS > QWEN > CRUSH
 export const INSTRUCTION_FILE_PRIORITY = [
@@ -71,32 +70,20 @@ export const INSTRUCTION_FILE_PRIORITY = [
   'CRUSH.md'
 ];
 
-// This variable will hold the currently configured filename for instruction context files.
-// It defaults to the priority list but can be overridden by setGeminiMdFilename.
-let currentGeminiMdFilename: string | string[] = INSTRUCTION_FILE_PRIORITY;
-
 export function setGeminiMdFilename(newFilename: string | string[]): void {
-  if (Array.isArray(newFilename)) {
-    if (newFilename.length > 0) {
-      currentGeminiMdFilename = newFilename.map((name) => name.trim());
-    }
-  } else if (newFilename && newFilename.trim() !== '') {
-    currentGeminiMdFilename = newFilename.trim();
-  }
+  // After the changes, we always use OUROBOROS.md for memory
+  // But keep the function for backward compatibility
+  // The parameter is intentionally unused as we always use OUROBOROS.md now
 }
 
 export function getCurrentGeminiMdFilename(): string {
-  if (Array.isArray(currentGeminiMdFilename)) {
-    return currentGeminiMdFilename[0];
-  }
-  return currentGeminiMdFilename;
+  // Always return OUROBOROS.md as the primary memory file
+  return 'OUROBOROS.md';
 }
 
 export function getAllGeminiMdFilenames(): string[] {
-  if (Array.isArray(currentGeminiMdFilename)) {
-    return currentGeminiMdFilename;
-  }
-  return [currentGeminiMdFilename];
+  // Always return OUROBOROS.md as the primary memory file
+  return ['OUROBOROS.md'];
 }
 
 interface SaveMemoryParams {
@@ -105,8 +92,16 @@ interface SaveMemoryParams {
   modified_content?: string;
 }
 
+// Store the current working directory for project-specific OUROBOROS.md
+let currentWorkingDirectory: string = process.cwd();
+
+export function setWorkingDirectory(dir: string): void {
+  currentWorkingDirectory = dir;
+}
+
 function getGlobalMemoryFilePath(): string {
-  return path.join(Storage.getGlobalGeminiDir(), getCurrentGeminiMdFilename());
+  // OUROBOROS.md should be saved in the project directory, not globally
+  return path.join(currentWorkingDirectory, getCurrentGeminiMdFilename());
 }
 
 /**
