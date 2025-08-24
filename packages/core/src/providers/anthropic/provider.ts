@@ -77,19 +77,36 @@ export class AnthropicProvider extends BaseLLMProvider {
     console.log(`[Anthropic Provider] Initializing with model: ${this.config.model}`);
     
     try {
-      // If using OAuth, initialize OAuth manager and update client
+      // If using OAuth, try to initialize OAuth manager
       if (this.oauthManager) {
-        console.log('[Anthropic Provider] Initializing OAuth authentication...');
-        await this.oauthManager.initialize();
-        
-        // Get access token and create new client
-        const accessToken = await this.oauthManager.getAccessToken();
-        this.client = new Anthropic({
-          apiKey: accessToken, // Use access token as API key
-          baseURL: this.config.baseUrl,
-        });
-        
-        console.log('[Anthropic Provider] OAuth authentication successful');
+        console.log('[Anthropic Provider] Attempting OAuth authentication...');
+        try {
+          await this.oauthManager.initialize();
+          
+          // Get access token and create new client
+          const accessToken = await this.oauthManager.getAccessToken();
+          this.client = new Anthropic({
+            apiKey: accessToken, // Use access token as API key
+            baseURL: this.config.baseUrl,
+          });
+          
+          console.log('[Anthropic Provider] OAuth authentication successful');
+        } catch (oauthError) {
+          console.warn('[Anthropic Provider] OAuth authentication failed, falling back to API key:', (oauthError as Error).message);
+          
+          // Fall back to API key authentication
+          if (this.config.apiKey) {
+            this.client = new Anthropic({
+              apiKey: this.config.apiKey,
+              baseURL: this.config.baseUrl,
+            });
+            console.log('[Anthropic Provider] Using API key authentication instead');
+            // Disable OAuth manager to prevent further attempts
+            this.oauthManager = undefined;
+          } else {
+            throw new Error('No authentication method available: OAuth failed and no API key provided');
+          }
+        }
       }
       
       // Skip validation for now to avoid timeout with invalid API keys

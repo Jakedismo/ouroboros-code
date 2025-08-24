@@ -1012,7 +1012,7 @@ export class Config {
       provider: this.provider as LLMProvider,
       model: this.getModel(),
       enableBuiltinTools: true,
-      enableMCP: Object.keys(this.getMultiProviderMCPConfig().mcpServers || {}).length > 0,
+      enableMCP: true, // Always enable MCP for all providers
       mcpConfig: this.getMultiProviderMCPConfig(),
       configInstance: this,
       apiKey: this.getProviderApiKey(),

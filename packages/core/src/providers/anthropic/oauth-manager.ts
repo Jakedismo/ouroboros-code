@@ -161,6 +161,7 @@ export class AnthropicOAuthManager {
     }
     
     console.log('[OAuth Manager] No stored credentials found in any location');
+    throw new Error('No OAuth credentials found. Please authenticate with Claude first or use API key authentication.');
   }
 
   /**
