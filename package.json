@@ -97,6 +97,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.60.0",
+    "@lvce-editor/ripgrep": "^2.1.0",
     "node-fetch": "^3.3.2",
     "openai": "^5.13.1",
     "strip-ansi": "^7.1.0"

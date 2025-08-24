@@ -347,7 +347,8 @@ export class AutonomousA2AHandler extends EventEmitter {
       prompt_id: 'autonomous-a2a'
     };
 
-    const toolResponse = await executeToolCall(this.config, toolCallRequest);
+    const abortController = new AbortController();
+    const toolResponse = await executeToolCall(this.config, toolCallRequest, abortController.signal);
     
     if (toolResponse.error) {
       throw new Error(`a2a_coordinate tool execution failed: ${toolResponse.error.message}`);
@@ -379,7 +380,8 @@ export class AutonomousA2AHandler extends EventEmitter {
       prompt_id: 'autonomous-a2a'
     };
 
-    const toolResponse = await executeToolCall(this.config, toolCallRequest);
+    const abortController = new AbortController();
+    const toolResponse = await executeToolCall(this.config, toolCallRequest, abortController.signal);
     
     if (toolResponse.error) {
       throw new Error(`mao_inbox_poll tool execution failed: ${toolResponse.error.message}`);
