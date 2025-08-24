@@ -17,3 +17,9 @@ export type { LLMProviderConfig, ImagePart } from './types.js';
 
 // Export orchestrator
 export { MultiProviderOrchestrator } from './multi-provider-orchestrator.js';
+
+// Export Anthropic OAuth
+export { EnhancedAnthropicOAuthManager } from './anthropic/oauth-manager-enhanced.js';
+export { AnthropicOAuthManager } from './anthropic/oauth-manager.js';
+export type { EnhancedOAuthConfig, OAuthStatus } from './anthropic/oauth-manager-enhanced.js';
+export type { AnthropicOAuthConfig } from './anthropic/oauth-manager.js';

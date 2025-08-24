@@ -5,7 +5,7 @@
  */
 
 import type { CommandModule, Argv } from 'yargs';
-import { EnhancedAnthropicOAuthManager } from '../../../core/src/providers/anthropic/oauth-manager-enhanced.js';
+import { EnhancedAnthropicOAuthManager } from '@ouroboros/code-cli-core';
 
 // Claude OAuth subcommands
 const claudeLoginCommand: CommandModule = {
