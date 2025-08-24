@@ -203,7 +203,58 @@ export ANTHROPIC_API_KEY="YOUR_API_KEY"  # From https://console.anthropic.com/
 ouroboros-code --provider gemini  # or openai, anthropic
 ```
 
-### Option 3: Vertex AI
+### Option 3: Claude OAuth (Claude Max Subscribers)
+
+**✨ Best for:** Claude Max subscribers who want seamless authentication without API keys
+
+**Benefits:**
+
+- **🔐 No API key management** - OAuth 2.0 authentication with PKCE security
+- **🌐 Browser integration** - User-friendly authentication flow with HTML feedback
+- **🔄 Automatic token refresh** - Seamless session management with exponential backoff
+- **📱 Cross-platform compatibility** - Import tokens from Python SDK and Claude CLI
+- **🛡️ Secure storage** - RFC 7636 compliant with encrypted token storage
+
+#### Authenticate with Claude OAuth
+
+```bash
+# First-time authentication (opens browser)
+ouroboros-code auth claude login
+
+# Headless authentication (get URL to visit manually)
+ouroboros-code auth claude login --no-browser
+
+# Check authentication status
+ouroboros-code auth claude status --verbose
+
+# Use Claude with OAuth
+ouroboros-code --provider anthropic --claude-use-oauth
+```
+
+#### Import existing credentials
+
+```bash
+# List available credential sources
+ouroboros-code auth claude import --list-sources
+
+# Import from Python SDK
+ouroboros-code auth claude import --from ~/.claude_code/tokens.json
+
+# Auto-import from detected locations
+ouroboros-code auth claude import
+```
+
+#### Manage authentication
+
+```bash
+# Logout (revoke tokens on server and clear locally)
+ouroboros-code auth claude logout
+
+# Clear only local tokens (keep server tokens active)
+ouroboros-code auth claude logout --local-only
+```
+
+### Option 4: Vertex AI
 
 **✨ Best for:** Enterprise teams and production workloads
 

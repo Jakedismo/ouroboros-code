@@ -5,6 +5,39 @@ All notable changes to Ouroboros Code will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-alpha.6] - 2025-01-24
+
+### Added
+- **🔐 Claude OAuth Authentication System**: Complete OAuth 2.0 Authorization Code Flow with PKCE for Claude Max subscribers
+  - RFC 7636 compliant PKCE generator with SHA-256 challenges for enhanced security
+  - Local callback server (port 54545) with user-friendly HTML success/error pages
+  - Multi-format token storage supporting Ouroboros, Python SDK, and legacy Claude CLI formats
+  - Enhanced OAuth manager with automatic token refresh and exponential backoff retry logic
+  - Browser integration with optional `--no-browser` mode for headless environments
+
+- **🚀 CLI Authentication Commands**: New `ouroboros-code auth claude` command suite
+  - `auth claude login` - OAuth authentication flow with port configuration options
+  - `auth claude status` - Authentication status with detailed token information (`--verbose`)
+  - `auth claude logout` - Token revocation with local/server options (`--local-only`)
+  - `auth claude import` - Import tokens from Python SDK and Claude CLI locations (`--list-sources`)
+
+- **🔒 Security & Compatibility Features**:
+  - Secure token storage with 0o600 file permissions
+  - State validation and CSRF protection against OAuth attacks
+  - Cross-platform compatibility with Python SDK (`~/.claude_code/tokens.json`)
+  - Legacy Claude CLI support (`~/.claude/.credentials.json`)
+  - Automatic port conflict detection and resolution
+
+### Enhanced
+- **AnthropicProvider Integration**: Added OAuth methods for seamless Claude Max authentication
+- **Backward Compatibility**: Legacy OAuth manager wrapper maintains existing API contracts
+- **CLI Help System**: Enhanced help text with OAuth authentication examples and usage patterns
+
+### Changed
+- Claude authentication now supports both API keys and OAuth 2.0 for Claude Max subscribers
+- Command-line help updated to reflect new authentication options
+- Provider selection enhanced with OAuth capability indicators
+
 ## [1.0.0-alpha.5] - 2025-01-23
 
 ### Added
