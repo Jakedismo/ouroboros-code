@@ -336,13 +336,12 @@ export async function main() {
         <SettingsContext.Provider value={settings}>
           <AppWrapper
             config={config}
-            settings={settings}
             startupWarnings={startupWarnings}
             version={version}
           />
         </SettingsContext.Provider>
       </React.StrictMode>,
-      { exitOnCtrlC: false, isScreenReaderEnabled: config.getScreenReader() },
+      { exitOnCtrlC: false },
     );
 
     checkForUpdates()

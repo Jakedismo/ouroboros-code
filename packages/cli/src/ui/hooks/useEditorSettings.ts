@@ -46,7 +46,7 @@ export const useEditorSettings = (
       }
 
       try {
-        settingsContext?.settings.setValue(
+        settingsContext?.setValue(
           scope,
           'preferredEditor',
           editorType,

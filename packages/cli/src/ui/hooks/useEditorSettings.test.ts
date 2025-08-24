@@ -13,6 +13,7 @@ import {
   vi,
   type MockedFunction,
 } from 'vitest';
+import React from 'react';
 import { act } from 'react';
 import { renderHook } from '@testing-library/react';
 import { useEditorSettings } from './useEditorSettings.js';
@@ -23,6 +24,7 @@ import {
   checkHasEditorType,
   allowEditorTypeInSandbox,
 } from '@ouroboros/code-cli-core';
+import { SettingsContext } from '../contexts/SettingsContext.js';
 
 vi.mock('@ouroboros/code-cli-core', async () => {
   const actual = await vi.importActual('@ouroboros/code-cli-core');
@@ -42,6 +44,13 @@ describe('useEditorSettings', () => {
   let mockAddItem: MockedFunction<
     (item: Omit<HistoryItem, 'id'>, timestamp: number) => void
   >;
+
+  const wrapper = ({ children }: { children: React.ReactNode }) =>
+    React.createElement(
+      SettingsContext.Provider,
+      { value: mockLoadedSettings },
+      children,
+    );
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -63,16 +72,18 @@ describe('useEditorSettings', () => {
   });
 
   it('should initialize with dialog closed', () => {
-    const { result } = renderHook(() =>
-      useEditorSettings(mockLoadedSettings, mockSetEditorError, mockAddItem),
+    const { result } = renderHook(
+      () => useEditorSettings(mockSetEditorError, mockAddItem),
+      { wrapper },
     );
 
     expect(result.current.isEditorDialogOpen).toBe(false);
   });
 
   it('should open editor dialog when openEditorDialog is called', () => {
-    const { result } = renderHook(() =>
-      useEditorSettings(mockLoadedSettings, mockSetEditorError, mockAddItem),
+    const { result } = renderHook(
+      () => useEditorSettings(mockSetEditorError, mockAddItem),
+      { wrapper },
     );
 
     act(() => {
@@ -83,8 +94,9 @@ describe('useEditorSettings', () => {
   });
 
   it('should close editor dialog when exitEditorDialog is called', () => {
-    const { result } = renderHook(() =>
-      useEditorSettings(mockLoadedSettings, mockSetEditorError, mockAddItem),
+    const { result } = renderHook(
+      () => useEditorSettings(mockSetEditorError, mockAddItem),
+      { wrapper },
     );
     act(() => {
       result.current.openEditorDialog();
@@ -94,8 +106,9 @@ describe('useEditorSettings', () => {
   });
 
   it('should handle editor selection successfully', () => {
-    const { result } = renderHook(() =>
-      useEditorSettings(mockLoadedSettings, mockSetEditorError, mockAddItem),
+    const { result } = renderHook(
+      () => useEditorSettings(mockSetEditorError, mockAddItem),
+      { wrapper },
     );
 
     const editorType: EditorType = 'vscode';
@@ -125,8 +138,9 @@ describe('useEditorSettings', () => {
   });
 
   it('should handle clearing editor preference (undefined editor)', () => {
-    const { result } = renderHook(() =>
-      useEditorSettings(mockLoadedSettings, mockSetEditorError, mockAddItem),
+    const { result } = renderHook(
+      () => useEditorSettings(mockSetEditorError, mockAddItem),
+      { wrapper },
     );
 
     const scope = SettingScope.Workspace;
@@ -155,8 +169,9 @@ describe('useEditorSettings', () => {
   });
 
   it('should handle different editor types', () => {
-    const { result } = renderHook(() =>
-      useEditorSettings(mockLoadedSettings, mockSetEditorError, mockAddItem),
+    const { result } = renderHook(
+      () => useEditorSettings(mockSetEditorError, mockAddItem),
+      { wrapper },
     );
 
     const editorTypes: EditorType[] = ['cursor', 'windsurf', 'vim'];
@@ -184,8 +199,9 @@ describe('useEditorSettings', () => {
   });
 
   it('should handle different setting scopes', () => {
-    const { result } = renderHook(() =>
-      useEditorSettings(mockLoadedSettings, mockSetEditorError, mockAddItem),
+    const { result } = renderHook(
+      () => useEditorSettings(mockSetEditorError, mockAddItem),
+      { wrapper },
     );
 
     const editorType: EditorType = 'vscode';
@@ -213,8 +229,9 @@ describe('useEditorSettings', () => {
   });
 
   it('should not set preference for unavailable editors', () => {
-    const { result } = renderHook(() =>
-      useEditorSettings(mockLoadedSettings, mockSetEditorError, mockAddItem),
+    const { result } = renderHook(
+      () => useEditorSettings(mockSetEditorError, mockAddItem),
+      { wrapper },
     );
 
     mockCheckHasEditorType.mockReturnValue(false);
@@ -233,8 +250,9 @@ describe('useEditorSettings', () => {
   });
 
   it('should not set preference for editors not allowed in sandbox', () => {
-    const { result } = renderHook(() =>
-      useEditorSettings(mockLoadedSettings, mockSetEditorError, mockAddItem),
+    const { result } = renderHook(
+      () => useEditorSettings(mockSetEditorError, mockAddItem),
+      { wrapper },
     );
 
     mockAllowEditorTypeInSandbox.mockReturnValue(false);
@@ -253,8 +271,9 @@ describe('useEditorSettings', () => {
   });
 
   it('should handle errors during editor selection', () => {
-    const { result } = renderHook(() =>
-      useEditorSettings(mockLoadedSettings, mockSetEditorError, mockAddItem),
+    const { result } = renderHook(
+      () => useEditorSettings(mockSetEditorError, mockAddItem),
+      { wrapper },
     );
 
     const errorMessage = 'Failed to save settings';

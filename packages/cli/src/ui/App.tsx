@@ -123,12 +123,11 @@ interface AppProps {
 
 export const AppWrapper = (props: AppProps) => {
   const kittyProtocolStatus = useKittyKeyboardProtocol();
-  const settingsContext = useContext(SettingsContext);
-  if (!settingsContext) {
+  const settings = useContext(SettingsContext);
+  if (!settings) {
     // This should not happen as AppWrapper is always rendered within the provider.
     throw new Error('SettingsContext is not available');
   }
-  const { settings } = settingsContext;
 
   return (
     <KeypressProvider
@@ -151,12 +150,11 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
   const { stdout } = useStdout();
   const nightly = version.includes('nightly');
   const { history, addItem, clearItems, loadHistory } = useHistory();
-  const settingsContext = useContext(SettingsContext);
-  if (!settingsContext) {
+  const settings = useContext(SettingsContext);
+  if (!settings) {
     // This should not happen as App is always rendered within the provider.
     throw new Error('SettingsContext is not available');
   }
-  const { settings } = settingsContext;
 
   const [idePromptAnswered, setIdePromptAnswered] = useState(false);
   const currentIDE = config.getIdeClient().getCurrentIde();
@@ -283,7 +281,7 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
     openThemeDialog,
     handleThemeSelect,
     handleThemeHighlight,
-  } = useThemeCommand(setThemeError, addItem);
+  } = useThemeCommand(settings, setThemeError, addItem);
 
   const { isSettingsDialogOpen, openSettingsDialog, closeSettingsDialog } =
     useSettingsCommand();
