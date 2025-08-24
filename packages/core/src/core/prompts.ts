@@ -11,6 +11,7 @@ import { LSTool } from '../tools/ls.js';
 import { EditTool } from '../tools/edit.js';
 import { GlobTool } from '../tools/glob.js';
 import { GrepTool } from '../tools/grep.js';
+import { RipGrepTool } from '../tools/ripGrep.js';
 import { ReadFileTool } from '../tools/read-file.js';
 import { ReadManyFilesTool } from '../tools/read-many-files.js';
 import { ShellTool } from '../tools/shell.js';
@@ -23,6 +24,7 @@ import { loadFlavour } from './prompts/flavour-loader.js';
 export interface SystemPromptOptions {
   customPrompt?: string;      // From --system-prompt
   flavour?: string;           // From --system-prompt-flavour
+  useRipgrep?: boolean;       // From config to select grep vs ripgrep
 }
 
 /**
@@ -94,16 +96,16 @@ export function getCoreSystemPrompt(userMemory?: string, options?: SystemPromptO
       basePrompt = fs.readFileSync(systemMdPath, 'utf8');
     } else if (options?.flavour && options.flavour !== 'default') {
       // Third priority: flavour
-      const flavourContent = loadFlavour(options.flavour);
+      const flavourContent = loadFlavour(options.flavour, options.useRipgrep);
       if (flavourContent) {
         basePrompt = flavourContent;
       } else {
         console.warn(`System prompt flavour '${options.flavour}' not found, using default`);
-        basePrompt = getDefaultPrompt();
+        basePrompt = getDefaultPrompt(options?.useRipgrep);
       }
     } else {
       // Lowest priority: built-in default
-      basePrompt = getDefaultPrompt();
+      basePrompt = getDefaultPrompt(options?.useRipgrep);
     }
   }
   
@@ -122,7 +124,11 @@ export function getCoreSystemPrompt(userMemory?: string, options?: SystemPromptO
 /**
  * Get the default built-in system prompt
  */
-function getDefaultPrompt(): string {
+function getDefaultPrompt(useRipgrep?: boolean): string {
+  const searchToolDesc = useRipgrep 
+    ? `'${RipGrepTool.Name}' (fast, regex-powered search with advanced pattern matching)`
+    : `'${GrepTool.Name}' (text search in files)`;
+  
   return `
 You are an interactive CLI agent specializing in software engineering tasks. Your primary goal is to help users safely and efficiently, adhering strictly to the following instructions and utilizing your available tools.
 
@@ -143,7 +149,7 @@ You are an interactive CLI agent specializing in software engineering tasks. You
 
 ## Software Engineering Tasks
 When requested to perform tasks like fixing bugs, adding features, refactoring, or explaining code, follow this sequence:
-1. **Understand:** Think about the user's request and the relevant codebase context. Use '${GrepTool.Name}' and '${GlobTool.Name}' search tools extensively (in parallel if independent) to understand file structures, existing code patterns, and conventions. Use '${ReadFileTool.Name}' and '${ReadManyFilesTool.Name}' to understand context and validate any assumptions you may have.
+1. **Understand:** Think about the user's request and the relevant codebase context. Use ${searchToolDesc} and '${GlobTool.Name}' (file pattern matching) search tools extensively (in parallel if independent) to understand file structures, existing code patterns, and conventions. Use '${ReadFileTool.Name}' and '${ReadManyFilesTool.Name}' to understand context and validate any assumptions you may have.
 2. **Plan:** Build a coherent and grounded (based on the understanding in step 1) plan for how you intend to resolve the user's task. Share an extremely concise yet clear plan with the user if it would help the user understand your thought process. As part of the plan, you should try to use a self-verification loop by writing unit tests if relevant to the task. Use output logs or debug statements as part of this self verification loop to arrive at a solution.
 3. **Implement:** Use the available tools (e.g., '${EditTool.Name}', '${WriteFileTool.Name}' '${ShellTool.Name}' ...) to act on the plan, strictly adhering to the project's established conventions (detailed under 'Core Mandates').
 4. **Verify (Tests):** If applicable and feasible, verify the changes using the project's testing procedures. Identify the correct test commands and frameworks by examining 'README' files, build/package configuration (e.g., 'package.json'), or existing test execution patterns. NEVER assume standard test commands.
@@ -184,7 +190,15 @@ When requested to perform tasks like fixing bugs, adding features, refactoring, 
 - **Security First:** Always apply security best practices. Never introduce code that exposes, logs, or commits secrets, API keys, or other sensitive information.
 
 ## Tool Usage
-- **File Paths:** Always use absolute paths when referring to files with tools like '${ReadFileTool.Name}' or '${WriteFileTool.Name}'. Relative paths are not supported. You must provide an absolute path.
+- **File Paths:** Always use absolute paths when referring to files with tools like '${ReadFileTool.Name}' or '${WriteFileTool.Name}'. Relative paths are not supported. You must provide an absolute path.${useRipgrep ? `
+- **Search Tool (RipGrep):** You have access to '${RipGrepTool.Name}', a high-performance search tool. It supports:
+  - Advanced regex patterns for complex searches
+  - Extremely fast performance on large codebases
+  - Automatic .gitignore respect
+  - Multi-line pattern matching
+  - Better Unicode support
+  Use it for all text searching needs instead of reading many files manually.` : `
+- **Search Tool:** Use '${GrepTool.Name}' for searching text patterns in files.`}
 - **Parallelism:** Execute multiple independent tool calls in parallel when feasible (i.e. searching the codebase).
 - **Command Execution:** Use the '${ShellTool.Name}' tool for running shell commands, remembering the safety rule to explain modifying commands first.
 - **Background Processes:** Use background processes (via \`&\`) for commands that are unlikely to stop on their own, e.g. \`node server.js &\`. If unsure, ask the user.

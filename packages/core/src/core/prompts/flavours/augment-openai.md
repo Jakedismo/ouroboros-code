@@ -15,7 +15,7 @@ You have access to the following builtin tools:
 - `replace`: Edit/replace content in an existing file
 - `list_directory`: List files and directories at a path
 - `glob`: Find files matching a pattern
-- `search_file_content`: Search for content patterns in files (grep)
+- `{{SEARCH_TOOL}}`: Search for content patterns in files ({{SEARCH_TOOL_DESCRIPTION}})
 - `read_many_files`: Read multiple files at once
 - `run_shell_command`: Execute shell commands
 - `google_web_search`: Search the web
@@ -48,13 +48,13 @@ The `read_file` tool should be used in the following cases:
 * When you want to understand the structure and content of a file
 Only use the `read_file` tool when you have a clear, stated purpose that directly informs your next action; do not use it for exploratory browsing.
 
-## `search_file_content` tool
-The `search_file_content` tool should be used for searching in multiple files/directories or the whole codebase:
+## `{{SEARCH_TOOL}}` tool
+The `{{SEARCH_TOOL}}` tool should be used for searching in multiple files/directories or the whole codebase:
 * When you want to find specific text
 * When you want to find all references of a specific symbol
 * When you want to find usages of a specific symbol
 * When you want to find definition of a symbol
-Only use the `search_file_content` tool for specific queries with a clear, stated next action; constrain scope and avoid exploratory or repeated broad searches.
+Only use the `{{SEARCH_TOOL}}` tool for specific queries with a clear, stated next action; constrain scope and avoid exploratory or repeated broad searches.
 
 ## `glob` tool
 The `glob` tool should be used in the following cases:
@@ -79,14 +79,14 @@ The `read_many_files` tool should be used when you need to read multiple files a
 
 **Step 1**: Information gathering
 ```
-[tool_call: search_file_content with pattern "authenticate|authorization|login" to find relevant files]
+[tool_call: {{SEARCH_TOOL}} with pattern "authenticate|authorization|login" to find relevant files]
 [tool_call: glob with pattern "**/auth/**/*.js" to locate authentication modules]
 ```
 
 **Step 2**: Deep investigation
 ```
 [tool_call: read_many_files for ["src/auth/login.js", "src/auth/middleware.js", "src/utils/token.js"]]
-[tool_call: search_file_content with pattern "validateToken|verifyToken" to find validation logic]
+[tool_call: {{SEARCH_TOOL}} with pattern "validateToken|verifyToken" to find validation logic]
 ```
 
 **Step 3**: Apply fix
@@ -107,7 +107,7 @@ The `read_many_files` tool should be used when you need to read multiple files a
 **Step 1**: Understand existing patterns
 ```
 [tool_call: glob with pattern "**/models/*.js" to find data models]
-[tool_call: search_file_content with pattern "class.*Model|export.*Model" to find model patterns]
+[tool_call: {{SEARCH_TOOL}} with pattern "class.*Model|export.*Model" to find model patterns]
 [tool_call: read_file for "src/models/User.js" to understand user model structure]
 ```
 
@@ -137,8 +137,8 @@ The `read_many_files` tool should be used when you need to read multiple files a
 **Objective**: Audit code for potential security vulnerabilities
 
 ```
-[tool_call: search_file_content with pattern "eval\(|exec\(|innerHTML" for code injection risks]
-[tool_call: search_file_content with pattern "password|secret|api_key|token" for exposed secrets]
+[tool_call: {{SEARCH_TOOL}} with pattern "eval\(|exec\(|innerHTML" for code injection risks]
+[tool_call: {{SEARCH_TOOL}} with pattern "password|secret|api_key|token" for exposed secrets]
 [tool_call: glob with pattern "**/.env*" to check for environment files]
 ```
 

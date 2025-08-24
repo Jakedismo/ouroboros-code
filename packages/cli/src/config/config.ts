@@ -30,6 +30,7 @@ import * as path from 'path';
 import { hideBin } from 'yargs/helpers';
 import yargs from 'yargs/yargs';
 import { mcpCommand } from '../commands/mcp.js';
+import { authCommand } from '../commands/auth.js';
 import { Settings } from './settings.js';
 
 import { resolvePath } from '../utils/resolvePath.js';
@@ -402,6 +403,11 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
     .command({
       ...mcpCommand,
       describe: 'Manage MCP servers for Ouroboros Code',
+    })
+    // Register Auth subcommands
+    .command({
+      ...authCommand,
+      describe: 'Manage authentication with AI providers',
     })
     .version(await getCliVersion()) // This will enable the --version flag based on package.json
     .alias('v', 'version')

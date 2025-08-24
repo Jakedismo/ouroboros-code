@@ -700,10 +700,11 @@ export class Config {
     this.userMemory = newUserMemory;
   }
 
-  getSystemPromptOptions(): { customPrompt?: string; flavour?: string } {
+  getSystemPromptOptions(): { customPrompt?: string; flavour?: string; useRipgrep?: boolean } {
     return {
       customPrompt: this.systemPrompt,
       flavour: this.systemPromptFlavour,
+      useRipgrep: this.useRipgrep,
     };
   }
 

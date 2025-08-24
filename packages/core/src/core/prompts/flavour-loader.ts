@@ -52,11 +52,44 @@ function getFlavoursDirectory(): string {
 }
 
 /**
+ * Process template markers in flavour content
+ * @param content The flavour content with template markers
+ * @param useRipgrep Whether to use RipGrep instead of Grep
+ * @returns The processed content with replacements
+ */
+function processFlavourTemplates(content: string, useRipgrep?: boolean): string {
+  let processed = content;
+  
+  // Replace search tool references
+  if (useRipgrep) {
+    // Replace generic search tool references
+    processed = processed.replace(/{{SEARCH_TOOL}}/g, 'ripgrep');
+    processed = processed.replace(/{{SEARCH_TOOL_NAME}}/g, 'RipGrep');
+    processed = processed.replace(/{{SEARCH_TOOL_DESCRIPTION}}/g, 
+      'fast, regex-powered search with advanced pattern matching and multi-line support');
+    
+    // Replace specific tool names
+    processed = processed.replace(/\bsearch_file_content\b/g, 'ripgrep');
+    processed = processed.replace(/\bgrep\b(?! tools?| command)/g, 'ripgrep');
+    processed = processed.replace(/\bGrep\b(?! tools?| command)/g, 'RipGrep');
+  } else {
+    // Use grep defaults
+    processed = processed.replace(/{{SEARCH_TOOL}}/g, 'search_file_content');
+    processed = processed.replace(/{{SEARCH_TOOL_NAME}}/g, 'Grep');
+    processed = processed.replace(/{{SEARCH_TOOL_DESCRIPTION}}/g, 
+      'text search in files using regular expressions');
+  }
+  
+  return processed;
+}
+
+/**
  * Load a system prompt flavour from file
  * @param flavour The flavour name to load
+ * @param useRipgrep Whether to use RipGrep instead of Grep
  * @returns The system prompt content or null if not found
  */
-export function loadFlavour(flavour: string): string | null {
+export function loadFlavour(flavour: string, useRipgrep?: boolean): string | null {
   try {
     const flavoursDir = getFlavoursDirectory();
     const flavourPath = path.join(flavoursDir, `${flavour}.md`);
@@ -67,8 +100,11 @@ export function loadFlavour(flavour: string): string | null {
       return null;
     }
     
-    // Read and return the flavour content
-    return fs.readFileSync(flavourPath, 'utf8');
+    // Read the flavour content
+    const content = fs.readFileSync(flavourPath, 'utf8');
+    
+    // Process template markers
+    return processFlavourTemplates(content, useRipgrep);
   } catch (error) {
     console.error(`Error loading system prompt flavour '${flavour}':`, error);
     return null;

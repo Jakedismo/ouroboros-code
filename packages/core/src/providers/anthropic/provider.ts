@@ -13,7 +13,7 @@ import {
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseLLMProvider } from '../base.js';
 import { AnthropicFormatConverter } from './converter.js';
-import { AnthropicOAuthManager } from './oauth-manager.js';
+import { AnthropicOAuthManager, EnhancedAnthropicOAuthManager } from './oauth-manager.js';
 import {
   LLMProviderConfig,
   LLMProvider,
@@ -34,6 +34,7 @@ import {
 export class AnthropicProvider extends BaseLLMProvider {
   private client: Anthropic;
   private oauthManager?: AnthropicOAuthManager;
+  private enhancedOAuthManager?: EnhancedAnthropicOAuthManager;
 
   constructor(config: LLMProviderConfig) {
     super(config);
@@ -801,5 +802,98 @@ export class AnthropicProvider extends BaseLLMProvider {
       apiKey: accessToken,
       baseURL: this.config.baseUrl,
     });
+  }
+
+  /**
+   * Get enhanced OAuth manager for advanced OAuth features
+   */
+  getEnhancedOAuthManager(): EnhancedAnthropicOAuthManager {
+    if (!this.enhancedOAuthManager) {
+      this.enhancedOAuthManager = new EnhancedAnthropicOAuthManager({
+        clientId: process.env['CLAUDE_OAUTH_CLIENT_ID'] || 'ouroboros-code-cli',
+        autoRefresh: true,
+      });
+    }
+    return this.enhancedOAuthManager;
+  }
+
+  /**
+   * Start OAuth authentication flow
+   * @param noBrowser - If true, won't open browser automatically
+   * @returns Authorization URL
+   */
+  async startOAuthFlow(noBrowser: boolean = false): Promise<string> {
+    const manager = this.getEnhancedOAuthManager();
+    const authUrl = await manager.authenticate(noBrowser);
+    
+    // After successful authentication, reinitialize client
+    const accessToken = await manager.getAccessToken();
+    this.client = new Anthropic({
+      apiKey: accessToken,
+      baseURL: this.config.baseUrl,
+    });
+    
+    console.log('[Anthropic Provider] OAuth authentication completed, client updated');
+    return authUrl;
+  }
+
+  /**
+   * Get detailed OAuth status
+   */
+  async getDetailedOAuthStatus() {
+    const manager = this.getEnhancedOAuthManager();
+    return await manager.getStatus();
+  }
+
+  /**
+   * Revoke OAuth tokens
+   */
+  async revokeOAuthTokens(): Promise<void> {
+    const manager = this.getEnhancedOAuthManager();
+    await manager.revokeTokens();
+    console.log('[Anthropic Provider] OAuth tokens revoked');
+  }
+
+  /**
+   * Import OAuth credentials from file or standard locations
+   * @param credentialsPath - Optional path to credentials file
+   */
+  async importOAuthCredentials(credentialsPath?: string): Promise<void> {
+    const manager = this.getEnhancedOAuthManager();
+    
+    if (credentialsPath) {
+      await manager.importTokens(credentialsPath);
+    } else {
+      // Try to find and import from standard locations
+      const status = await manager.getStorageStatus();
+      const availableLocation = status.find(s => s.hasTokens && !s.error);
+      
+      if (availableLocation) {
+        await manager.importTokens(availableLocation.path);
+        console.log(`[Anthropic Provider] Imported credentials from ${availableLocation.name}`);
+      } else {
+        throw new Error('No OAuth credentials found in any standard location');
+      }
+    }
+
+    // Reinitialize client with imported credentials
+    try {
+      const accessToken = await manager.getAccessToken();
+      this.client = new Anthropic({
+        apiKey: accessToken,
+        baseURL: this.config.baseUrl,
+      });
+      console.log('[Anthropic Provider] Client updated with imported credentials');
+    } catch (error) {
+      console.warn('[Anthropic Provider] Failed to initialize client with imported credentials:', error);
+    }
+  }
+
+  /**
+   * Get OAuth storage status across all locations
+   */
+  async getOAuthStorageStatus() {
+    const manager = this.getEnhancedOAuthManager();
+    return await manager.getStorageStatus();
   }
 }
