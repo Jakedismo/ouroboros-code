@@ -71,7 +71,7 @@ npm install -g @google/gemini-cli@latest
 
 ### Nightly
 
-- New releases will be published each week at UTC 0000 each day, This will be all changes from the main branch as represted at time of release. It should be assumed there are pending validations and issues. Use `nightly` tag.
+- New releases will be published each week at UTC 0000 each day, This will be all changes from the main branch as represented at time of release. It should be assumed there are pending validations and issues. Use `nightly` tag.
 
 ```bash
 npm install -g @google/gemini-cli@nightly
@@ -264,20 +264,22 @@ ouroboros-code -p "Explain the architecture of this codebase"
 
 #### Start a new project with provider comparison
 
-````bash
+```bash
 cd new-project/
 ouroboros-code
 > /compare Write me a Discord bot that answers questions using a FAQ.md file
 # Compares solutions from multiple providers side-by-side
+```
 
 #### Analyze existing code with convergence
+
 ```bash
 git clone https://github.com/google-gemini/gemini-cli
 cd gemini-cli
 ouroboros-code
 > /converge Analyze this codebase architecture and suggest improvements
 # Synthesizes insights from all providers into unified recommendations
-````
+```
 
 ## 📚 Documentation
 
