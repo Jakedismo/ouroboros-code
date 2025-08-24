@@ -9,27 +9,35 @@ import {
   GeminiCLIExtension,
   Storage,
 } from '@ouroboros/code-cli-core';
+import {
+  ExtensionProviderRegistry,
+  Extension as CoreExtension,
+  ExtensionConfig as CoreExtensionConfig,
+} from '@ouroboros/code-cli-core';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
 export const EXTENSIONS_CONFIG_FILENAME = 'gemini-extension.json';
 
-export interface Extension {
-  path: string;
-  config: ExtensionConfig;
-  contextFiles: string[];
+export interface Extension extends CoreExtension {
+  // CLI-specific extensions can be added here
 }
 
-export interface ExtensionConfig {
-  name: string;
-  version: string;
+export interface ExtensionConfig extends CoreExtensionConfig {
+  // Existing functionality specific to CLI
   mcpServers?: Record<string, MCPServerConfig>;
-  contextFileName?: string | string[];
-  excludeTools?: string[];
 }
 
-export function loadExtensions(workspaceDir: string): Extension[] {
+// Re-export core interfaces for backward compatibility
+export type { 
+  ProviderExtensionConfig, 
+  ExtensionDependencies, 
+  ExtensionRequirements, 
+  ExtensionScripts 
+} from '@ouroboros/code-cli-core';
+
+export async function loadExtensions(workspaceDir: string): Promise<Extension[]> {
   const allExtensions = [
     ...loadExtensionsFromDir(workspaceDir),
     ...loadExtensionsFromDir(os.homedir()),
@@ -42,7 +50,13 @@ export function loadExtensions(workspaceDir: string): Extension[] {
     }
   }
 
-  return Array.from(uniqueExtensions.values());
+  const extensions = Array.from(uniqueExtensions.values());
+
+  // Register providers from extensions
+  const registry = ExtensionProviderRegistry.getInstance();
+  await registry.registerProvidersFromExtensions(extensions);
+
+  return extensions;
 }
 
 function loadExtensionsFromDir(dir: string): Extension[] {
@@ -171,3 +185,4 @@ export function annotateActiveExtensions(
 
   return annotatedExtensions;
 }
+

@@ -12,7 +12,7 @@ import yargs from 'yargs';
 describe('mcp command', () => {
   it('should have correct command definition', () => {
     expect(mcpCommand.command).toBe('mcp');
-    expect(mcpCommand.describe).toBe('Manage MCP servers');
+    expect(mcpCommand.describe).toBe('Manage MCP servers for Ouroboros Code');
     expect(typeof mcpCommand.builder).toBe('function');
     expect(typeof mcpCommand.handler).toBe('function');
   });

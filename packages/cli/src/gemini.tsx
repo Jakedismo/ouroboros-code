@@ -7,7 +7,7 @@
 import React from 'react';
 import { render } from 'ink';
 import { AppWrapper } from './ui/App.js';
-import { loadCliConfig, parseArguments } from './config/config.js';
+import { loadCliConfig, parseArguments, showProviderInfo, validateProvider } from './config/config.js';
 import { readStdin } from './utils/readStdin.js';
 import { basename } from 'node:path';
 import v8 from 'node:v8';
@@ -152,7 +152,7 @@ export async function main() {
   }
 
   const argv = await parseArguments();
-  const extensions = loadExtensions(workspaceRoot);
+  const extensions = await loadExtensions(workspaceRoot);
   const config = await loadCliConfig(
     settings.merged,
     extensions,
@@ -184,6 +184,20 @@ export async function main() {
       console.log(`- ${extension.config.name}`);
     }
     process.exit(0);
+  }
+
+  // Handle --provider-info option
+  if (argv.providerInfo) {
+    await showProviderInfo(argv.providerInfo, extensions);
+    process.exit(0);
+  }
+
+  // Validate provider before proceeding
+  if (argv.provider && !(await validateProvider(argv.provider))) {
+    console.error(`❌ Provider '${argv.provider}' is not available.`);
+    console.log(`\n🔍 Use --provider-info <provider> to get information about available providers`);
+    console.log(`💡 Use ouroboros-code extension list to see installed extensions with providers`);
+    process.exit(1);
   }
 
   // Set a default auth type if one isn't set.

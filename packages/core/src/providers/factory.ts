@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import * as path from 'path';
 import { ContentGenerator } from '../core/contentGenerator.js';
 import {
   LLMProvider,
@@ -22,9 +23,11 @@ import {
 /**
  * Factory class for creating LLM provider instances
  * Supports dynamic loading of providers and proper error handling
+ * Also supports extension-based providers for local inference
  */
 export class LLMProviderFactory {
   private static providerCache = new Map<string, typeof BaseLLMProvider>();
+  private static extensionProviderRegistry: any = null;
 
   /**
    * Create a provider instance based on configuration
@@ -114,33 +117,6 @@ export class LLMProviderFactory {
     return successful;
   }
 
-  /**
-   * Check if a provider is available
-   */
-  static async isProviderAvailable(provider: LLMProvider): Promise<boolean> {
-    try {
-      await this.loadProviderClass(provider);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Get list of available providers
-   */
-  static async getAvailableProviders(): Promise<LLMProvider[]> {
-    const providers = Object.values(LLMProvider);
-    const available: LLMProvider[] = [];
-
-    for (const provider of providers) {
-      if (await this.isProviderAvailable(provider)) {
-        available.push(provider);
-      }
-    }
-
-    return available;
-  }
 
   /**
    * Create a provider with automatic fallback
@@ -184,10 +160,18 @@ export class LLMProviderFactory {
 
   /**
    * Create basic provider instance
+   * First checks extension providers, then falls back to core providers
    */
   private static async createBasicProvider(
     config: LLMProviderConfig,
   ): Promise<BaseLLMProvider> {
+    // First, try extension providers
+    const extensionProvider = await this.tryCreateExtensionProvider(config);
+    if (extensionProvider) {
+      return extensionProvider;
+    }
+
+    // Fall back to core providers
     switch (config.provider) {
       case LLMProvider.GEMINI:
         const { GeminiProvider } = await import('./gemini/provider.js');
@@ -206,6 +190,110 @@ export class LLMProviderFactory {
       default:
         throw new Error(`Unsupported provider: ${config.provider}`);
     }
+  }
+
+  /**
+   * Try to create provider from extension registry
+   */
+  private static async tryCreateExtensionProvider(
+    config: LLMProviderConfig,
+  ): Promise<BaseLLMProvider | null> {
+    // Dynamically import the extension registry to avoid circular dependencies
+    if (!this.extensionProviderRegistry) {
+      try {
+        const { ExtensionProviderRegistry } = await import('../config/extension-provider-registry.js');
+        this.extensionProviderRegistry = ExtensionProviderRegistry.getInstance();
+      } catch (error) {
+        // Extension system not available, return null
+        return null;
+      }
+    }
+
+    if (!this.extensionProviderRegistry.isProviderRegistered(config.provider)) {
+      return null;
+    }
+
+    const providerInfo = this.extensionProviderRegistry.getProvider(config.provider);
+    if (!providerInfo) {
+      return null;
+    }
+
+    // Load provider class if not already loaded
+    if (!providerInfo.providerClass) {
+      try {
+        const providerPath = require.resolve(
+          path.resolve(providerInfo.extension.path, providerInfo.config.entryPoint)
+        );
+        const ProviderModule = await import(providerPath);
+        const ProviderClass = ProviderModule.default || ProviderModule;
+        
+        // Validate provider class
+        if (!this.isValidProviderClass(ProviderClass)) {
+          throw new Error(`Invalid provider class in ${config.provider}`);
+        }
+
+        // Cache the provider class
+        providerInfo.providerClass = ProviderClass;
+      } catch (error) {
+        console.error(`Failed to load extension provider ${config.provider}:`, error);
+        return null;
+      }
+    }
+
+    // Create provider instance
+    return new providerInfo.providerClass(config);
+  }
+
+  /**
+   * Check if provider is available (core or extension)
+   */
+  static async isProviderAvailable(provider: string): Promise<boolean> {
+    // Check core providers
+    try {
+      if (Object.values(LLMProvider).includes(provider as LLMProvider)) {
+        await this.loadProviderClass(provider as LLMProvider);
+        return true;
+      }
+    } catch {
+      // Core provider not available, continue to check extensions
+    }
+
+    // Check extension providers
+    try {
+      const { ExtensionProviderRegistry } = await import('../config/extension-provider-registry.js');
+      const registry = ExtensionProviderRegistry.getInstance();
+      return registry.isProviderRegistered(provider);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get list of all available providers (core + extensions)
+   */
+  static async getAvailableProviders(): Promise<string[]> {
+    const coreProviders = Object.values(LLMProvider);
+    
+    try {
+      const { ExtensionProviderRegistry } = await import('../config/extension-provider-registry.js');
+      const registry = ExtensionProviderRegistry.getInstance();
+      const extensionProviders = registry.getAvailableProviderIds();
+      return [...coreProviders, ...extensionProviders];
+    } catch {
+      return coreProviders;
+    }
+  }
+
+  /**
+   * Validate if class is a valid provider class
+   */
+  private static isValidProviderClass(ProviderClass: any): boolean {
+    return (
+      typeof ProviderClass === 'function' &&
+      ProviderClass.prototype &&
+      (ProviderClass.prototype instanceof BaseLLMProvider ||
+        typeof ProviderClass.prototype.generateContent === 'function')
+    );
   }
 
   /**

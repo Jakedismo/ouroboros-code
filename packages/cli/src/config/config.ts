@@ -36,6 +36,7 @@ import { Settings } from './settings.js';
 import { resolvePath } from '../utils/resolvePath.js';
 import { getCliVersion } from '../utils/version.js';
 import { Extension, annotateActiveExtensions } from './extension.js';
+import { ExtensionProviderRegistry } from '@ouroboros/code-cli-core';
 import { loadSandboxConfig } from './sandboxConfig.js';
 
 import { isWorkspaceTrusted } from './trustedFolders.js';
@@ -80,6 +81,7 @@ export interface CliArgs {
   experimentalA2aMode: boolean | undefined;
   extensions: string[] | undefined;
   listExtensions: boolean | undefined;
+  providerInfo: string | undefined;
   proxy: string | undefined;
   includeDirectories: string[] | undefined;
   // Multi-LLM provider options
@@ -112,6 +114,127 @@ function getProviderDefaultModel(provider: string): string {
     default:
       return DEFAULT_MODELS[LLMProvider.GEMINI];
   }
+}
+
+/**
+ * Get available provider choices, including extension providers
+ */
+async function getAvailableProviders(): Promise<string[]> {
+  const coreProviders = ['gemini', 'openai', 'anthropic'];
+  
+  try {
+    const registry = ExtensionProviderRegistry.getInstance();
+    const extensionProviders = registry.getAvailableProviderIds();
+    return [...coreProviders, ...extensionProviders];
+  } catch (error) {
+    // If extension registry is not available, return core providers only
+    return coreProviders;
+  }
+}
+
+/**
+ * Show detailed information about a provider
+ */
+export async function showProviderInfo(providerId: string, extensions: Extension[]): Promise<void> {
+  const coreProviders = new Set(['gemini', 'openai', 'anthropic']);
+  
+  if (coreProviders.has(providerId)) {
+    console.log(`\n📋 Core Provider: ${providerId}`);
+    console.log(`Type: Built-in core provider`);
+    console.log(`Default Model: ${getProviderDefaultModel(providerId)}`);
+    console.log(`Status: ✅ Always available`);
+    
+    switch (providerId) {
+      case 'gemini':
+        console.log(`Description: Google's Gemini AI models with advanced multimodal capabilities`);
+        console.log(`Authentication: GOOGLE_API_KEY environment variable or OAuth`);
+        break;
+      case 'openai':
+        console.log(`Description: OpenAI's GPT models including GPT-5 with advanced reasoning`);
+        console.log(`Authentication: OPENAI_API_KEY environment variable or --openai-api-key`);
+        break;
+      case 'anthropic':
+        console.log(`Description: Anthropic's Claude models including Claude 4 and Opus 4.1`);
+        console.log(`Authentication: ANTHROPIC_API_KEY environment variable or --anthropic-api-key`);
+        break;
+    }
+    return;
+  }
+
+  // Check extension providers
+  try {
+    const registry = ExtensionProviderRegistry.getInstance();
+    const providerInfo = registry.getProvider(providerId);
+    
+    if (providerInfo) {
+      const { extension, config } = providerInfo;
+      
+      console.log(`\n🔌 Extension Provider: ${providerId}`);
+      console.log(`Extension: ${extension.config.name} (v${extension.config.version})`);
+      console.log(`Type: ${config.type}`);
+      console.log(`Display Name: ${config.displayName}`);
+      console.log(`Description: ${config.description}`);
+      console.log(`Default Model: ${config.defaultModel}`);
+      console.log(`Entry Point: ${config.entryPoint}`);
+      
+      console.log(`\n🎯 Capabilities:`);
+      console.log(`  - Streaming: ${config.capabilities.supportsStreaming ? '✅' : '❌'}`);
+      console.log(`  - Tools: ${config.capabilities.supportsTools ? '✅' : '❌'}`);
+      console.log(`  - Function Calling: ${config.capabilities.supportsFunctionCalling ? '✅' : '❌'}`);
+      console.log(`  - Vision: ${config.capabilities.supportsVision ? '✅' : '❌'}`);
+      console.log(`  - Embedding: ${config.capabilities.supportsEmbedding ? '✅' : '❌'}`);
+      console.log(`  - System Messages: ${config.capabilities.supportsSystemMessage ? '✅' : '❌'}`);
+      console.log(`  - Tool Choice: ${config.capabilities.supportsToolChoice ? '✅' : '❌'}`);
+      console.log(`  - Max Tokens: ${config.capabilities.maxTokens.toLocaleString()}`);
+      console.log(`  - Max Context: ${config.capabilities.maxContextTokens.toLocaleString()}`);
+      
+      if (extension.config.description) {
+        console.log(`\n📖 Extension Description: ${extension.config.description}`);
+      }
+      
+      if (extension.config.author) {
+        console.log(`👤 Author: ${extension.config.author}`);
+      }
+      
+      console.log(`📁 Extension Path: ${extension.path}`);
+      console.log(`⏰ Registered: ${new Date(providerInfo.registeredAt).toLocaleString()}`);
+      
+      console.log(`\n💡 Usage:`);
+      console.log(`  ouroboros-code --provider ${providerId} "Your prompt here"`);
+      
+      return;
+    }
+  } catch (error) {
+    // Extension registry not available
+  }
+
+  // Provider not found
+  console.error(`❌ Provider '${providerId}' not found.`);
+  console.log(`\n🔍 Available providers:`);
+  
+  console.log(`\n📋 Core providers: gemini, openai, anthropic`);
+  
+  try {
+    const registry = ExtensionProviderRegistry.getInstance();
+    const extensionProviders = registry.getAvailableProviderIds();
+    if (extensionProviders.length > 0) {
+      console.log(`🔌 Extension providers: ${extensionProviders.join(', ')}`);
+    } else {
+      console.log(`🔌 Extension providers: None installed`);
+    }
+  } catch {
+    console.log(`🔌 Extension providers: Extension system not available`);
+  }
+  
+  console.log(`\n💡 Install extensions with: ouroboros-code extension install <extension-name>`);
+}
+
+/**
+ * Validate that a provider is available
+ */
+export async function validateProvider(providerId: string): Promise<boolean> {
+  const availableProviders = await getAvailableProviders();
+  return availableProviders.includes(providerId);
 }
 
 export async function parseArguments(): Promise<CliArgs> {
@@ -157,8 +280,7 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
         })
         .option('provider', {
           type: 'string',
-          choices: ['gemini', 'openai', 'anthropic'],
-          description: '🌐 LLM Provider - Switch between AI providers seamlessly',
+          description: '🌐 LLM Provider - Switch between AI providers seamlessly (gemini, openai, anthropic, or installed extensions)',
           default: 'gemini',
         })
         .option('openai-api-key', {
@@ -359,6 +481,10 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
           type: 'boolean',
           description: 'List all available extensions and exit.',
         })
+        .option('provider-info', {
+          type: 'string',
+          description: 'Show detailed information about a specific provider',
+        })
         .option('proxy', {
           type: 'string',
           description:
@@ -427,6 +553,10 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
     ouroboros-code                          # Interactive mode with Gemini
     ouroboros-code --provider openai        # Use OpenAI GPT models
     ouroboros-code --provider anthropic     # Use Anthropic Claude and Opus models
+  
+  Extension providers:
+    ouroboros-code --provider-info ollama   # Get info about installed providers
+    ouroboros-code --provider ollama        # Use extension providers (if installed)
 
   Advanced multi-provider commands:
     ouroboros-code /blindspot               # Detect what each provider misses

@@ -6,6 +6,7 @@
 
 // Export config
 export * from './config/config.js';
+export * from './config/extension-provider-registry.js';
 
 // Export webhook configuration (WEBHOOK_EXTENSION)
 export * from './config/webhook-config.js';
