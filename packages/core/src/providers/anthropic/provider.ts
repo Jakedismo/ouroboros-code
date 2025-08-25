@@ -14,6 +14,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { BaseLLMProvider } from '../base.js';
 import { AnthropicFormatConverter } from './converter.js';
 import { AnthropicOAuthManager, EnhancedAnthropicOAuthManager } from './oauth-manager.js';
+import { AnthropicPromptCacheManager } from './prompt-cache-manager.js';
 import {
   LLMProviderConfig,
   LLMProvider,
@@ -29,15 +30,25 @@ import {
 } from '../types.js';
 
 /**
- * Anthropic provider implementation
+ * Anthropic provider implementation with prompt caching support
  */
 export class AnthropicProvider extends BaseLLMProvider {
   private client: Anthropic;
   private oauthManager?: AnthropicOAuthManager;
   private enhancedOAuthManager?: EnhancedAnthropicOAuthManager;
+  private cacheManager?: AnthropicPromptCacheManager;
 
   constructor(config: LLMProviderConfig) {
     super(config);
+    
+    // Initialize prompt cache manager if caching is enabled
+    if (config.promptCaching?.enabled) {
+      this.cacheManager = new AnthropicPromptCacheManager(
+        config.model,
+        config.promptCaching.cacheTTL === 60 // Enable extended TTL if configured for 1 hour
+      );
+      console.log(`[Anthropic Provider] Prompt caching enabled for model ${config.model}`);
+    }
     
     // Initialize OAuth manager if OAuth is configured
     if (config.useOAuth) {
@@ -131,7 +142,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   }
 
   /**
-   * Generate content using Anthropic API
+   * Generate content using Anthropic API with prompt caching support
    */
   protected async generateUnifiedContent(
     request: UnifiedGenerateRequest,
@@ -143,14 +154,48 @@ export class AnthropicProvider extends BaseLLMProvider {
         await this.refreshOAuthIfNeeded();
       }
       
+      // Apply prompt caching if enabled
+      let processedRequest = request;
+      if (this.cacheManager && this.config.promptCaching?.enabled) {
+        const cachedMessages = this.cacheManager.addCacheBreakpoints(
+          request.messages,
+          this.config.promptCaching!.cacheBreakpoints?.map(pos => ({
+            messageIndex: pos,
+            type: 'ephemeral' as const,
+            ttl: this.config.promptCaching!.cacheTTL
+          })),
+          this.config.promptCaching!.autoBreakpoints ?? true
+        );
+        
+        processedRequest = {
+          ...request,
+          messages: cachedMessages
+        };
+        
+        console.log(`[Anthropic Provider] Added cache breakpoints to ${cachedMessages.filter((m: any) => m.cache_control).length} messages`);
+      }
+      
       // Convert to Anthropic format
-      const anthropicRequest = this.converter.toProviderFormat(request);
+      const anthropicRequest = this.converter.toProviderFormat(processedRequest);
 
       // Set model
       anthropicRequest.model = this.config.model;
 
-      // Make the API call
-      const response = await this.client.messages.create(anthropicRequest);
+      // Add prompt caching beta header if caching is enabled
+      const headers: Record<string, string> = {};
+      if (this.cacheManager && this.config.promptCaching?.enabled) {
+        headers['anthropic-beta'] = 'prompt-caching-2024-07-31';
+      }
+
+      // Make the API call with caching headers
+      const response = await this.client.messages.create(anthropicRequest, {
+        ...(Object.keys(headers).length > 0 && { headers })
+      });
+
+      // Update cache statistics if caching is enabled
+      if (this.cacheManager && response.usage) {
+        this.cacheManager.updateCacheStats(response.usage);
+      }
 
       // Convert back to unified format
       return this.converter.fromProviderResponse(response);
@@ -166,27 +211,61 @@ export class AnthropicProvider extends BaseLLMProvider {
   }
 
   /**
-   * Generate streaming content
+   * Generate streaming content with prompt caching support
    */
   protected async *generateUnifiedContentStream(
     request: UnifiedGenerateRequest,
     _userPromptId: string,
   ): AsyncGenerator<UnifiedGenerateResponse> {
     try {
+      // Apply prompt caching if enabled
+      let processedRequest = request;
+      if (this.cacheManager && this.config.promptCaching?.enabled) {
+        const cachedMessages = this.cacheManager.addCacheBreakpoints(
+          request.messages,
+          this.config.promptCaching!.cacheBreakpoints?.map(pos => ({
+            messageIndex: pos,
+            type: 'ephemeral' as const,
+            ttl: this.config.promptCaching!.cacheTTL
+          })),
+          this.config.promptCaching!.autoBreakpoints ?? true
+        );
+        
+        processedRequest = {
+          ...request,
+          messages: cachedMessages
+        };
+      }
+      
       // Convert to Anthropic format
-      const anthropicRequest = this.converter.toProviderFormat(request);
+      const anthropicRequest = this.converter.toProviderFormat(processedRequest);
 
       // Set model and enable streaming
       anthropicRequest.model = this.config.model;
       anthropicRequest.stream = true;
 
-      // Make streaming API call
-      const stream = await this.client.messages.stream(anthropicRequest);
+      // Add prompt caching beta header if caching is enabled
+      const headers: Record<string, string> = {};
+      if (this.cacheManager && this.config.promptCaching?.enabled) {
+        headers['anthropic-beta'] = 'prompt-caching-2024-07-31';
+      }
+
+      // Make streaming API call with caching headers
+      const stream = await this.client.messages.stream(anthropicRequest, {
+        ...(Object.keys(headers).length > 0 && { headers })
+      });
+
+      let finalUsage: any = null;
 
       // Process stream events
       for await (const event of stream) {
         const converter = this.converter as AnthropicFormatConverter;
         const unifiedChunk = converter.convertStreamEvent(event);
+
+        // Capture usage information for cache stats
+        if ((event as any).usage) {
+          finalUsage = (event as any).usage;
+        }
 
         // Only yield chunks with actual content
         if (
@@ -196,6 +275,11 @@ export class AnthropicProvider extends BaseLLMProvider {
         ) {
           yield unifiedChunk;
         }
+      }
+
+      // Update cache statistics if caching is enabled and we have usage data
+      if (this.cacheManager && finalUsage) {
+        this.cacheManager.updateCacheStats(finalUsage);
       }
     } catch (error: unknown) {
       throw this.handleAnthropicError(error);
@@ -895,5 +979,47 @@ export class AnthropicProvider extends BaseLLMProvider {
   async getOAuthStorageStatus() {
     const manager = this.getEnhancedOAuthManager();
     return await manager.getStorageStatus();
+  }
+
+  /**
+   * Get prompt caching statistics
+   */
+  getCacheStats() {
+    return this.cacheManager?.getCacheStats() || null;
+  }
+
+  /**
+   * Get cache efficiency metrics
+   */
+  getCacheEfficiency() {
+    return this.cacheManager?.getCacheEfficiency() || null;
+  }
+
+  /**
+   * Reset cache statistics
+   */
+  resetCacheStats() {
+    this.cacheManager?.resetCacheStats();
+  }
+
+  /**
+   * Check if prompt caching is enabled and supported
+   */
+  isCachingEnabled(): boolean {
+    return !!(this.config.promptCaching?.enabled && this.cacheManager);
+  }
+
+  /**
+   * Check if the current model supports prompt caching
+   */
+  isCachingSupported(): boolean {
+    return AnthropicPromptCacheManager.isModelSupported(this.config.model);
+  }
+
+  /**
+   * Get recommended cache configuration for the current model
+   */
+  getRecommendedCacheConfig() {
+    return AnthropicPromptCacheManager.getRecommendedConfig(this.config.model);
   }
 }

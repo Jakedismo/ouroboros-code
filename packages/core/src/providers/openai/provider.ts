@@ -12,6 +12,7 @@ import {
 } from '@google/genai';
 import { BaseLLMProvider } from '../base.js';
 import { OpenAIFormatConverter } from './converter.js';
+import { OpenAIPromptCacheManager } from './prompt-cache-manager.js';
 import {
   LLMProviderConfig,
   LLMProvider,
@@ -30,14 +31,21 @@ import {
 type OpenAI = any;
 
 /**
- * OpenAI provider implementation
+ * OpenAI provider implementation with automatic prompt caching support
  */
 export class OpenAIProvider extends BaseLLMProvider {
   private client?: OpenAI;
   private OpenAI?: any; // OpenAI constructor
+  private cacheManager?: OpenAIPromptCacheManager;
 
   constructor(config: LLMProviderConfig) {
     super(config);
+    
+    // Initialize prompt cache manager if caching is enabled
+    if (config.promptCaching?.enabled) {
+      this.cacheManager = new OpenAIPromptCacheManager(config.model);
+      console.log(`[OpenAI Provider] Prompt caching tracking enabled for model ${config.model}`);
+    }
   }
 
   /**
@@ -85,7 +93,7 @@ export class OpenAIProvider extends BaseLLMProvider {
   }
 
   /**
-   * Generate content using OpenAI API
+   * Generate content using OpenAI API with automatic prompt caching
    */
   protected async generateUnifiedContent(
     request: UnifiedGenerateRequest,
@@ -111,8 +119,22 @@ export class OpenAIProvider extends BaseLLMProvider {
       // Set model
       openaiRequest.model = this.config.model;
 
-      // Make the API call
+      const startTime = Date.now();
+      
+      // Make the API call (OpenAI handles caching automatically)
       const response = await this.client.chat.completions.create(openaiRequest);
+
+      const latency = Date.now() - startTime;
+
+      // Track cache usage if caching is enabled
+      if (this.cacheManager && response.usage) {
+        this.cacheManager.updateStats(response.usage, latency);
+        
+        // Log cache statistics if debug mode is enabled
+        if (debugMode && response.usage.cached_tokens) {
+          console.log(`[OPENAI DEBUG ${userPromptId}] Cache hit: ${response.usage.cached_tokens} tokens cached`);
+        }
+      }
 
       // Convert back to unified format
       return this.converter.fromProviderResponse(response);
@@ -122,7 +144,7 @@ export class OpenAIProvider extends BaseLLMProvider {
   }
 
   /**
-   * Generate streaming content
+   * Generate streaming content with automatic prompt caching
    */
   protected async *generateUnifiedContentStream(
     request: UnifiedGenerateRequest,
@@ -140,13 +162,22 @@ export class OpenAIProvider extends BaseLLMProvider {
       openaiRequest.model = this.config.model;
       openaiRequest.stream = true;
 
-      // Make streaming API call
+      const startTime = Date.now();
+      
+      // Make streaming API call (OpenAI handles caching automatically)
       const stream = await this.client.chat.completions.create(openaiRequest);
+
+      let finalUsage: any = null;
 
       // Process stream chunks
       for await (const chunk of stream) {
         const converter = this.converter as OpenAIFormatConverter;
         const unifiedChunk = converter.convertStreamChunk(chunk);
+
+        // Capture final usage information from stream
+        if (chunk.usage) {
+          finalUsage = chunk.usage;
+        }
 
         // Only yield chunks with actual content
         if (
@@ -155,6 +186,17 @@ export class OpenAIProvider extends BaseLLMProvider {
           unifiedChunk.finishReason
         ) {
           yield unifiedChunk;
+        }
+      }
+
+      // Update cache statistics after streaming completes
+      if (this.cacheManager && finalUsage) {
+        const latency = Date.now() - startTime;
+        this.cacheManager.updateStats(finalUsage, latency);
+
+        const debugMode = this.config.configInstance?.getDebugMode?.() || false;
+        if (debugMode && finalUsage.cached_tokens) {
+          console.log(`[OPENAI DEBUG ${userPromptId}] Streaming cache hit: ${finalUsage.cached_tokens} tokens cached`);
         }
       }
     } catch (error: any) {
@@ -630,5 +672,60 @@ export class OpenAIProvider extends BaseLLMProvider {
       console.debug('OpenAI health check failed:', error);
       return false;
     }
+  }
+
+  /**
+   * Get prompt caching statistics (OpenAI automatic caching)
+   */
+  getCacheStats() {
+    return this.cacheManager?.getCacheStats() || null;
+  }
+
+  /**
+   * Get cache efficiency insights and optimization recommendations
+   */
+  getCacheInsights() {
+    if (!this.cacheManager) return null;
+
+    return {
+      efficiency: this.cacheManager.getCacheEfficiencyInsights(),
+      recommendations: this.cacheManager.getOptimizationRecommendations(),
+      performanceReport: this.cacheManager.getPerformanceReport(),
+    };
+  }
+
+  /**
+   * Reset cache statistics
+   */
+  resetCacheStats() {
+    this.cacheManager?.resetStats();
+  }
+
+  /**
+   * Check if prompt caching tracking is enabled
+   */
+  isCachingEnabled(): boolean {
+    return !!(this.config.promptCaching?.enabled && this.cacheManager);
+  }
+
+  /**
+   * Check if the current model supports automatic prompt caching
+   */
+  isCachingSupported(): boolean {
+    return OpenAIPromptCacheManager.isModelSupported(this.config.model);
+  }
+
+  /**
+   * Assess cache readiness of a prompt
+   */
+  assessPromptCacheReadiness(prompt: string) {
+    return OpenAIPromptCacheManager.assessPromptCacheReadiness(prompt);
+  }
+
+  /**
+   * Get cache performance report
+   */
+  getCachePerformanceReport() {
+    return this.cacheManager?.getPerformanceReport() || null;
   }
 }

@@ -144,6 +144,10 @@ export interface RunConfig {
    * before the execution is terminated. Helps prevent infinite loops.
    */
   max_turns?: number;
+  /** Optional callback invoked whenever tool calls update (status changes). */
+  onToolCallsUpdate?: (calls: any[]) => void;
+  /** Optional callback invoked for streamed tool output chunks. */
+  onToolOutput?: (callId: string, chunk: string) => void;
 }
 
 /**
@@ -511,6 +515,10 @@ export class SubAgentScope {
           this.runtimeContext,
           requestInfo,
           abortController.signal,
+          {
+            onToolCallsUpdate: this.runConfig.onToolCallsUpdate as any,
+            onToolOutput: this.runConfig.onToolOutput,
+          },
         );
       }
 

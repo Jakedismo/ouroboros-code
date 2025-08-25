@@ -648,6 +648,7 @@ export class CoreSystemIntegration {
     }
 
     // Use current active agent if no agent provided
+    // This allows specialist agents to execute workflows with their capabilities
     if (!context.agentConfig) {
       context.agentConfig = await this.agentManager.getActiveAgent() || undefined;
     }

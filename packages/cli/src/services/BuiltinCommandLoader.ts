@@ -43,7 +43,9 @@ import { raceCommand } from '../ui/commands/raceCommand.js';
 import { switchCommand } from '../ui/commands/switchCommand.js';
 import { agentCommand } from '../ui/commands/agentCommand.js';
 import { appleControlCommand } from '../ui/commands/appleControlCommand.js';
+import { sagaCommand } from '../ui/commands/sagaCommand.js';
 import { workflowCommand, progressCommand } from '../ui/commands/workflowCommand.js';
+import { optimalRoutingCommand } from '../ui/commands/optimalRoutingCommand.js';
 
 /**
  * Loads the core, hard-coded slash commands that are an integral part
@@ -85,9 +87,11 @@ export class BuiltinCommandLoader implements ICommandLoader {
       mcpCommand,
       memoryCommand,
       modelCommand,
+      optimalRoutingCommand,
       privacyCommand,
       quitCommand,
       raceCommand,
+      sagaCommand,
       restoreCommand(this.config),
       settingsCommand,
       setupGithubCommand,

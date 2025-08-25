@@ -101,17 +101,28 @@ export class RegistryInitializer {
     const activeAgent = await this.storage.getActiveAgent();
     
     if (!activeAgent) {
-      // Set automation specialist as default
-      const defaultAgentId = 'automation-specialist';
+      // Set Claude Code Style as default (system-prompt-flavour agent)
+      // This ensures the default agent uses standard coding prompts, not specialized personas
+      const defaultAgentId = 'claude-code-agent';
       const defaultAgent = await this.storage.loadAgent(defaultAgentId, 'built-in');
       
       if (defaultAgent) {
         await this.storage.setActiveAgent(defaultAgentId);
-        console.log(`🎯 Set default active agent: ${defaultAgent.name}`);
+        console.log(`🎯 Set default active agent: ${defaultAgent.name} (system-prompt-flavour)`);
       } else {
-        // Fallback to any available built-in agent
+        // Fallback to any system-prompt-flavour agent
         const agents = await this.registry.getAgentsByCategory('built-in');
-        if (agents.length > 0) {
+        const systemPromptAgent = agents.find(a => 
+          a.id.includes('claude-code') || 
+          a.id.includes('cursor') || 
+          a.id.includes('augment')
+        );
+        
+        if (systemPromptAgent) {
+          await this.storage.setActiveAgent(systemPromptAgent.id);
+          console.log(`🎯 Set fallback active agent: ${systemPromptAgent.name} (system-prompt-flavour)`);
+        } else if (agents.length > 0) {
+          // Last resort: any available agent
           await this.storage.setActiveAgent(agents[0].id);
           console.log(`🎯 Set fallback active agent: ${agents[0].name}`);
         }

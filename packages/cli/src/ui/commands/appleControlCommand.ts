@@ -125,36 +125,59 @@ Use \`/agent activate automation-specialist\` to switch to the automation agent.
           return;
         }
 
-        // Check if automation specialist is active
+        // Check if automation specialist is active, auto-activate if not
         try {
           const { getAgentManager } = await import('../../agents/integration/index.js');
           const agentManager = getAgentManager();
+          await agentManager.initialize();
           const activeAgent = await agentManager.getActiveAgent();
           
           if (!activeAgent || activeAgent.id !== 'automation-specialist') {
+            // Auto-activate the automation specialist for workflow tasks
             context.ui.addItem({
               type: MessageType.INFO,
-              text: `🤖 **Automation Workflow Request**
+              text: `🔄 **Auto-activating Automation Specialist**
 
-**Description:** ${workflowDescription}
+The Automation Specialist is being activated to handle your workflow request.
+This specialized agent provides:
+- ASCII workflow diagrams
+- Complex multi-step automation planning
+- Proper error handling and recovery
+- Real-time progress tracking
 
-⚠️  **Recommendation:** For best results, activate the **Automation Specialist** agent:
-\`/agent activate automation-specialist\`
-
-The Automation Specialist is specifically designed to:
-- Generate ASCII workflow diagrams
-- Plan complex multi-step automations  
-- Execute workflows with proper error handling
-- Provide real-time progress updates
-
-**Continue anyway?** You can proceed with the current agent, but the automation specialist provides specialized capabilities for workflow planning and execution.`
+Previous agent: ${activeAgent?.name || 'None'}`
             }, Date.now());
-          } else {
+            
+            // Activate the automation specialist
+            await agentManager.activateAgent('automation-specialist');
+            const newAgent = await agentManager.getActiveAgent();
+            
+            if (newAgent?.id === 'automation-specialist') {
+              context.ui.addItem({
+                type: MessageType.INFO,
+                text: `✅ **Automation Specialist Activated**
+
+The workflow specialist is now ready to process your request.
+After workflow completion, you can switch back using:
+\`/agent activate ${activeAgent?.id || 'claude-code-agent'}\``
+              }, Date.now());
+            } else {
+              // Fallback if activation failed
+              context.ui.addItem({
+                type: MessageType.WARNING,
+                text: `⚠️  Could not activate Automation Specialist. Proceeding with current agent.`
+              }, Date.now());
+            }
+          }
+          
+          // Now proceed with workflow (specialist should be active)
+          const currentAgent = await agentManager.getActiveAgent();
+          if (currentAgent?.id === 'automation-specialist') {
             context.ui.addItem({
               type: MessageType.INFO,
               text: `🤖 **Automation Workflow Request** 
 
-**Active Agent:** ${activeAgent.name} ✅
+**Active Agent:** ${currentAgent.name} ✅
 **Description:** ${workflowDescription}
 
 🎯 The Automation Specialist will now:

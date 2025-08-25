@@ -25,6 +25,18 @@ export enum LLMProvider {
 }
 
 /**
+ * Prompt caching configuration
+ */
+export interface PromptCachingConfig {
+  enabled: boolean; // Enable prompt caching
+  cacheType?: 'ephemeral' | 'persistent'; // Cache type (Anthropic: ephemeral only)
+  cacheTTL?: number; // Cache time-to-live in minutes (5 or 60 for Anthropic)
+  minimumTokens?: number; // Minimum tokens to cache (1024 for OpenAI, varies for Anthropic)
+  cacheBreakpoints?: number[]; // Specific token positions to set as cache breakpoints (Anthropic)
+  autoBreakpoints?: boolean; // Automatically add cache breakpoints at optimal positions
+}
+
+/**
  * Configuration for LLM provider instances
  */
 export interface LLMProviderConfig {
@@ -40,6 +52,9 @@ export interface LLMProviderConfig {
   configInstance?: any; // Reference to Config instance for tool integration
   mcpConfig?: Partial<MultiProviderMCPConfig>; // Advanced MCP configuration
   authType?: AuthType; // Authentication type for OAuth vs API key handling
+  
+  // Prompt caching configuration
+  promptCaching?: PromptCachingConfig;
   
   // OAuth configuration (for providers that support it)
   useOAuth?: boolean; // Use OAuth instead of API key

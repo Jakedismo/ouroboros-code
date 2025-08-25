@@ -26,6 +26,7 @@ export * from './core/tokenLimits.js';
 export * from './core/turn.js';
 export * from './core/geminiRequest.js';
 export * from './core/coreToolScheduler.js';
+export * from './core/subagent.js';
 export * from './core/nonInteractiveToolExecutor.js';
 export * from './core/A2AContextInjector.js';
 
