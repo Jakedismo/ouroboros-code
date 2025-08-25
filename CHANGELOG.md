@@ -5,6 +5,59 @@ All notable changes to Ouroboros Code will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.1] - 2025-01-24
+
+### 🔥 Major Feature: Local Inference Provider Extension System
+
+#### 🧩 Plug-and-Play Extension Architecture
+- **Extension Provider Registry**: Dynamic provider registration system with capability validation
+- **Requirements Validation**: Platform, architecture, memory, and dependency checking
+- **Hot-Loading**: Extensions load automatically without restart
+- **Zero-Dependency Core**: Extension system doesn't add bloat to core functionality
+
+#### 📦 Extension Package System
+- **Standardized Configuration**: `gemini-extension.json` with provider metadata
+- **Capability Declaration**: Streaming, tools, vision, embedding support specification
+- **Installation Hooks**: Pre/post install scripts for setup and validation
+- **Version Management**: Semantic versioning with dependency resolution
+
+#### 🚀 Local Inference Provider Support  
+- **Ollama Extension**: Local LLM inference with model management and streaming
+- **vLLM Extension**: High-performance inference server with GPU optimization
+- **Transformers.js Extension**: Browser-compatible JavaScript inference with Web Workers
+
+#### 🎯 Enhanced CLI Experience
+- **Dynamic Provider Discovery**: `--provider` argument now supports extension providers
+- **Provider Information**: `--provider-info <provider>` shows detailed capability information
+- **Installation Commands**: `ouroboros-code extension install/list/remove` for extension management
+- **Validation**: Pre-execution provider availability checking with helpful error messages
+
+#### 🛠️ Developer Experience
+- **Extension Templates**: Scaffolding for creating new provider extensions
+- **Testing Framework**: Built-in testing utilities for extension validation
+- **Documentation**: Comprehensive guides for extension development
+- **TypeScript Support**: Full type definitions for extension interfaces
+
+### Added
+- **ExtensionProviderRegistry**: Core registry system for managing extension providers
+- **Provider Validation**: Runtime capability and requirement checking
+- **Async Extension Loading**: Non-blocking extension discovery and registration
+- **Extension Provider Factory**: Integration with existing LLMProviderFactory
+- **CLI Provider Commands**: `--provider-info` and enhanced `--provider` support
+- **Extension Configuration Interface**: Comprehensive provider metadata system
+
+### Enhanced
+- **Provider Selection**: Dynamic provider discovery includes extensions
+- **Help Documentation**: Updated with extension provider examples
+- **Error Handling**: Better validation messages for unavailable providers
+- **Test Coverage**: Unit tests for extension provider system
+
+### Technical Details
+- **Architecture**: Extension registry moved to core package to avoid circular dependencies
+- **Performance**: Lazy loading of extension providers for optimal startup time
+- **Security**: Sandboxed extension execution with capability-based permissions
+- **Compatibility**: Full backward compatibility with existing provider system
+
 ## [1.0.0-alpha.6] - 2025-01-24
 
 ### Added

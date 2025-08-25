@@ -102,6 +102,28 @@ ouroboros-code --experimental-a2a-mode
 ouroboros-code --experimental-a2a-mode --debug
 ```
 
+### 🔌 Extension Provider System (Beta)
+
+Install and use local inference providers through our plug-and-play extension system:
+
+```bash
+# Install provider extensions
+ouroboros-code extension install extensions/ollama-provider/
+ouroboros-code extension install extensions/vllm-provider/
+ouroboros-code extension install extensions/transformersjs-provider/
+
+# Use installed providers immediately
+ouroboros-code --provider ollama "Run this locally with Ollama"
+ouroboros-code --provider vllm "High-performance inference with vLLM"
+ouroboros-code --provider transformersjs "Client-side AI with WebAssembly"
+
+# Manage extensions
+ouroboros-code extension list                       # List installed extensions
+ouroboros-code extension uninstall ollama-provider  # Remove extension
+```
+
+📚 **[Full Extension Provider Documentation](docs/EXTENSION_PROVIDERS.md)** - Learn how to use and create provider extensions
+
 ### Unified Tool Architecture
 
 All 11 builtin tools work identically across every provider:
@@ -272,6 +294,73 @@ gemini
 ```
 
 For Google Workspace accounts and other authentication methods, see the [authentication guide](./docs/cli/authentication.md).
+
+### Option 5: Local Inference Providers (Extensions)
+
+**🔥 New in Beta!** Ouroboros Code now supports local inference through installable extensions, giving you complete privacy and control over your AI workflows.
+
+**✨ Benefits:**
+- **🏠 Complete Privacy**: Run models locally without sending data to external APIs
+- **💰 Cost-Free**: No API usage fees after initial setup
+- **📶 Offline Capable**: Work without internet connection
+- **🎛️ Full Control**: Choose models, parameters, and infrastructure
+- **🔧 Customizable**: Install only the providers you need
+
+#### Available Local Provider Extensions
+
+##### 🦙 Ollama Provider
+High-quality local LLM inference with model management
+
+```bash
+# Install Ollama extension
+ouroboros-code extension install ollama-provider
+
+# Check provider details
+ouroboros-code --provider-info ollama
+
+# Use Ollama
+ouroboros-code --provider ollama "Explain quantum computing"
+ouroboros-code --provider ollama --model llama3.1:8b "Write Python code"
+```
+
+##### 🚀 vLLM Provider
+High-performance inference server optimized for throughput
+
+```bash
+# Install vLLM extension  
+ouroboros-code extension install vllm-provider
+
+# Use vLLM with GPU acceleration
+ouroboros-code --provider vllm --model meta-llama/Llama-3.1-8B-Instruct "Hello"
+```
+
+##### 🌐 Transformers.js Provider
+Browser-compatible JavaScript inference with Web Workers
+
+```bash
+# Install Transformers.js extension
+ouroboros-code extension install transformers-provider
+
+# Use lightweight models
+ouroboros-code --provider transformers --model Xenova/gpt2 "Generate text"
+```
+
+#### Extension Management
+
+```bash
+# List installed extensions
+ouroboros-code extension list
+
+# Get detailed provider information
+ouroboros-code --provider-info ollama
+ouroboros-code --provider-info vllm
+ouroboros-code --provider-info transformers
+
+# Remove extensions
+ouroboros-code extension remove ollama-provider
+```
+
+**📋 Requirements**: Each extension has specific requirements (GPU, memory, dependencies) that are validated during installation.
 
 ## 🚀 Getting Started
 

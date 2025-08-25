@@ -1,0 +1,78 @@
+{
+  "name": "ollama-provider",
+  "version": "1.0.0-beta.1",
+  "description": "Local LLM inference with Ollama - privacy-focused, cost-free AI in your terminal",
+  "author": "Ouroboros Development Team",
+  "homepage": "https://github.com/ouroboros-ai/ollama-provider",
+  "repository": "https://github.com/ouroboros-ai/ollama-provider",
+  "license": "Apache-2.0",
+  "keywords": [
+    "ollama",
+    "local-llm",
+    "privacy",
+    "offline",
+    "llama",
+    "inference",
+    "ouroboros"
+  ],
+  "providers": {
+    "ollama": {
+      "type": "local",
+      "displayName": "Ollama Local LLM",
+      "description": "High-quality local LLM inference with Ollama's optimized runtime",
+      "entryPoint": "dist/provider.js",
+      "defaultModel": "llama3.1:8b",
+      "capabilities": {
+        "supportsStreaming": true,
+        "supportsTools": true,
+        "supportsFunctionCalling": true,
+        "supportsVision": false,
+        "supportsEmbedding": true,
+        "maxTokens": 131072,
+        "maxContextTokens": 131072,
+        "supportsSystemMessage": true,
+        "supportsToolChoice": true
+      },
+      "configuration": {
+        "baseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama server base URL"
+        },
+        "pullOnDemand": {
+          "type": "boolean", 
+          "default": true,
+          "description": "Automatically pull models if not available locally"
+        },
+        "requestTimeout": {
+          "type": "number",
+          "default": 300000,
+          "description": "Request timeout in milliseconds"
+        },
+        "maxRetries": {
+          "type": "number",
+          "default": 3,
+          "description": "Maximum number of retry attempts"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "npm": ["ollama"],
+    "system": ["ollama"],
+    "optional": ["curl"]
+  },
+  "requirements": {
+    "platform": ["darwin", "linux", "win32"],
+    "arch": ["x64", "arm64"],
+    "memory": 4096,
+    "gpu": false,
+    "network": false,
+    "storage": 10240
+  },
+  "scripts": {
+    "preinstall": "npm run check-ollama",
+    "postinstall": "npm run verify-install",
+    "test": "npm run test:integration"
+  }
+}

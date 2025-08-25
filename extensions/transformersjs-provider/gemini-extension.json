@@ -1,0 +1,225 @@
+{
+  "name": "@ouroboros/transformersjs-provider",
+  "version": "1.0.0-beta.1",
+  "displayName": "Transformers.js Provider - Browser-Native AI",
+  "description": "Transformers.js provider extension for ultra-private, client-side AI inference. Run Hugging Face models directly in Node.js with WebAssembly - no servers required!",
+  "author": "Ouroboros Development Team",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/ouroboros-ai/transformersjs-provider",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ouroboros-ai/transformersjs-provider"
+  },
+  "bugs": {
+    "url": "https://github.com/ouroboros-ai/transformersjs-provider/issues"
+  },
+  "keywords": [
+    "transformers.js",
+    "webassembly",
+    "client-side",
+    "privacy",
+    "huggingface",
+    "browser-native",
+    "wasm",
+    "local-inference",
+    "ouroboros",
+    "extension"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "providers": {
+    "transformersjs": {
+      "displayName": "Transformers.js (Client-Side)",
+      "description": "Ultra-private client-side AI inference with Hugging Face models via WebAssembly",
+      "entryPoint": "./dist/provider.js",
+      "defaultModel": "Xenova/distilbert-base-uncased-distilled-squad",
+      "capabilities": {
+        "supportsStreaming": false,
+        "supportsTools": false,
+        "supportsEmbeddings": true,
+        "supportsVision": true,
+        "supportsClassification": true,
+        "supportsQuestionAnswering": true,
+        "supportsSummarization": true,
+        "supportsTranslation": true,
+        "supportsTokenClassification": true,
+        "clientSide": true,
+        "requiresInternet": true
+      },
+      "requirements": {
+        "platform": ["darwin", "linux", "win32"],
+        "arch": ["x64", "arm64"],
+        "memory": "4GB",
+        "storage": "2GB",
+        "internet": "required_for_download",
+        "dependencies": [
+          "@xenova/transformers>=2.8.0"
+        ]
+      },
+      "configuration": {
+        "model": {
+          "type": "string",
+          "required": true,
+          "description": "Hugging Face model name (e.g., 'Xenova/distilbert-base-uncased')"
+        },
+        "task": {
+          "type": "string",
+          "enum": [
+            "text-generation",
+            "text-classification",
+            "question-answering", 
+            "summarization",
+            "translation",
+            "feature-extraction",
+            "token-classification",
+            "fill-mask",
+            "image-classification",
+            "object-detection",
+            "image-to-text"
+          ],
+          "default": "text-generation",
+          "description": "Task type for the model"
+        },
+        "modelCache": {
+          "type": "string",
+          "description": "Local directory for model caching (default: ~/.cache/transformers-js/)"
+        },
+        "maxLength": {
+          "type": "number",
+          "default": 512,
+          "min": 1,
+          "max": 2048,
+          "description": "Maximum sequence length"
+        },
+        "temperature": {
+          "type": "number",
+          "default": 1.0,
+          "min": 0.1,
+          "max": 2.0,
+          "description": "Sampling temperature (for generation tasks)"
+        },
+        "topK": {
+          "type": "number",
+          "default": 50,
+          "min": 1,
+          "description": "Top-K sampling (for generation tasks)"
+        },
+        "topP": {
+          "type": "number",
+          "default": 0.9,
+          "min": 0.0,
+          "max": 1.0,
+          "description": "Nucleus sampling (for generation tasks)"
+        },
+        "doSample": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to use sampling for generation"
+        },
+        "numBeams": {
+          "type": "number",
+          "default": 1,
+          "min": 1,
+          "description": "Number of beams for beam search"
+        },
+        "repetitionPenalty": {
+          "type": "number",
+          "default": 1.0,
+          "min": 0.1,
+          "description": "Repetition penalty for generation"
+        },
+        "quantized": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use quantized models for better performance"
+        },
+        "device": {
+          "type": "string",
+          "enum": ["auto", "cpu", "gpu", "wasm"],
+          "default": "auto",
+          "description": "Device to run inference on"
+        },
+        "progress_callback": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show download progress for models"
+        }
+      },
+      "modelCategories": {
+        "text": {
+          "generation": [
+            "Xenova/gpt2",
+            "Xenova/distilgpt2",
+            "Xenova/gpt-3.5-turbo",
+            "microsoft/DialoGPT-medium"
+          ],
+          "classification": [
+            "Xenova/distilbert-base-uncased-finetuned-sst-2-english",
+            "cardiffnlp/twitter-roberta-base-sentiment-latest"
+          ],
+          "questionAnswering": [
+            "Xenova/distilbert-base-uncased-distilled-squad",
+            "deepset/roberta-base-squad2"
+          ],
+          "summarization": [
+            "Xenova/distilbart-cnn-6-6",
+            "facebook/bart-large-cnn"
+          ],
+          "embeddings": [
+            "Xenova/all-MiniLM-L6-v2",
+            "sentence-transformers/all-mpnet-base-v2"
+          ]
+        },
+        "vision": {
+          "classification": [
+            "google/vit-base-patch16-224",
+            "microsoft/resnet-50"
+          ],
+          "objectDetection": [
+            "facebook/detr-resnet-50",
+            "hustvl/yolos-tiny"
+          ],
+          "imageToText": [
+            "nlpconnect/vit-gpt2-image-captioning",
+            "Salesforce/blip-image-captioning-base"
+          ]
+        }
+      },
+      "commands": {
+        "check": {
+          "description": "Check Transformers.js installation and WebAssembly support",
+          "command": "node scripts/check-transformersjs.js"
+        },
+        "verify": {
+          "description": "Verify provider installation and model loading",
+          "command": "node scripts/verify-install.js"
+        },
+        "cache-clear": {
+          "description": "Clear model cache to free up storage",
+          "command": "node scripts/clear-cache.js"
+        }
+      }
+    }
+  },
+  "installation": {
+    "preInstall": [
+      "node scripts/check-transformersjs.js"
+    ],
+    "postInstall": [
+      "node scripts/verify-install.js"
+    ]
+  },
+  "documentation": {
+    "readme": "README.md",
+    "examples": "examples/",
+    "quickStart": "https://github.com/ouroboros-ai/transformersjs-provider#quick-start",
+    "troubleshooting": "https://github.com/ouroboros-ai/transformersjs-provider#troubleshooting",
+    "modelLibrary": "https://huggingface.co/models?library=transformers.js"
+  },
+  "support": {
+    "issues": "https://github.com/ouroboros-ai/transformersjs-provider/issues",
+    "discussions": "https://github.com/ouroboros-ai/transformersjs-provider/discussions",
+    "docs": "https://docs.ouroboros.dev/extensions/transformersjs"
+  }
+}

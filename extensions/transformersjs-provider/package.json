@@ -1,0 +1,58 @@
+{
+  "name": "@ouroboros/transformersjs-provider",
+  "version": "1.0.0-beta.1",
+  "description": "Transformers.js Provider Extension for Ouroboros Code - Client-side AI inference with WebAssembly",
+  "main": "dist/provider.js",
+  "types": "dist/provider.d.ts",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ouroboros-ai/transformersjs-provider"
+  },
+  "keywords": [
+    "transformers.js",
+    "webassembly",
+    "client-side",
+    "privacy",
+    "huggingface",
+    "browser-native",
+    "wasm",
+    "local-inference",
+    "ouroboros",
+    "extension",
+    "ai"
+  ],
+  "author": "Ouroboros Development Team",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "node tests/integration.js",
+    "check-transformersjs": "node scripts/check-transformersjs.js",
+    "verify-install": "node scripts/verify-install.js",
+    "clear-cache": "node scripts/clear-cache.js",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@xenova/transformers": "^2.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^3.0.0"
+  },
+  "files": [
+    "dist/**/*",
+    "gemini-extension.json",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

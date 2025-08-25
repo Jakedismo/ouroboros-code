@@ -1,0 +1,190 @@
+{
+  "name": "@ouroboros/vllm-provider",
+  "version": "1.0.0-beta.1",
+  "displayName": "vLLM Provider - High-Performance Local Inference",
+  "description": "vLLM provider extension for high-throughput local LLM inference with OpenAI-compatible API. Perfect for production workloads requiring maximum performance.",
+  "author": "Ouroboros Development Team",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/ouroboros-ai/vllm-provider",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ouroboros-ai/vllm-provider"
+  },
+  "bugs": {
+    "url": "https://github.com/ouroboros-ai/vllm-provider/issues"
+  },
+  "keywords": [
+    "vllm",
+    "llm",
+    "local-inference", 
+    "high-performance",
+    "openai-compatible",
+    "production",
+    "throughput",
+    "ouroboros",
+    "extension"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "providers": {
+    "vllm": {
+      "displayName": "vLLM (High-Performance)",
+      "description": "vLLM high-performance inference server with OpenAI-compatible API",
+      "entryPoint": "./dist/provider.js",
+      "defaultModel": "microsoft/DialoGPT-medium",
+      "capabilities": {
+        "supportsStreaming": true,
+        "supportsTools": true,
+        "supportsEmbeddings": false,
+        "supportsVision": false,
+        "supportsBatching": true,
+        "supportsParallelism": true
+      },
+      "requirements": {
+        "platform": ["linux", "darwin"],
+        "arch": ["x64", "arm64"],
+        "memory": "8GB",
+        "gpu": "recommended",
+        "dependencies": [
+          "python>=3.8",
+          "vllm>=0.3.0"
+        ],
+        "optional_dependencies": [
+          "nvidia-gpu",
+          "cuda>=11.8"
+        ]
+      },
+      "configuration": {
+        "baseUrl": {
+          "type": "string", 
+          "default": "http://localhost:8000",
+          "description": "vLLM server API endpoint URL"
+        },
+        "model": {
+          "type": "string",
+          "required": true,
+          "description": "Model name/path to serve (e.g., 'microsoft/DialoGPT-medium')"
+        },
+        "maxTokens": {
+          "type": "number",
+          "default": 2048,
+          "description": "Maximum tokens to generate"
+        },
+        "temperature": {
+          "type": "number",
+          "default": 0.7,
+          "min": 0.0,
+          "max": 2.0,
+          "description": "Sampling temperature"
+        },
+        "topP": {
+          "type": "number", 
+          "default": 0.9,
+          "min": 0.0,
+          "max": 1.0,
+          "description": "Nucleus sampling parameter"
+        },
+        "topK": {
+          "type": "number",
+          "default": 50,
+          "min": 1,
+          "description": "Top-K sampling parameter"
+        },
+        "frequencyPenalty": {
+          "type": "number",
+          "default": 0.0,
+          "min": -2.0,
+          "max": 2.0,
+          "description": "Frequency penalty for reducing repetition"
+        },
+        "presencePenalty": {
+          "type": "number", 
+          "default": 0.0,
+          "min": -2.0,
+          "max": 2.0,
+          "description": "Presence penalty for encouraging diversity"
+        },
+        "requestTimeout": {
+          "type": "number",
+          "default": 60000,
+          "description": "Request timeout in milliseconds"
+        },
+        "maxRetries": {
+          "type": "number",
+          "default": 3,
+          "description": "Maximum number of request retries"
+        },
+        "serverConfig": {
+          "type": "object",
+          "description": "Advanced vLLM server configuration",
+          "properties": {
+            "tensorParallelSize": {
+              "type": "number",
+              "default": 1,
+              "description": "Number of GPUs for tensor parallelism"
+            },
+            "maxNumSeqs": {
+              "type": "number", 
+              "default": 256,
+              "description": "Maximum number of sequences to process in parallel"
+            },
+            "maxModelLen": {
+              "type": "number",
+              "description": "Maximum model sequence length"
+            },
+            "quantization": {
+              "type": "string",
+              "enum": ["awq", "gptq", "squeezellm", "fp8"],
+              "description": "Model quantization method"
+            },
+            "gpuMemoryUtilization": {
+              "type": "number",
+              "default": 0.9,
+              "min": 0.1,
+              "max": 1.0,
+              "description": "GPU memory utilization fraction"
+            }
+          }
+        }
+      },
+      "commands": {
+        "install": {
+          "description": "Install vLLM and dependencies",
+          "command": "python -m pip install vllm>=0.3.0"
+        },
+        "start": {
+          "description": "Start vLLM server",
+          "command": "python -m vllm.entrypoints.openai.api_server --model {model} --port 8000"
+        },
+        "check": {
+          "description": "Check vLLM installation and server status", 
+          "command": "node scripts/check-vllm.js"
+        },
+        "verify": {
+          "description": "Verify provider installation and functionality",
+          "command": "node scripts/verify-install.js"
+        }
+      }
+    }
+  },
+  "installation": {
+    "preInstall": [
+      "node scripts/check-vllm.js"
+    ],
+    "postInstall": [
+      "node scripts/verify-install.js"
+    ]
+  },
+  "documentation": {
+    "readme": "README.md",
+    "examples": "examples/",
+    "quickStart": "https://github.com/ouroboros-ai/vllm-provider#quick-start",
+    "troubleshooting": "https://github.com/ouroboros-ai/vllm-provider#troubleshooting"
+  },
+  "support": {
+    "issues": "https://github.com/ouroboros-ai/vllm-provider/issues",
+    "discussions": "https://github.com/ouroboros-ai/vllm-provider/discussions",
+    "docs": "https://docs.ouroboros.dev/extensions/vllm"
+  }
+}
