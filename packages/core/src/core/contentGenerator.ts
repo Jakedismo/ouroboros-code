@@ -159,8 +159,7 @@ export async function createContentGenerator(
       timeout: 60000,
       maxRetries: 3,
       enableBuiltinTools: true, // Enable builtin tools integration
-      enableMCP: gcConfig.getMultiProviderMCPConfig().mcpServers && 
-                Object.keys(gcConfig.getMultiProviderMCPConfig().mcpServers).length > 0, // Enable MCP if servers are configured
+      enableMCP: true, // Enable MCP by default for all providers
       mcpConfig: gcConfig.getMultiProviderMCPConfig(), // Pass MCP configuration
       configInstance: gcConfig, // Pass config instance for tool integration
       authType: config.authType, // 🔑 Pass authType so provider can handle OAuth vs API key
@@ -217,8 +216,7 @@ export async function createContentGenerator(
           timeout: 60000,
           maxRetries: 3,
           enableBuiltinTools: true, // Enable builtin tools integration
-          enableMCP: gcConfig.getMultiProviderMCPConfig().mcpServers && 
-                    Object.keys(gcConfig.getMultiProviderMCPConfig().mcpServers).length > 0, // Enable MCP if servers are configured
+          enableMCP: true, // Enable MCP by default for all providers
           mcpConfig: gcConfig.getMultiProviderMCPConfig(), // Pass MCP configuration
           configInstance: gcConfig, // Pass config instance for tool integration
         };

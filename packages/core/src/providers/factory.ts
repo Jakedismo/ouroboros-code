@@ -566,7 +566,7 @@ export class LLMProviderFactory {
       model: DEFAULT_MODELS[provider],
       maxRetries: 3,
       timeout: 30000,
-      enableMCP: false,
+      enableMCP: true,
       enableBuiltinTools: true,
       ...overrides,
     };
