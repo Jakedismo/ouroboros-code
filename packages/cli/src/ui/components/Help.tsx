@@ -23,7 +23,21 @@ export const Help: React.FC<Help> = ({ commands }) => (
   >
     {/* Basics */}
     <Text bold color={Colors.Foreground}>
-      Basics:
+      🤖 Multi-Agent System:
+    </Text>
+    <Text color={Colors.Foreground}>
+      <Text bold color={Colors.AccentPurple}>
+        Agent Management
+      </Text>
+      : Use{' '}
+      <Text bold color={Colors.AccentPurple}>
+        /agent list
+      </Text>{' '}
+      to see available agents,{' '}
+      <Text bold color={Colors.AccentPurple}>
+        /agent activate
+      </Text>{' '}
+      to switch to specialized agents.
     </Text>
     <Text color={Colors.Foreground}>
       <Text bold color={Colors.AccentPurple}>

@@ -94,6 +94,8 @@ import { useKittyKeyboardProtocol } from './hooks/useKittyKeyboardProtocol.js';
 import { keyMatchers, Command } from './keyMatchers.js';
 import * as fs from 'fs';
 import { UpdateNotification } from './components/UpdateNotification.js';
+import { WorkflowProgressProvider } from './contexts/WorkflowProgressContext.js';
+import { WorkflowProgressOverlay, WorkflowProgressMini } from './components/WorkflowProgressOverlay.js';
 import {
   isProQuotaExceededError,
   isGenericQuotaExceededError,
@@ -136,7 +138,9 @@ export const AppWrapper = (props: AppProps) => {
     >
       <SessionStatsProvider>
         <VimModeProvider settings={settings}>
-          <App {...props} />
+          <WorkflowProgressProvider>
+            <App {...props} />
+          </WorkflowProgressProvider>
         </VimModeProvider>
       </SessionStatsProvider>
     </KeypressProvider>
@@ -960,6 +964,7 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
 
   return (
     <StreamingContext.Provider value={streamingState}>
+      <WorkflowProgressOverlay dismissible={true} showHelp={true} />
       <Box flexDirection="column" width="90%">
         {/*
          * The Static component is an Ink intrinsic in which there can only be 1 per application.
@@ -1332,6 +1337,7 @@ const App = ({ config, startupWarnings = [], version }: AppProps) => {
               thinkingProvider={thinkingState.provider}
             />
           )}
+          <WorkflowProgressMini />
         </Box>
       </Box>
     </StreamingContext.Provider>

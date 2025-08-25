@@ -1,26 +1,58 @@
-# Ouroboros Code 🐍 - Beta v1.0.0-beta.2
+# Ouroboros Code 🐍 - Multi-Agent CLI v2.0.0-alpha.1
 
 ![Ouroboros Code Screenshot](./docs/assets/image.png)
 
-**Ouroboros Code** is an advanced multi-agent AI framework that brings the power of **multiple LLM providers** (Gemini, OpenAI, Anthropic) directly into your terminal. Built on the foundation of Gemini CLI, it extends the capabilities with unified tool architecture, seamless provider migration, innovative convergence analysis, and now **plug-and-play extension provider system** for local inference—all while maintaining full compatibility with Gemini's powerful features.
+**Ouroboros Code** is a revolutionary **multi-agent AI framework** that transforms your terminal into an intelligent development environment. Featuring **specialized AI agents**, **intelligent workflow automation**, **comprehensive session management**, and **advanced performance optimization**—all powered by multiple LLM providers (Gemini, OpenAI, Anthropic) with unified tool architecture and plug-and-play extension support.
 
 ## 🚀 Why Ouroboros Code?
 
-### Multi-LLM Provider Architecture
-- **🔄 Provider Flexibility**: Seamlessly switch between Gemini, OpenAI (GPT-5), and Anthropic (Opus 4.1, Claude 4)
-- **🔌 Extension Providers**: Install local inference providers (Ollama, vLLM, Transformers.js) as plug-and-play extensions
-- **⚡ Unified Tools**: All 11 builtin tools work identically across every provider
-- **🎯 Zero Migration Cost**: Switch providers without losing any functionality
-- **🧬 Convergence Analysis**: Compare and synthesize responses from multiple providers
-- **💻  Image inputs:** Copy paste images from your clipboard and use them as input for increased contextual understanding
+### 🤖 Intelligent Multi-Agent System
+- **Specialized AI Agents**: Pre-built agents for development, automation, analysis, and creative tasks
+- **Custom Agent Creation**: Full prompt engineering interface with interactive TUI wizards
+- **Dynamic Agent Activation**: Context-aware agent switching with provider integration
+- **Agent Performance Tracking**: Comprehensive metrics and benchmarking system
+- **Agent Registry**: Complete agent lifecycle management with storage and configuration
 
-### Inherited Gemini Power
-- **🎯 Free tier**: 60 requests/min and 1,000 requests/day with personal Google account
-- **🧠 Powerful Gemini 2.5 Pro**: Access to 1M token context window
-- **🔧 Built-in tools**: Google Search grounding, file operations, shell commands, web fetching
-- **🔌 Extensible**: Advanced MCP (Model Context Protocol) with connection pooling
-- **💻 Terminal-first**: Designed for developers who live in the command line
-- **🛡️ Open source**: Apache 2.0 licensed
+### 🔧 Advanced Workflow Automation
+- **Intelligent Workflow Planning**: Automation specialist with ASCII diagram generation
+- **Real-time Progress Monitoring**: Live workflow execution with performance tracking
+- **Error Recovery & Rollback**: Comprehensive error handling with automatic recovery strategies
+- **Workflow State Management**: Persistent workflow tracking with resume capabilities
+- **Step-by-Step Execution**: Coordinated tool execution with optimization
+
+### 🔗 Deep System Integration
+- **Multi-LLM Provider Support**: OpenAI (GPT-5), Anthropic (Claude 4), Gemini (2.5 Pro) with unified agent interfaces
+- **11 Built-in Tools Integration**: File system, web, and system operations across all providers
+- **MCP Tools Integration**: Advanced Model Context Protocol support with connection pooling
+- **Session Management**: Comprehensive session persistence with crash recovery
+- **AppleScript Integration**: Complete macOS automation (Notes, Mail, Calendar, System)
+
+### ⚡ Performance & Optimization
+- **Intelligent Performance Optimizer**: Automatic resource management and system optimization
+- **Real-time Analytics**: 11 comprehensive metrics with OpenTelemetry integration
+- **Resource Pool Management**: Dynamic allocation and scaling with efficiency monitoring
+- **Performance Benchmarking**: Automated performance testing and optimization recommendations
+- **Memory & CPU Optimization**: Intelligent resource cleanup and allocation strategies
+
+### 🚨 Robust Error Handling & Logging
+- **Comprehensive Error Handler**: 15 error categories with 4 severity levels
+- **Automatic Error Recovery**: Multiple recovery strategies with intelligent retry logic
+- **Structured Logging System**: Multi-transport logging with correlation tracking
+- **Error-Log Correlation**: Automatic linking of errors with related log entries
+- **System Health Monitoring**: Real-time health assessment with proactive alerting
+
+### 💻 Advanced Terminal User Interface
+- **Interactive Agent Management**: Visual agent selection, creation, and configuration
+- **Real-time Progress Display**: Live workflow execution with animated progress indicators
+- **Session Recovery Interface**: Interactive session restoration with context preview
+- **Workflow Visualization**: Real-time step execution with performance monitoring
+- **Health Dashboard**: System status monitoring with recommendations
+
+### 🏗️ Production-Ready Architecture
+- **6 Major Integration Systems**: Workflow-Tool, Session-Agent, Analytics, Optimization, Error-Logging
+- **Comprehensive Testing**: End-to-end test suite with integration health checks
+- **System Finalization**: Complete system validation with readiness assessment
+- **Extensible Design**: Built for future enhancements and customizations
 
 ## 📦 Installation
 
@@ -91,6 +123,131 @@ ouroboros-code --provider transformersjs --model Xenova/gpt2 "Generate creative 
 > - **Ollama**: Requires Ollama service running locally
 > - **vLLM**: Requires GPU and CUDA for optimal performance
 > - **Transformers.js**: Works on CPU but limited to smaller models
+
+## 🤖 Multi-Agent System Usage
+
+### Agent Management
+
+#### List Available Agents
+```bash
+# View all available agents
+ouroboros-code /agent list
+
+# Interactive agent selection
+ouroboros-code /agent list --interactive
+```
+
+#### Activate Specialized Agents
+```bash
+# Activate the automation specialist for workflow planning
+ouroboros-code /agent activate automation-specialist
+
+# Activate the development assistant
+ouroboros-code /agent activate development-assistant
+
+# Activate the analysis expert
+ouroboros-code /agent activate analysis-expert
+```
+
+#### Create Custom Agents
+```bash
+# Launch the agent creation wizard
+ouroboros-code /agent create
+
+# Create agent with specific configuration
+ouroboros-code /agent create --name "custom-agent" --interactive
+```
+
+### Workflow Automation
+
+#### Intelligent Workflow Planning
+```bash
+# Plan and execute complex workflows
+ouroboros-code "Create a complete CI/CD pipeline for my React app with testing and deployment"
+
+# Generate workflow diagrams
+ouroboros-code "Design an automated backup system with ASCII diagrams"
+```
+
+#### Session Management
+```bash
+# Recover previous session
+ouroboros-code /session recover
+
+# List all sessions
+ouroboros-code /session list
+
+# Create named session
+ouroboros-code /session create "project-setup"
+```
+
+### System Health & Performance
+
+#### Monitor System Health
+```bash
+# View system status
+ouroboros-code /system health
+
+# Run performance benchmarks
+ouroboros-code /system benchmark
+
+# View analytics dashboard
+ouroboros-code /system analytics
+```
+
+#### Error Handling & Recovery
+```bash
+# View error history
+ouroboros-code /system errors
+
+# Test system recovery
+ouroboros-code /system test
+
+# View system recommendations
+ouroboros-code /system recommendations
+```
+
+## 🔧 Advanced Features
+
+### AppleScript Integration (macOS)
+
+#### Notes Management
+```bash
+ouroboros-code "Create a new note titled 'Meeting Notes' with bullet points from our discussion"
+ouroboros-code "Search my notes for 'project timeline' and summarize the findings"
+```
+
+#### Mail Operations
+```bash
+ouroboros-code "Check my unread emails and summarize the important ones"
+ouroboros-code "Search for emails about 'budget approval' from last week"
+```
+
+#### Calendar Integration
+```bash
+ouroboros-code "Create a meeting for tomorrow at 2 PM about the project review"
+ouroboros-code "List all my meetings for this week and show conflicts"
+```
+
+### Workflow Automation Examples
+
+#### Development Workflows
+```bash
+# Complete project setup
+ouroboros-code "Set up a new Node.js project with TypeScript, ESLint, Prettier, and Jest"
+
+# Code review and optimization
+ouroboros-code "Review my recent commits and suggest performance improvements"
+```
+
+#### System Administration
+```bash
+# System maintenance
+ouroboros-code "Check system health, clean up disk space, and update dependencies"
+
+# Security analysis
+ouroboros-code "Audit my project for security vulnerabilities and suggest fixes"
+```
 
 ## Release Cadence and Tags
 

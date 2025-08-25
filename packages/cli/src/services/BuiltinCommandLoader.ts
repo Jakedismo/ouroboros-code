@@ -41,6 +41,9 @@ import { convergeCommand } from '../ui/commands/convergeCommand.js';
 import { compareCommand } from '../ui/commands/compareCommand.js';
 import { raceCommand } from '../ui/commands/raceCommand.js';
 import { switchCommand } from '../ui/commands/switchCommand.js';
+import { agentCommand } from '../ui/commands/agentCommand.js';
+import { appleControlCommand } from '../ui/commands/appleControlCommand.js';
+import { workflowCommand, progressCommand } from '../ui/commands/workflowCommand.js';
 
 /**
  * Loads the core, hard-coded slash commands that are an integral part
@@ -59,6 +62,8 @@ export class BuiltinCommandLoader implements ICommandLoader {
   async loadCommands(_signal: AbortSignal): Promise<SlashCommand[]> {
     const allDefinitions: Array<SlashCommand | null> = [
       aboutCommand,
+      agentCommand,
+      appleControlCommand,
       authCommand,
       blindspotCommand,
       bugCommand,
@@ -92,6 +97,8 @@ export class BuiltinCommandLoader implements ICommandLoader {
       themeCommand,
       toolsCommand,
       vimCommand,
+      workflowCommand,
+      progressCommand,
     ];
 
     return allDefinitions.filter((cmd): cmd is SlashCommand => cmd !== null);
