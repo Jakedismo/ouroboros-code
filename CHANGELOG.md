@@ -5,6 +5,31 @@ All notable changes to Ouroboros Code will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.2] - 2025-01-25
+
+### 🎯 Extension Management Commands
+- **Full CLI Integration**: Added `ouroboros-code extension` command with subcommands
+- **Install Command**: `extension install <path>` with automatic provider registration
+- **Uninstall Command**: `extension uninstall <name>` with clean removal
+- **List Command**: `extension list` with verbose and provider-only options
+- **Help Integration**: Extension command appears in main CLI help text
+
+### 🔧 Production-Ready Provider Extensions
+- **Ollama Provider**: Complete implementation with auto-pull, streaming, and embeddings
+- **vLLM Provider**: OpenAI-compatible high-performance inference server integration
+- **Transformers.js Provider**: WebAssembly-based client-side inference with multi-task support
+- **Comprehensive Testing**: All providers include full unit and integration test suites
+
+### 📚 Documentation
+- **EXTENSION_PROVIDERS.md**: Complete guide for using and creating provider extensions
+- **README Updates**: Added extension system examples and quick start guide
+- **Provider READMEs**: Each extension includes detailed setup and usage instructions
+
+### Fixed
+- **Scoped Package Installation**: Properly handles @org/package naming in extensions
+- **Extension Discovery**: Recursive scanning finds providers in nested directories
+- **Dynamic Loading**: Providers immediately available after installation
+
 ## [1.0.0-beta.1] - 2025-01-24
 
 ### 🔥 Major Feature: Local Inference Provider Extension System

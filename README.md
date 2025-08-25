@@ -1,13 +1,14 @@
-# Ouroboros Code 🐍
+# Ouroboros Code 🐍 - Beta v1.0.0-beta.2
 
 ![Ouroboros Code Screenshot](./docs/assets/image.png)
 
-**Ouroboros Code** is an advanced multi-agent AI framework that brings the power of **multiple LLM providers** (Gemini, OpenAI, Anthropic) directly into your terminal. Built on the foundation of Gemini CLI, it extends the capabilities with unified tool architecture, seamless provider migration, and innovative convergence analysis—all while maintaining full compatibility with Gemini's powerful features.
+**Ouroboros Code** is an advanced multi-agent AI framework that brings the power of **multiple LLM providers** (Gemini, OpenAI, Anthropic) directly into your terminal. Built on the foundation of Gemini CLI, it extends the capabilities with unified tool architecture, seamless provider migration, innovative convergence analysis, and now **plug-and-play extension provider system** for local inference—all while maintaining full compatibility with Gemini's powerful features.
 
 ## 🚀 Why Ouroboros Code?
 
 ### Multi-LLM Provider Architecture
 - **🔄 Provider Flexibility**: Seamlessly switch between Gemini, OpenAI (GPT-5), and Anthropic (Opus 4.1, Claude 4)
+- **🔌 Extension Providers**: Install local inference providers (Ollama, vLLM, Transformers.js) as plug-and-play extensions
 - **⚡ Unified Tools**: All 11 builtin tools work identically across every provider
 - **🎯 Zero Migration Cost**: Switch providers without losing any functionality
 - **🧬 Convergence Analysis**: Compare and synthesize responses from multiple providers

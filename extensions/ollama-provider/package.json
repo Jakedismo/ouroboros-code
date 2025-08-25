@@ -1,6 +1,6 @@
 {
   "name": "@ouroboros/ollama-provider",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Ollama Provider Extension for Ouroboros Code - Local LLM inference",
   "main": "dist/provider.js",
   "types": "dist/provider.d.ts",

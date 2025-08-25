@@ -1,6 +1,6 @@
 {
   "name": "@ouroboros/transformersjs-provider",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "displayName": "Transformers.js Provider - Browser-Native AI",
   "description": "Transformers.js provider extension for ultra-private, client-side AI inference. Run Hugging Face models directly in Node.js with WebAssembly - no servers required!",
   "author": "Ouroboros Development Team",

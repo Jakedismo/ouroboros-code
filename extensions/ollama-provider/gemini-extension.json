@@ -1,6 +1,6 @@
 {
   "name": "ollama-provider",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Local LLM inference with Ollama - privacy-focused, cost-free AI in your terminal",
   "author": "Ouroboros Development Team",
   "homepage": "https://github.com/ouroboros-ai/ollama-provider",

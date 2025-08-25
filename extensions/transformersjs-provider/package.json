@@ -1,6 +1,6 @@
 {
   "name": "@ouroboros/transformersjs-provider",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Transformers.js Provider Extension for Ouroboros Code - Client-side AI inference with WebAssembly",
   "main": "dist/provider.js",
   "types": "dist/provider.d.ts",

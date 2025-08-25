@@ -1,6 +1,6 @@
 {
   "name": "@ouroboros/vllm-provider",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "displayName": "vLLM Provider - High-Performance Local Inference",
   "description": "vLLM provider extension for high-throughput local LLM inference with OpenAI-compatible API. Perfect for production workloads requiring maximum performance.",
   "author": "Ouroboros Development Team",

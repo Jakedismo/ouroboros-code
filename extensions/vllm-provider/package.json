@@ -1,6 +1,6 @@
 {
   "name": "@ouroboros/vllm-provider",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "vLLM Provider Extension for Ouroboros Code - High-performance local LLM inference",
   "main": "dist/provider.js",
   "types": "dist/provider.d.ts",
