@@ -6,7 +6,7 @@
 
 import { CommandModule } from 'yargs';
 import { join } from 'path';
-import { existsSync, readFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 
 interface ListArgs {
@@ -42,21 +42,55 @@ export const listExtensions: CommandModule<{}, ListArgs> = {
         return;
       }
 
-      const extensionDirs = readdirSync(extensionsDir).filter(dir => {
-        const dirPath = join(extensionsDir, dir);
-        return existsSync(dirPath) && readdirSync(dirPath).length > 0;
-      });
+      // Helper function to find all extensions (including scoped packages)
+      const findExtensions = (baseDir: string, prefix: string = ''): Array<{name: string, path: string}> => {
+        const extensions: Array<{name: string, path: string}> = [];
+        
+        try {
+          const items = readdirSync(baseDir);
+          
+          for (const item of items) {
+            const itemPath = join(baseDir, item);
+            
+            if (!existsSync(itemPath) || !statSync(itemPath).isDirectory()) {
+              continue;
+            }
+            
+            const fullName = prefix ? `${prefix}/${item}` : item;
+            
+            // Check if this directory has extension config files
+            const configFiles = ['gemini-extension.json', 'ouroboros-extension.json', 'extension.json'];
+            const hasConfig = configFiles.some(configFile => 
+              existsSync(join(itemPath, configFile))
+            );
+            
+            if (hasConfig) {
+              // This is an extension
+              extensions.push({ name: fullName, path: itemPath });
+            } else if (item.startsWith('@')) {
+              // This is a scope directory, recurse into it
+              extensions.push(...findExtensions(itemPath, item));
+            }
+          }
+        } catch (error) {
+          // Ignore read errors
+        }
+        
+        return extensions;
+      };
 
-      if (extensionDirs.length === 0) {
+      const extensions = findExtensions(extensionsDir);
+
+      if (extensions.length === 0) {
         console.log('📦 No extensions installed yet.');
         return;
       }
 
-      console.log(`📦 Installed Extensions (${extensionDirs.length}):`);
+      console.log(`📦 Installed Extensions (${extensions.length}):`);
       console.log('═'.repeat(50));
 
-      for (const dirName of extensionDirs) {
-        const extensionPath = join(extensionsDir, dirName);
+      for (const extension of extensions) {
+        const extensionPath = extension.path;
         let config: any = {};
         
         // Try to read extension config
@@ -74,7 +108,7 @@ export const listExtensions: CommandModule<{}, ListArgs> = {
           }
         }
 
-        const extensionName = config.name || dirName;
+        const extensionName = config.name || extension.name;
         const version = config.version || 'unknown';
         const description = config.description || 'No description available';
         
@@ -131,12 +165,11 @@ export const listExtensions: CommandModule<{}, ListArgs> = {
       console.log(`   ouroboros-code extension list --providers`);
 
       // Show provider usage examples if any provider extensions are found
-      const providerExtensions = extensionDirs.filter(dirName => {
-        const extensionPath = join(extensionsDir, dirName);
+      const providerExtensions = extensions.filter(extension => {
         const configFiles = ['gemini-extension.json', 'ouroboros-extension.json', 'extension.json'];
         
         for (const fileName of configFiles) {
-          const configPath = join(extensionPath, fileName);
+          const configPath = join(extension.path, fileName);
           if (existsSync(configPath)) {
             try {
               const config = JSON.parse(readFileSync(configPath, 'utf-8'));
@@ -151,12 +184,11 @@ export const listExtensions: CommandModule<{}, ListArgs> = {
 
       if (providerExtensions.length > 0) {
         console.log(`\n🤖 Use installed providers:`);
-        for (const dirName of providerExtensions) {
-          const extensionPath = join(extensionsDir, dirName);
+        for (const extension of providerExtensions) {
           const configFiles = ['gemini-extension.json', 'ouroboros-extension.json', 'extension.json'];
           
           for (const fileName of configFiles) {
-            const configPath = join(extensionPath, fileName);
+            const configPath = join(extension.path, fileName);
             if (existsSync(configPath)) {
               try {
                 const config = JSON.parse(readFileSync(configPath, 'utf-8'));
