@@ -1,0 +1,55 @@
+{
+  "name": "@ouroboros/vision-quest-extension",
+  "version": "1.0.0",
+  "description": "Vision Quest - Multi-phase development workflow extension for Ouroboros Code",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "jest",
+    "lint": "eslint src --ext .ts,.tsx",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "ouroboros",
+    "extension",
+    "ai",
+    "development",
+    "workflow",
+    "automation"
+  ],
+  "author": "Ouroboros Systems",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@ouroboros/ouroboros-code-core": "workspace:*",
+    "fs-extra": "^11.1.0",
+    "ink": "^4.4.1",
+    "ink-gradient": "^3.0.0",
+    "ink-text-input": "^5.0.1",
+    "react": "^18.2.0",
+    "xstate": "^5.5.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.45",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "jest": "^29.7.0",
+    "typescript": "^5.3.2"
+  },
+  "peerDependencies": {
+    "@ouroboros/ouroboros-code-core": "*"
+  },
+  "files": [
+    "dist",
+    "manifest.json",
+    "README.md"
+  ],
+  "ouroboros": {
+    "type": "extension",
+    "manifest": "./manifest.json"
+  }
+}

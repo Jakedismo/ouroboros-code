@@ -1,0 +1,59 @@
+{
+  "name": "vision-quest",
+  "displayName": "Vision Quest - Multi-Phase Development Workflow",
+  "version": "1.0.0",
+  "description": "A sophisticated end-to-end development workflow from natural language to validated implementation",
+  "author": "Ouroboros Systems",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "commands": [
+    {
+      "name": "saga",
+      "description": "Start a Vision Quest development workflow",
+      "aliases": ["quest", "vision"]
+    }
+  ],
+  "capabilities": {
+    "requiresMultiProvider": true,
+    "requiresGit": false,
+    "requiresFilesystem": true,
+    "requiresShell": true
+  },
+  "config": {
+    "maxIterations": 10,
+    "defaultProvider": "auto",
+    "enableThinking": true,
+    "ephemeralWorkspace": true,
+    "autoValidation": true,
+    "tui": {
+      "enabled": true,
+      "theme": "gradient",
+      "animations": true
+    },
+    "successGates": {
+      "typescript": {
+        "tsc": true,
+        "lint": true,
+        "test": true
+      },
+      "python": {
+        "ruff": true,
+        "pytest": true
+      },
+      "go": {
+        "vet": true,
+        "test": true
+      }
+    }
+  },
+  "dependencies": {
+    "ink": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "ink-select-input": "^6.0.0",
+    "ink-spinner": "^5.0.0",
+    "ink-gradient": "^3.0.0",
+    "xstate": "^5.0.0",
+    "diff": "^5.0.0",
+    "slugify": "^1.6.0"
+  }
+}
