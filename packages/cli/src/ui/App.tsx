@@ -98,10 +98,18 @@ import ansiEscapes from 'ansi-escapes';
 import { OverflowProvider } from './contexts/OverflowContext.js';
 import { ShowMoreLines } from './components/ShowMoreLines.js';
 import { PrivacyNotice } from './privacy/PrivacyNotice.js';
+// TUI components
+import { Sidebar } from './components/Sidebar.js';
+import { ContextPanel } from './components/ContextPanel.js';
+import { WorkflowProgressProvider } from './contexts/WorkflowProgressContext.js';
+import {
+  WorkflowProgressOverlay,
+  WorkflowProgressMini,
+} from './components/WorkflowProgressOverlay.js';
+import { appEvents, AppEvent } from '../utils/events.js';
 import { useSettingsCommand } from './hooks/useSettingsCommand.js';
 import { SettingsDialog } from './components/SettingsDialog.js';
 import { setUpdateHandler } from '../utils/handleAutoUpdate.js';
-import { appEvents, AppEvent } from '../utils/events.js';
 import { isNarrowWidth } from './utils/isNarrowWidth.js';
 import { useWorkspaceMigration } from './hooks/useWorkspaceMigration.js';
 import { WorkspaceMigrationDialog } from './components/WorkspaceMigrationDialog.js';
@@ -233,6 +241,11 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     onWorkspaceMigrationDialogOpen,
     onWorkspaceMigrationDialogClose,
   } = useWorkspaceMigration(settings);
+  
+  // TUI state management
+  const [showSidebar, setShowSidebar] = useState<boolean>(false);
+  const [showContextPanel, setShowContextPanel] = useState<boolean>(false);
+  const [showWorkflowProgress, setShowWorkflowProgress] = useState<boolean>(false);
 
   useEffect(() => {
     const unsubscribe = ideContext.subscribeToIdeContext(setIdeContextState);
@@ -256,10 +269,22 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
       });
     };
     appEvents.on(AppEvent.LogError, logErrorHandler);
+    
+    // TUI event handlers
+    const toggleSidebar = () => setShowSidebar(prev => !prev);
+    const toggleContext = () => setShowContextPanel(prev => !prev);
+    const toggleWorkflow = () => setShowWorkflowProgress(prev => !prev);
+    
+    appEvents.on(AppEvent.ToggleSidebar, toggleSidebar);
+    appEvents.on(AppEvent.ToggleContextPanel, toggleContext);
+    appEvents.on(AppEvent.ToggleWorkflowProgress, toggleWorkflow);
 
     return () => {
       appEvents.off(AppEvent.OpenDebugConsole, openDebugConsole);
       appEvents.off(AppEvent.LogError, logErrorHandler);
+      appEvents.off(AppEvent.ToggleSidebar, toggleSidebar);
+      appEvents.off(AppEvent.ToggleContextPanel, toggleContext);
+      appEvents.off(AppEvent.ToggleWorkflowProgress, toggleWorkflow);
     };
   }, [handleNewMessage]);
 
@@ -718,6 +743,21 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
         setConstrainHeight(true);
       }
 
+      // TUI keyboard shortcuts
+      if (key.meta && key.name === 's') {
+        // Cmd/Meta + S - Toggle Sidebar
+        setShowSidebar(prev => !prev);
+        return;
+      } else if (key.meta && key.name === 'k') {
+        // Cmd/Meta + K - Toggle Context Panel
+        setShowContextPanel(prev => !prev);
+        return;
+      } else if (key.meta && key.name === 'p') {
+        // Cmd/Meta + P - Toggle Workflow Progress
+        setShowWorkflowProgress(prev => !prev);
+        return;
+      }
+      
       if (keyMatchers[Command.SHOW_ERROR_DETAILS](key)) {
         setShowErrorDetails((prev) => !prev);
       } else if (keyMatchers[Command.TOGGLE_TOOL_DESCRIPTIONS](key)) {
@@ -945,7 +985,12 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     );
   }
 
-  const mainAreaWidth = Math.floor(terminalWidth * 0.9);
+  // Calculate layout dimensions accounting for sidebars
+  const sidebarWidth = showSidebar ? 26 : 0;
+  const contextPanelWidth = showContextPanel ? 34 : 0;
+  const gutterWidth = (showSidebar ? 2 : 0) + (showContextPanel ? 2 : 0);
+  const totalSideWidth = sidebarWidth + contextPanelWidth + gutterWidth;
+  const mainAreaWidth = Math.max(40, Math.floor(terminalWidth * 0.9) - totalSideWidth);
   const debugConsoleMaxHeight = Math.floor(Math.max(terminalHeight * 0.2, 5));
   // Arbitrary threshold to ensure that items in the static area are large
   // enough but not too large to make the terminal hard to use.
@@ -957,7 +1002,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   return (
     <StreamingContext.Provider value={streamingState}>
       <Box flexDirection="column" width="90%">
-        {/*
+            {/*
          * The Static component is an Ink intrinsic in which there can only be 1 per application.
          * Because of this restriction we're hacking it slightly by having a 'header' item here to
          * ensure that it's statically rendered.
