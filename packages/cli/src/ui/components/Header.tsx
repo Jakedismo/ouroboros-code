@@ -40,6 +40,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   const artWidth = getAsciiArtWidth(displayTitle);
 
+  // Use theme-appropriate gradient colors for the 3D effect
+  const gradientColors = Colors.GradientColors || [Colors.AccentBlue, Colors.AccentPurple, Colors.AccentCyan];
+  
   return (
     <Box
       alignItems="flex-start"
@@ -48,20 +51,20 @@ export const Header: React.FC<HeaderProps> = ({
       flexDirection="column"
     >
       {Colors.GradientColors ? (
-        <Gradient colors={Colors.GradientColors}>
+        <Gradient colors={gradientColors}>
           <Text>{displayTitle}</Text>
         </Gradient>
       ) : (
-        <Text>{displayTitle}</Text>
+        <Text color={Colors.Primary}>{displayTitle}</Text>
       )}
       {nightly && (
         <Box width="100%" flexDirection="row" justifyContent="flex-end">
           {Colors.GradientColors ? (
-            <Gradient colors={Colors.GradientColors}>
+            <Gradient colors={gradientColors}>
               <Text>v{version}</Text>
             </Gradient>
           ) : (
-            <Text>v{version}</Text>
+            <Text color={Colors.AccentPurple}>v{version}</Text>
           )}
         </Box>
       )}
