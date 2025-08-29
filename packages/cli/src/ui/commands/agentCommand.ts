@@ -5,7 +5,7 @@
  */
 
 import { MessageType } from '../types.js';
-import { CommandKind, SlashCommand } from './types.js';
+import { CommandKind, type SlashCommand } from './types.js';
 
 export const agentCommand: SlashCommand = {
   name: 'agent',
@@ -19,8 +19,7 @@ export const agentCommand: SlashCommand = {
       description: 'List all available agents',
       kind: CommandKind.BUILT_IN,
       action: async (context, _args) => {
-        context.addMessage(
-          'agent list',
+        context.ui.addItem(
           {
             type: MessageType.INFO,
             text: `📋 **Available Agents:**
@@ -48,8 +47,7 @@ Use \`/agent activate <agent-name>\` to activate an agent.`,
       action: async (context, args) => {
         const agentName = args?.trim() || '';
         if (!agentName) {
-          context.addMessage(
-            'agent activate',
+          context.ui.addItem(
             {
               type: MessageType.ERROR,
               text: '❌ Please specify an agent name to activate.\nUsage: `/agent activate <agent-name>`',
@@ -59,10 +57,9 @@ Use \`/agent activate <agent-name>\` to activate an agent.`,
           return;
         }
         
-        context.addMessage(
-          `agent activate ${agentName}`,
+        context.ui.addItem(
           {
-            type: MessageType.SUCCESS,
+            type: MessageType.INFO,
             text: `✅ Agent **${agentName}** activated successfully!\n\nThe agent will now assist you with relevant tasks.`,
           },
           Date.now(),
@@ -76,8 +73,7 @@ Use \`/agent activate <agent-name>\` to activate an agent.`,
       action: async (context, args) => {
         const agentName = args?.trim() || '';
         if (!agentName) {
-          context.addMessage(
-            'agent deactivate',
+          context.ui.addItem(
             {
               type: MessageType.ERROR,
               text: '❌ Please specify an agent name to deactivate.\nUsage: `/agent deactivate <agent-name>`',
@@ -87,8 +83,7 @@ Use \`/agent activate <agent-name>\` to activate an agent.`,
           return;
         }
         
-        context.addMessage(
-          `agent deactivate ${agentName}`,
+        context.ui.addItem(
           {
             type: MessageType.INFO,
             text: `🔄 Agent **${agentName}** deactivated.`,
@@ -102,8 +97,7 @@ Use \`/agent activate <agent-name>\` to activate an agent.`,
       description: 'Show active agents status',
       kind: CommandKind.BUILT_IN,
       action: async (context, _args) => {
-        context.addMessage(
-          'agent status',
+        context.ui.addItem(
           {
             type: MessageType.INFO,
             text: `📊 **Agent Status:**

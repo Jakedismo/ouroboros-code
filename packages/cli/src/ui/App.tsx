@@ -98,14 +98,14 @@ import ansiEscapes from 'ansi-escapes';
 import { OverflowProvider } from './contexts/OverflowContext.js';
 import { ShowMoreLines } from './components/ShowMoreLines.js';
 import { PrivacyNotice } from './privacy/PrivacyNotice.js';
-// TUI components
-import { Sidebar } from './components/Sidebar.js';
-import { ContextPanel } from './components/ContextPanel.js';
-import { WorkflowProgressProvider } from './contexts/WorkflowProgressContext.js';
-import {
-  WorkflowProgressOverlay,
-  WorkflowProgressMini,
-} from './components/WorkflowProgressOverlay.js';
+// TUI components (simplified for now)
+// import { Sidebar } from './components/Sidebar.js';
+// import { ContextPanel } from './components/ContextPanel.js';
+// import { WorkflowProgressProvider } from './contexts/WorkflowProgressContext.js';
+// import {
+//   WorkflowProgressOverlay,
+//   WorkflowProgressMini,
+// } from './components/WorkflowProgressOverlay.js';
 import { appEvents, AppEvent } from '../utils/events.js';
 import { useSettingsCommand } from './hooks/useSettingsCommand.js';
 import { SettingsDialog } from './components/SettingsDialog.js';
@@ -242,10 +242,10 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     onWorkspaceMigrationDialogClose,
   } = useWorkspaceMigration(settings);
   
-  // TUI state management
+  // TUI state management (simplified for now)
   const [showSidebar, setShowSidebar] = useState<boolean>(false);
   const [showContextPanel, setShowContextPanel] = useState<boolean>(false);
-  const [showWorkflowProgress, setShowWorkflowProgress] = useState<boolean>(false);
+  // const [showWorkflowProgress, setShowWorkflowProgress] = useState<boolean>(false);
 
   useEffect(() => {
     const unsubscribe = ideContext.subscribeToIdeContext(setIdeContextState);
@@ -270,21 +270,21 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     };
     appEvents.on(AppEvent.LogError, logErrorHandler);
     
-    // TUI event handlers
+    // TUI event handlers (simplified for now)
     const toggleSidebar = () => setShowSidebar(prev => !prev);
     const toggleContext = () => setShowContextPanel(prev => !prev);
-    const toggleWorkflow = () => setShowWorkflowProgress(prev => !prev);
+    // const toggleWorkflow = () => setShowWorkflowProgress(prev => !prev);
     
     appEvents.on(AppEvent.ToggleSidebar, toggleSidebar);
     appEvents.on(AppEvent.ToggleContextPanel, toggleContext);
-    appEvents.on(AppEvent.ToggleWorkflowProgress, toggleWorkflow);
+    // appEvents.on(AppEvent.ToggleWorkflowProgress, toggleWorkflow);
 
     return () => {
       appEvents.off(AppEvent.OpenDebugConsole, openDebugConsole);
       appEvents.off(AppEvent.LogError, logErrorHandler);
       appEvents.off(AppEvent.ToggleSidebar, toggleSidebar);
       appEvents.off(AppEvent.ToggleContextPanel, toggleContext);
-      appEvents.off(AppEvent.ToggleWorkflowProgress, toggleWorkflow);
+      // appEvents.off(AppEvent.ToggleWorkflowProgress, toggleWorkflow);
     };
   }, [handleNewMessage]);
 
@@ -752,11 +752,11 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
         // Cmd/Meta + K - Toggle Context Panel
         setShowContextPanel(prev => !prev);
         return;
-      } else if (key.meta && key.name === 'p') {
+      } /*else if (key.meta && key.name === 'p') {
         // Cmd/Meta + P - Toggle Workflow Progress
         setShowWorkflowProgress(prev => !prev);
         return;
-      }
+      }*/
       
       if (keyMatchers[Command.SHOW_ERROR_DETAILS](key)) {
         setShowErrorDetails((prev) => !prev);
