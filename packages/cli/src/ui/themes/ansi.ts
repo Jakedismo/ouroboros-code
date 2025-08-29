@@ -23,6 +23,9 @@ const ansiColors: ColorsTheme = {
   Comment: 'gray',
   Gray: 'gray',
   GradientColors: ['cyan', 'green'],
+  Primary: 'blue',
+  White: 'white',
+  Warning: 'yellow',
 };
 
 export const ANSI: Theme = new Theme(

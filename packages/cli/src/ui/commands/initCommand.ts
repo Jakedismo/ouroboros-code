@@ -86,7 +86,7 @@ You are an AI agent that brings the power of Gemini directly into the terminal. 
 
 **Final Output:**
 
-Write the complete content to the \`GEMINI.md\` file. The output must be well-formatted Markdown.
+Write the complete content to the \`OUROBOROS.md\` file. The output must be well-formatted Markdown.
 `,
     };
   },

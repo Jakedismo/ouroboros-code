@@ -22,6 +22,9 @@ const googleCodeColors: ColorsTheme = {
   Comment: '#5f6368',
   Gray: lightTheme.Gray,
   GradientColors: ['#066', '#606'],
+  Primary: '#066',
+  White: '#FFFFFF',
+  Warning: '#660',
 };
 
 export const GoogleCode: Theme = new Theme(

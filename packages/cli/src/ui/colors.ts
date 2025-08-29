@@ -53,4 +53,13 @@ export const Colors: ColorsTheme = {
   get GradientColors() {
     return themeManager.getActiveTheme().colors.GradientColors;
   },
+  get Primary() {
+    return themeManager.getActiveTheme().colors.Primary;
+  },
+  get White() {
+    return themeManager.getActiveTheme().colors.White;
+  },
+  get Warning() {
+    return themeManager.getActiveTheme().colors.Warning;
+  },
 };

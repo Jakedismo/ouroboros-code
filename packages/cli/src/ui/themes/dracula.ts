@@ -22,6 +22,9 @@ const draculaColors: ColorsTheme = {
   Comment: '#6272a4',
   Gray: '#6272a4',
   GradientColors: ['#ff79c6', '#8be9fd'],
+  Primary: '#8be9fd',
+  White: '#f8f8f2',
+  Warning: '#f1fa8c',
 };
 
 export const Dracula: Theme = new Theme(

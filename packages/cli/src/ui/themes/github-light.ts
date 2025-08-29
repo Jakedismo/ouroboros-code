@@ -22,6 +22,9 @@ const githubLightColors: ColorsTheme = {
   Comment: '#998',
   Gray: '#999',
   GradientColors: ['#458', '#008080'],
+  Primary: '#458',
+  White: '#FFFFFF',
+  Warning: '#990073',
 };
 
 export const GitHubLight: Theme = new Theme(

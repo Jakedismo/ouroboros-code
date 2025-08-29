@@ -23,6 +23,9 @@ const noColorColorsTheme: ColorsTheme = {
   DiffRemoved: '',
   Comment: '',
   Gray: '',
+  Primary: 'blue',
+  White: 'white',
+  Warning: 'yellow',
 };
 
 const noColorSemanticColors: SemanticColors = {

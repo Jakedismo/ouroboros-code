@@ -22,6 +22,9 @@ const ayuLightColors: ColorsTheme = {
   Comment: '#ABADB1',
   Gray: '#a6aaaf',
   GradientColors: ['#399ee6', '#86b300'],
+  Primary: '#399ee6',
+  White: '#FFFFFF',
+  Warning: '#f2ae49',
 };
 
 export const AyuLight: Theme = new Theme(

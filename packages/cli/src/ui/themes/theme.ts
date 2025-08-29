@@ -26,6 +26,10 @@ export interface ColorsTheme {
   Comment: string;
   Gray: string;
   GradientColors?: string[];
+  // Additional colors used in TUI components
+  Primary: string;
+  White: string;
+  Warning: string;
 }
 
 export interface CustomTheme {
@@ -93,6 +97,9 @@ export const lightTheme: ColorsTheme = {
   Comment: '#008000',
   Gray: '#97a0b0',
   GradientColors: ['#4796E4', '#847ACE', '#C3677F'],
+  Primary: '#3B82F6',
+  White: '#FFFFFF',
+  Warning: '#D5A40A',
 };
 
 export const darkTheme: ColorsTheme = {
@@ -111,6 +118,9 @@ export const darkTheme: ColorsTheme = {
   Comment: '#6C7086',
   Gray: '#6C7086',
   GradientColors: ['#4796E4', '#847ACE', '#C3677F'],
+  Primary: '#89B4FA',
+  White: '#CDD6F4',
+  Warning: '#F9E2AF',
 };
 
 export const ansiTheme: ColorsTheme = {
@@ -128,6 +138,9 @@ export const ansiTheme: ColorsTheme = {
   DiffRemoved: 'red',
   Comment: 'gray',
   Gray: 'gray',
+  Primary: 'blue',
+  White: 'white',
+  Warning: 'yellow',
 };
 
 export class Theme {
@@ -268,6 +281,9 @@ export function createCustomTheme(customTheme: CustomTheme): Theme {
     Comment: customTheme.ui?.comment ?? customTheme.Comment ?? '',
     Gray: customTheme.text?.secondary ?? customTheme.Gray ?? '',
     GradientColors: customTheme.ui?.gradient ?? customTheme.GradientColors,
+    Primary: customTheme.text?.link ?? customTheme.AccentBlue ?? '',
+    White: customTheme.text?.primary ?? customTheme.Foreground ?? '',
+    Warning: customTheme.status?.warning ?? customTheme.AccentYellow ?? '',
   };
 
   // Generate CSS properties mappings based on the custom theme colors

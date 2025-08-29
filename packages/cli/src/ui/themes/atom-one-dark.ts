@@ -22,6 +22,9 @@ const atomOneDarkColors: ColorsTheme = {
   Comment: '#5c6370',
   Gray: '#5c6370',
   GradientColors: ['#61aeee', '#98c379'],
+  Primary: '#61aeee',
+  White: '#abb2bf',
+  Warning: '#e6c07b',
 };
 
 export const AtomOneDark: Theme = new Theme(

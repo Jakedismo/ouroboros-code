@@ -9,11 +9,11 @@ import { GitIgnoreParser } from '../utils/gitIgnoreParser.js';
 import { isGitRepository } from '../utils/gitUtils.js';
 import * as path from 'node:path';
 
-const GEMINI_IGNORE_FILE_NAME = '.geminiignore';
+const GEMINI_IGNORE_FILE_NAME = '.ouroborosignore';
 
 export interface FilterFilesOptions {
   respectGitIgnore?: boolean;
-  respectGeminiIgnore?: boolean;
+  respectGeminiIgnore?: boolean; // Legacy name, actually respects .ouroborosignore
 }
 
 export class FileDiscoveryService {

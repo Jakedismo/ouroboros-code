@@ -8,6 +8,24 @@ This is **Ouroboros** - an open-source multi-agent AI framework that brings the 
 
 ## 🚨 CRITICAL: Merging Without Breaking Ouroboros Features
 
+### Latest TUI Integration & Branding Updates (2025-08-29)
+
+**Successfully Fixed Issues**:
+1. ✅ TypeScript errors in TUI components (added missing color properties)
+2. ✅ Build system compilation (fixed all theme files)
+3. ✅ Settings migration from `.gemini` to `.ouroboros`
+4. ✅ ASCII art branding (OUROBOROS instead of GEMINI)
+5. ✅ Memory system (`OUROBOROS.md` instead of `GEMINI.md`)
+
+**Key Changes Made**:
+- Added `Primary`, `White`, `Warning` properties to all theme files
+- Created `WorkflowProgressDisplay.tsx` component
+- Updated memory tool to use `.ouroboros` directory
+- Fixed VS Code extension imports to use `@ouroboros/ouroboros-code-core`
+- Removed conflicting `WorkflowProgressContext.tsx`
+
+## 🚨 CRITICAL: Merging Without Breaking Ouroboros Features
+
 ### When Merging from Upstream (Google's Gemini CLI)
 
 **IMPORTANT**: This project extends Google's Gemini CLI with significant additional features. When merging upstream changes, you MUST preserve all Ouroboros-specific functionality.

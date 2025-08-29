@@ -22,6 +22,9 @@ const xcodeColors: ColorsTheme = {
   Comment: '#007400',
   Gray: '#c0c0c0',
   GradientColors: ['#1c00cf', '#007400'],
+  Primary: '#1c00cf',
+  White: '#FFFFFF',
+  Warning: '#836C28',
 };
 
 export const XCode: Theme = new Theme(

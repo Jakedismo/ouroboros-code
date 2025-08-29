@@ -23,6 +23,9 @@ const ansiLightColors: ColorsTheme = {
   Comment: 'gray',
   Gray: 'gray',
   GradientColors: ['blue', 'green'],
+  Primary: 'blue',
+  White: 'white',
+  Warning: 'orange',
 };
 
 export const ANSILight: Theme = new Theme(

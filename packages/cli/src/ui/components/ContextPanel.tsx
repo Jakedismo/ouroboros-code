@@ -7,7 +7,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { Colors } from '../colors.js';
-import { ApprovalMode } from '@ouroboros/ouroboros-code-core';
+import { ApprovalMode, type MCPServerConfig } from '@ouroboros/ouroboros-code-core';
 import { ContextSummaryDisplay } from './ContextSummaryDisplay.js';
 
 interface ContextPanelProps {
@@ -56,8 +56,8 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
           ideContext={undefined}
           geminiMdFileCount={geminiMdFileCount}
           contextFileNames={contextFileNames}
-          mcpServers={mcpServers}
-          blockedMcpServers={blockedMcpServers}
+          mcpServers={mcpServers as Record<string, MCPServerConfig> | undefined}
+          blockedMcpServers={blockedMcpServers as Array<{ name: string; extensionName: string }> | undefined}
           showToolDescriptions={false}
         />
       </Box>
