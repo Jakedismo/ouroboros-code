@@ -13,12 +13,12 @@ import {
   BaseDeclarativeTool,
   BaseToolInvocation,
   Kind,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import type {
   ToolCallConfirmationDetails,
   ToolResult,
   ToolInvocation,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import { expect, vi } from 'vitest';
 
 export const mockOnUserConfirmForToolConfirmation = vi.fn();

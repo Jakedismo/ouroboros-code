@@ -25,7 +25,7 @@ import { runNonInteractive } from './nonInteractiveCli.js';
 import { loadExtensions } from './config/extension.js';
 import { cleanupCheckpoints, registerCleanup } from './utils/cleanup.js';
 import { getCliVersion } from './utils/version.js';
-import type { Config } from '@google/gemini-cli-core';
+import type { Config } from '@ouroboros/ouroboros-code-core';
 import {
   sessionId,
   logUserPrompt,
@@ -35,7 +35,7 @@ import {
   IdeConnectionEvent,
   IdeConnectionType,
   FatalConfigError,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import { validateAuthMethod } from './config/auth.js';
 import { setMaxSizedBoxDebugging } from './ui/components/shared/MaxSizedBox.js';
 import { validateNonInteractiveAuth } from './validateNonInterActiveAuth.js';

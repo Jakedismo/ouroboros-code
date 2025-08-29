@@ -10,17 +10,17 @@ import type {
   Config,
   GeminiClient,
   ContentGenerator,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import {
   CodeAssistServer,
   LoggingContentGenerator,
   UserTierId,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import type { OAuth2Client } from 'google-auth-library';
 import { usePrivacySettings } from './usePrivacySettings.js';
 
 // Mock the dependencies
-vi.mock('@google/gemini-cli-core', () => {
+vi.mock('@ouroboros/ouroboros-code-core', () => {
   // Mock classes for instanceof checks
   class MockCodeAssistServer {
     projectId = 'test-project-id';

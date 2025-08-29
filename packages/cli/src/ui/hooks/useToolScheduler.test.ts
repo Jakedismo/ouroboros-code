@@ -25,20 +25,20 @@ import type {
   ToolInvocation,
   AnyDeclarativeTool,
   AnyToolInvocation,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import {
   ToolConfirmationOutcome,
   ApprovalMode,
   Kind,
   BaseDeclarativeTool,
   BaseToolInvocation,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import type { HistoryItemWithoutId, HistoryItemToolGroup } from '../types.js';
 import { ToolCallStatus } from '../types.js';
 
 // Mocks
-vi.mock('@google/gemini-cli-core', async () => {
-  const actual = await vi.importActual('@google/gemini-cli-core');
+vi.mock('@ouroboros/ouroboros-code-core', async () => {
+  const actual = await vi.importActual('@ouroboros/ouroboros-code-core');
   return {
     ...actual,
     ToolRegistry: vi.fn(),

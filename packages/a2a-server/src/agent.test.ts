@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Config } from '@google/gemini-cli-core';
+import type { Config } from '@ouroboros/ouroboros-code-core';
 import {
   GeminiEventType,
   ApprovalMode,
   type ToolCallConfirmationDetails,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import type {
   TaskStatusUpdateEvent,
   SendStreamingMessageSuccessResponse,
@@ -95,8 +95,8 @@ vi.mock('./config.js', async () => {
 
 // Mock the GeminiClient to avoid actual API calls
 const sendMessageStreamSpy = vi.fn();
-vi.mock('@google/gemini-cli-core', async () => {
-  const actual = await vi.importActual('@google/gemini-cli-core');
+vi.mock('@ouroboros/ouroboros-code-core', async () => {
+  const actual = await vi.importActual('@ouroboros/ouroboros-code-core');
   return {
     ...actual,
     GeminiClient: vi.fn().mockImplementation(() => ({

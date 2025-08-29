@@ -7,8 +7,8 @@
 // File for 'gemini mcp list' command
 import type { CommandModule } from 'yargs';
 import { loadSettings } from '../../config/settings.js';
-import type { MCPServerConfig } from '@google/gemini-cli-core';
-import { MCPServerStatus, createTransport } from '@google/gemini-cli-core';
+import type { MCPServerConfig } from '@ouroboros/ouroboros-code-core';
+import { MCPServerStatus, createTransport } from '@ouroboros/ouroboros-code-core';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { loadExtensions } from '../../config/extension.js';
 

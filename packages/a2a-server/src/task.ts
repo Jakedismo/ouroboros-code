@@ -14,7 +14,7 @@ import {
   MCPServerStatus,
   isNodeError,
   parseAndFormatApiError,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import type {
   ToolConfirmationPayload,
   CompletedToolCall,
@@ -25,7 +25,7 @@ import type {
   ToolCallConfirmationDetails,
   Config,
   UserTierId,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import type { RequestContext } from '@a2a-js/sdk/server';
 import { type ExecutionEventBus } from '@a2a-js/sdk/server';
 import type {

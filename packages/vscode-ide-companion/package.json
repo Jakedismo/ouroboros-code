@@ -1,13 +1,13 @@
 {
-  "name": "gemini-cli-vscode-ide-companion",
-  "displayName": "Gemini CLI Companion",
-  "description": "Enable Gemini CLI with direct access to your IDE workspace.",
-  "version": "0.2.1",
+  "name": "ouroboros-code-vscode-ide-companion",
+  "displayName": "Ouroboros Code Companion",
+  "description": "Enable Ouroboros Code with direct access to your IDE workspace.",
+  "version": "1.0.0-beta.3",
   "publisher": "google",
   "icon": "assets/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/google-gemini/gemini-cli.git",
+    "url": "https://github.com/ouroboros-ai/ouroboros-code.git",
     "directory": "packages/vscode-ide-companion"
   },
   "engines": {

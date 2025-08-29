@@ -19,8 +19,8 @@ import type {
   ToolCall,
   Status as CoreStatus,
   EditorType,
-} from '@google/gemini-cli-core';
-import { CoreToolScheduler } from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
+import { CoreToolScheduler } from '@ouroboros/ouroboros-code-core';
 import { useCallback, useState, useMemo } from 'react';
 import type {
   HistoryItemToolGroup,

@@ -8,9 +8,9 @@ const { logSlashCommand } = vi.hoisted(() => ({
   logSlashCommand: vi.fn(),
 }));
 
-vi.mock('@google/gemini-cli-core', async (importOriginal) => {
+vi.mock('@ouroboros/ouroboros-code-core', async (importOriginal) => {
   const original =
-    await importOriginal<typeof import('@google/gemini-cli-core')>();
+    await importOriginal<typeof import('@ouroboros/ouroboros-code-core')>();
 
   return {
     ...original,
@@ -88,7 +88,7 @@ import {
   makeFakeConfig,
   ToolConfirmationOutcome,
   type IdeClient,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 
 function createTestCommand(
   overrides: Partial<SlashCommand>,

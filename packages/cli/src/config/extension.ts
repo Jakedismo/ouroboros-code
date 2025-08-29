@@ -7,8 +7,8 @@
 import type {
   MCPServerConfig,
   GeminiCLIExtension,
-} from '@google/gemini-cli-core';
-import { Storage } from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
+import { Storage } from '@ouroboros/ouroboros-code-core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';

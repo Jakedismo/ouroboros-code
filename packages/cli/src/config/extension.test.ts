@@ -24,7 +24,7 @@ import {
 import {
   type GeminiCLIExtension,
   type MCPServerConfig,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import { execSync } from 'node:child_process';
 import { SettingScope, loadSettings } from './settings.js';
 import { type SimpleGit, simpleGit } from 'simple-git';

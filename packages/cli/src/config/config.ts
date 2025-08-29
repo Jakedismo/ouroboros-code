@@ -15,7 +15,7 @@ import type {
   TelemetryTarget,
   FileFilteringOptions,
   MCPServerConfig,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import { extensionsCommand } from '../commands/extensions.js';
 import {
   Config,
@@ -30,7 +30,7 @@ import {
   ShellTool,
   EditTool,
   WriteFileTool,
-} from '@google/gemini-cli-core';
+} from '@ouroboros/ouroboros-code-core';
 import type { Settings } from './settings.js';
 
 import type { Extension } from './extension.js';
@@ -77,16 +77,50 @@ export interface CliArgs {
   proxy: string | undefined;
   includeDirectories: string[] | undefined;
   screenReader: boolean | undefined;
+  // Ouroboros-specific provider options
+  provider: string | undefined;
+  openaiApiKey: string | undefined;
+  openaiModel: string | undefined;
+  openaiUseOauth: boolean | undefined;
+  anthropicApiKey: string | undefined;
+  anthropicModel: string | undefined;
+  claudeUseOauth: boolean | undefined;
+  geminiApiKey: string | undefined;
+  temperature: number | undefined;
+  maxTokens: number | undefined;
+  // Ouroboros advanced features
+  autonomous: string | undefined;
+  systemPrompt: string | undefined;
+  systemPromptFlavour: string | undefined;
+  maxConcurrentTools: number | undefined;
+  confirmationMode: string | undefined;
+  maxSessionTurns: number | undefined;
+  toolTimeout: number | undefined;
+  experimentalA2aMode: boolean | undefined;
+  providerInfo: string | undefined;
 }
 
 export async function parseArguments(settings: Settings): Promise<CliArgs> {
   const yargsInstance = yargs(hideBin(process.argv))
     .locale('en')
-    .scriptName('gemini')
+    .scriptName('ouroboros-code')
     .usage(
-      'Usage: gemini [options] [command]\n\nGemini CLI - Launch an interactive CLI, use -p/--prompt for non-interactive mode',
+      `✨ OUROBOROS CODE - The Infinite Loop of AI Intelligence ✨
+
+🚀 Core Features:
+  • Multi-Provider Support: Seamlessly switch between Gemini, OpenAI & Anthropic
+  • Advanced Commands: /blindspot, /challenge, /compare, /converge, /race
+  • Autonomous Mode: Agent continues working autonomously with A2A communication
+  • MCP Integration: Advanced tool orchestration with connection pooling
+  • Unified Tools: 11 builtin tools work identically across all providers
+
+Usage: ouroboros-code [options] [command]
+
+Interactive mode: ouroboros-code
+Non-interactive: ouroboros-code -p/--prompt "your task"
+Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
     )
-    .command('$0', 'Launch Gemini CLI', (yargsInstance) =>
+    .command('$0', 'Launch Ouroboros Code - Multi-LLM Intelligence', (yargsInstance) =>
       yargsInstance
         .option('model', {
           alias: 'm',
@@ -104,6 +138,53 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
           type: 'string',
           description:
             'Execute the provided prompt and continue in interactive mode',
+        })
+        .option('autonomous', {
+          type: 'string',
+          description:
+            '🤖 Autonomous mode: Execute prompt and continue running for follow-up tasks (enables A2A communication on port 45123)',
+        })
+        .option('system-prompt', {
+          type: 'string',
+          description: '📝 Custom system prompt (file path or direct string)',
+        })
+        .option('system-prompt-flavour', {
+          type: 'string',
+          description:
+            '🎨 System prompt flavour/variant (available: default, claude-code, cursor-agent, augment-openai, augment-claude)',
+        })
+        .option('max-concurrent-tools', {
+          type: 'number',
+          description:
+            'Maximum number of concurrent tool executions (default: 3)',
+          default: 3,
+        })
+        .option('confirmation-mode', {
+          type: 'string',
+          choices: ['always', 'never', 'smart'],
+          description:
+            'Tool confirmation mode: always, never, or smart (default: smart)',
+          default: 'smart',
+        })
+        .option('max-session-turns', {
+          type: 'number',
+          description:
+            'Maximum number of conversation turns in autonomous mode (default: unlimited)',
+          default: -1,
+        })
+        .option('tool-timeout', {
+          type: 'number',
+          description: 'Tool execution timeout in seconds (default: 120)',
+          default: 120,
+        })
+        .option('experimental-a2a-mode', {
+          type: 'boolean',
+          description: '🔬 Enable experimental Agent-to-Agent communication',
+          default: false,
+        })
+        .option('provider-info', {
+          type: 'string',
+          description: 'Show detailed information about a specific provider',
         })
         .option('sandbox', {
           alias: 's',
@@ -221,6 +302,54 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
             // Handle comma-separated values
             dirs.flatMap((dir) => dir.split(',').map((d) => d.trim())),
         })
+        // Ouroboros-specific provider options
+        .option('provider', {
+          type: 'string',
+          choices: ['gemini', 'openai', 'anthropic'],
+          description: 'LLM provider to use',
+          default: 'gemini',
+        })
+        .option('openai-api-key', {
+          type: 'string',
+          description: 'OpenAI API key (or set OPENAI_API_KEY env var)',
+        })
+        .option('openai-model', {
+          type: 'string',
+          description: 'OpenAI model to use',
+          default: 'gpt-4o',
+        })
+        .option('openai-use-oauth', {
+          type: 'boolean',
+          description: 'Use OAuth for OpenAI authentication',
+          default: false,
+        })
+        .option('anthropic-api-key', {
+          type: 'string',
+          description: 'Anthropic API key (or set ANTHROPIC_API_KEY env var)',
+        })
+        .option('anthropic-model', {
+          type: 'string',
+          description: 'Anthropic model to use',
+          default: 'claude-3-5-sonnet-20241022',
+        })
+        .option('claude-use-oauth', {
+          type: 'boolean',
+          description: 'Use OAuth for Anthropic/Claude authentication',
+          default: false,
+        })
+        .option('gemini-api-key', {
+          type: 'string',
+          description: 'Gemini API key (or set GEMINI_API_KEY env var)',
+        })
+        .option('temperature', {
+          type: 'number',
+          description: 'Temperature for LLM generation (0.0-2.0)',
+          default: 0.7,
+        })
+        .option('max-tokens', {
+          type: 'number',
+          description: 'Maximum tokens for LLM generation',
+        })
         .option('screen-reader', {
           type: 'boolean',
           description: 'Enable screen reader mode for accessibility.',
@@ -231,6 +360,11 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
           if (argv.prompt && argv['promptInteractive']) {
             throw new Error(
               'Cannot use both --prompt (-p) and --prompt-interactive (-i) together',
+            );
+          }
+          if (argv.autonomous && (argv.prompt || argv['promptInteractive'])) {
+            throw new Error(
+              'Cannot use --autonomous with --prompt or --prompt-interactive. --autonomous includes prompt execution.',
             );
           }
           if (argv.yolo && argv['approvalMode']) {
@@ -249,6 +383,33 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
   }
 
   yargsInstance
+    .epilogue(`
+📚 Examples:
+
+  Basic usage:
+    ouroboros-code                          # Interactive mode
+    ouroboros-code -p "write hello world"   # Non-interactive
+    ouroboros-code --provider openai        # Use OpenAI
+
+  Multi-provider commands:
+    ouroboros-code /blindspot               # Detect what each provider misses
+    ouroboros-code /challenge               # Adversarial debate between providers
+    ouroboros-code /compare                 # Side-by-side comparison
+    ouroboros-code /converge                # Unified synthesis from all providers
+    ouroboros-code /race                    # Performance race between providers
+
+  Autonomous agent mode:
+    ouroboros-code --autonomous "continue working autonomously"
+    # Enables A2A communication on port 45123 for multi-agent coordination
+    
+    # With configuration:
+    ouroboros-code --autonomous "continue" --max-session-turns 50 --confirmation-mode never
+
+📚 Learn more: https://github.com/ouroboros-ai/ouroboros-code
+🐛 Report issues: https://github.com/ouroboros-ai/ouroboros-code/issues
+
+                    Powered by the eternal cycle ∞
+`)
     .version(await getCliVersion()) // This will enable the --version flag based on package.json
     .alias('v', 'version')
     .help()
