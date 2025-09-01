@@ -188,6 +188,10 @@ export interface ConfigParameters {
   includeDirectories?: string[];
   bugCommand?: BugCommandSettings;
   model: string;
+  // Provider configuration
+  provider?: 'openai' | 'anthropic' | 'gemini';
+  providerApiKey?: string;
+  providerUseOauth?: boolean;
   extensionContextFilePaths?: string[];
   maxSessionTurns?: number;
   experimentalZedIntegration?: boolean;
@@ -254,6 +258,10 @@ export class Config {
   private readonly cwd: string;
   private readonly bugCommand: BugCommandSettings | undefined;
   private readonly model: string;
+  // Provider configuration
+  private readonly provider: 'openai' | 'anthropic' | 'gemini';
+  private readonly providerApiKey: string | undefined;
+  private readonly providerUseOauth: boolean;
   private readonly extensionContextFilePaths: string[];
   private readonly noBrowser: boolean;
   private readonly folderTrustFeature: boolean;
@@ -339,6 +347,10 @@ export class Config {
     this.fileDiscoveryService = params.fileDiscoveryService ?? null;
     this.bugCommand = params.bugCommand;
     this.model = params.model;
+    // Provider configuration
+    this.provider = params.provider ?? 'gemini';
+    this.providerApiKey = params.providerApiKey;
+    this.providerUseOauth = params.providerUseOauth ?? false;
     this.extensionContextFilePaths = params.extensionContextFilePaths ?? [];
     this.maxSessionTurns = params.maxSessionTurns ?? -1;
     this.experimentalZedIntegration =
@@ -453,6 +465,18 @@ export class Config {
     if (this.contentGeneratorConfig) {
       this.contentGeneratorConfig.model = newModel;
     }
+  }
+
+  getProvider(): 'openai' | 'anthropic' | 'gemini' {
+    return this.provider;
+  }
+
+  getProviderApiKey(): string | undefined {
+    return this.providerApiKey;
+  }
+
+  getProviderUseOauth(): boolean {
+    return this.providerUseOauth;
   }
 
   isInFallbackMode(): boolean {

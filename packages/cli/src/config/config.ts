@@ -87,6 +87,7 @@ export interface CliArgs {
   anthropicModel: string | undefined;
   claudeUseOauth: boolean | undefined;
   geminiApiKey: string | undefined;
+  geminiModel: string | undefined;
   temperature: number | undefined;
   maxTokens: number | undefined;
   // Ouroboros advanced features
@@ -317,7 +318,7 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
         .option('openai-model', {
           type: 'string',
           description: 'OpenAI model to use',
-          default: 'gpt-4o',
+          default: 'gpt-5',
         })
         .option('openai-use-oauth', {
           type: 'boolean',
@@ -331,7 +332,7 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
         .option('anthropic-model', {
           type: 'string',
           description: 'Anthropic model to use',
-          default: 'claude-3-5-sonnet-20241022',
+          default: 'claude-opus-4-1-20250805',
         })
         .option('claude-use-oauth', {
           type: 'boolean',
@@ -341,6 +342,11 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
         .option('gemini-api-key', {
           type: 'string',
           description: 'Gemini API key (or set GEMINI_API_KEY env var)',
+        })
+        .option('gemini-model', {
+          type: 'string',
+          description: 'Gemini model to use',
+          default: 'gemini-2.5-pro',
         })
         .option('temperature', {
           type: 'number',
@@ -520,6 +526,37 @@ export async function loadHierarchicalGeminiMemory(
   );
 }
 
+/**
+ * Extract provider options from CLI arguments
+ */
+function extractProviderOptions(
+  argv: CliArgs,
+  providerType: 'openai' | 'anthropic' | 'gemini'
+): { apiKey?: string; model?: string; useOauth?: boolean } {
+  switch (providerType) {
+    case 'openai':
+      return {
+        apiKey: argv.openaiApiKey || process.env['OPENAI_API_KEY'],
+        model: argv.openaiModel || 'gpt-5',
+        useOauth: argv.openaiUseOauth || false,
+      };
+    case 'anthropic':
+      return {
+        apiKey: argv.anthropicApiKey || process.env['ANTHROPIC_API_KEY'],
+        model: argv.anthropicModel || 'claude-opus-4-1-20250805',
+        useOauth: argv.claudeUseOauth || false,
+      };
+    case 'gemini':
+      return {
+        apiKey: argv.geminiApiKey || process.env['GEMINI_API_KEY'],
+        model: argv.geminiModel || 'gemini-2.5-pro',
+        useOauth: false, // Gemini doesn't have OAuth option in CLI
+      };
+    default:
+      throw new Error(`Unknown provider type: ${providerType}`);
+  }
+}
+
 export async function loadCliConfig(
   settings: Settings,
   extensions: Extension[],
@@ -691,6 +728,17 @@ export async function loadCliConfig(
     argv.screenReader !== undefined
       ? argv.screenReader
       : (settings.ui?.accessibility?.screenReader ?? false);
+
+  // Extract provider configuration from CLI arguments
+  const providerType = (argv.provider || 'gemini') as 'openai' | 'anthropic' | 'gemini';
+  const providerOptions = extractProviderOptions(argv, providerType);
+  
+  if (debugMode) {
+    console.debug(`[Config] Using provider: ${providerType} with model: ${providerOptions.model}`);
+    console.debug(`[Config] API key provided: ${!!providerOptions.apiKey}`);
+    console.debug(`[Config] OAuth enabled: ${providerOptions.useOauth}`);
+  }
+
   return new Config({
     sessionId,
     embeddingModel: DEFAULT_GEMINI_EMBEDDING_MODEL,
@@ -754,7 +802,11 @@ export async function loadCliConfig(
     cwd,
     fileDiscoveryService: fileService,
     bugCommand: settings.advanced?.bugCommand,
-    model: argv.model || settings.model?.name || DEFAULT_GEMINI_MODEL,
+    model: providerOptions.model || argv.model || settings.model?.name || DEFAULT_GEMINI_MODEL,
+    // Provider configuration
+    provider: providerType,
+    providerApiKey: providerOptions.apiKey,
+    providerUseOauth: providerOptions.useOauth,
     extensionContextFilePaths,
     maxSessionTurns: settings.model?.maxSessionTurns ?? -1,
     experimentalZedIntegration: argv.experimentalAcp || false,
