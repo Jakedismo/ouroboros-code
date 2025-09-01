@@ -9,7 +9,6 @@ import {
   shutdownTelemetry,
   isTelemetrySdkInitialized,
   parseAndFormatApiError,
-  FatalTurnLimitedError,
 } from '@ouroboros/ouroboros-code-core';
 import * as net from 'node:net';
 import { ConsolePatcher } from './ui/utils/ConsolePatcher.js';
