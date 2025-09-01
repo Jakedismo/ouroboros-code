@@ -15,9 +15,89 @@ import {
   FatalTurnLimitedError,
 } from '@ouroboros/ouroboros-code-core';
 import type { Content, Part } from '@google/genai';
+import * as fs from 'node:fs/promises';
 
 import { ConsolePatcher } from './ui/utils/ConsolePatcher.js';
 import { handleAtCommand } from './ui/hooks/atCommandProcessor.js';
+import { ContinuousInputManager, InputCommandType, type InputCommand } from './services/continuousInputManager.js';
+
+async function handleInputCommand(
+  command: InputCommand,
+  currentMessages: Content[],
+  config: Config,
+): Promise<'exit' | 'continue' | 'processed'> {
+  switch (command.type) {
+    case InputCommandType.EXIT_AUTONOMOUS:
+      if (config.getDebugMode()) {
+        console.debug('[Autonomous] Received exit command');
+      }
+      return 'exit';
+
+    case InputCommandType.PAUSE_EXECUTION:
+      if (config.getDebugMode()) {
+        console.debug('[Autonomous] Execution paused');
+      }
+      // Wait for resume command
+      return 'continue';
+
+    case InputCommandType.RESUME_EXECUTION:
+      if (config.getDebugMode()) {
+        console.debug('[Autonomous] Execution resumed');
+      }
+      return 'continue';
+
+    case InputCommandType.USER_MESSAGE:
+      if (command.data) {
+        // Add user message to the conversation
+        currentMessages.push({
+          role: 'user',
+          parts: [{ text: command.data }],
+        });
+        return 'processed';
+      }
+      return 'continue';
+
+    case InputCommandType.INJECT_CONTEXT:
+      if (command.data) {
+        // Inject context as a system message
+        currentMessages.push({
+          role: 'user',
+          parts: [{ text: `[Context Injection]:\n${command.data}` }],
+        });
+        return 'processed';
+      }
+      return 'continue';
+
+    case InputCommandType.INJECT_FILE:
+      if (command.data) {
+        try {
+          const fileContent = await fs.readFile(command.data, 'utf-8');
+          currentMessages.push({
+            role: 'user',
+            parts: [{ text: `[File Content from ${command.data}]:\n${fileContent}` }],
+          });
+          return 'processed';
+        } catch (error) {
+          console.error(`Failed to read file ${command.data}:`, error);
+        }
+      }
+      return 'continue';
+
+    case InputCommandType.INJECT_COMMAND:
+      if (command.data) {
+        // Inject as a command for the AI to execute
+        currentMessages.push({
+          role: 'user',
+          parts: [{ text: `[Execute Command]: ${command.data}` }],
+        });
+        return 'processed';
+      }
+      return 'continue';
+
+    default:
+      return 'continue';
+  }
+}
 
 export async function runNonInteractive(
   config: Config,
@@ -28,6 +108,15 @@ export async function runNonInteractive(
     stderr: true,
     debugMode: config.getDebugMode(),
   });
+
+  let inputManager: ContinuousInputManager | undefined;
+  if (config.isContinuousInputEnabled()) {
+    inputManager = new ContinuousInputManager({
+      debugMode: config.getDebugMode(),
+      enableProtocol: true,
+    });
+    inputManager.start();
+  }
 
   try {
     consolePatcher.patch();
@@ -65,7 +154,22 @@ export async function runNonInteractive(
     ];
 
     let turnCount = 0;
-    while (true) {
+    let shouldExit = false;
+    
+    while (!shouldExit) {
+      // Check for continuous input before each turn
+      if (inputManager && inputManager.hasPendingCommands()) {
+        const command = inputManager.getNextCommand();
+        if (command) {
+          const handled = await handleInputCommand(command, currentMessages, config);
+          if (handled === 'exit') {
+            shouldExit = true;
+            break;
+          } else if (handled === 'continue') {
+            continue;
+          }
+        }
+      }
       turnCount++;
       if (
         config.getMaxSessionTurns() >= 0 &&
@@ -117,8 +221,21 @@ export async function runNonInteractive(
         }
         currentMessages = [{ role: 'user', parts: toolResponseParts }];
       } else {
-        process.stdout.write('\n'); // Ensure a final newline
-        return;
+        // In autonomous mode, wait for more input instead of exiting
+        if (config.isAutonomousMode() && inputManager) {
+          // Wait for new input
+          await new Promise<void>((resolve) => {
+            const checkForInput = setInterval(() => {
+              if (inputManager.hasPendingCommands() || shouldExit) {
+                clearInterval(checkForInput);
+                resolve();
+              }
+            }, 100);
+          });
+        } else {
+          process.stdout.write('\n'); // Ensure a final newline
+          return;
+        }
       }
     }
   } catch (error) {
@@ -130,6 +247,9 @@ export async function runNonInteractive(
     );
     throw error;
   } finally {
+    if (inputManager) {
+      inputManager.stop();
+    }
     consolePatcher.cleanup();
     if (isTelemetrySdkInitialized()) {
       await shutdownTelemetry(config);

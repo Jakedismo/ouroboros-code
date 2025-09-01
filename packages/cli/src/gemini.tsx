@@ -22,6 +22,7 @@ import { getStartupWarnings } from './utils/startupWarnings.js';
 import { getUserStartupWarnings } from './utils/userStartupWarnings.js';
 import { ConsolePatcher } from './ui/utils/ConsolePatcher.js';
 import { runNonInteractive } from './nonInteractiveCli.js';
+import { runAutonomous } from './autonomousCli.js';
 import { loadExtensions } from './config/extension.js';
 import { cleanupCheckpoints, registerCleanup } from './utils/cleanup.js';
 import { getCliVersion } from './utils/version.js';
@@ -382,7 +383,12 @@ export async function main() {
     console.log('Session ID: %s', sessionId);
   }
 
-  await runNonInteractive(nonInteractiveConfig, input, prompt_id);
+  // Use autonomous runner if autonomous mode is enabled
+  if (nonInteractiveConfig.isAutonomousMode()) {
+    await runAutonomous(nonInteractiveConfig, input, prompt_id);
+  } else {
+    await runNonInteractive(nonInteractiveConfig, input, prompt_id);
+  }
   process.exit(0);
 }
 

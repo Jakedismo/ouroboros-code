@@ -207,6 +207,8 @@ export interface ConfigParameters {
   skipNextSpeakerCheck?: boolean;
   extensionManagement?: boolean;
   enablePromptCompletion?: boolean;
+  autonomousMode?: boolean;
+  enableContinuousInput?: boolean;
 }
 
 export class Config {
@@ -279,6 +281,8 @@ export class Config {
   private readonly skipNextSpeakerCheck: boolean;
   private readonly extensionManagement: boolean;
   private readonly enablePromptCompletion: boolean = false;
+  private readonly autonomousMode: boolean;
+  private readonly enableContinuousInput: boolean;
   private initialized: boolean = false;
   readonly storage: Storage;
   private readonly fileExclusions: FileExclusions;
@@ -355,6 +359,8 @@ export class Config {
     this.extensionManagement = params.extensionManagement ?? false;
     this.storage = new Storage(this.targetDir);
     this.enablePromptCompletion = params.enablePromptCompletion ?? false;
+    this.autonomousMode = params.autonomousMode ?? false;
+    this.enableContinuousInput = params.enableContinuousInput ?? false;
     this.fileExclusions = new FileExclusions(this);
 
     if (params.contextFileName) {
@@ -792,6 +798,14 @@ export class Config {
 
   getEnablePromptCompletion(): boolean {
     return this.enablePromptCompletion;
+  }
+
+  isAutonomousMode(): boolean {
+    return this.autonomousMode;
+  }
+
+  isContinuousInputEnabled(): boolean {
+    return this.enableContinuousInput;
   }
 
   async getGitService(): Promise<GitService> {

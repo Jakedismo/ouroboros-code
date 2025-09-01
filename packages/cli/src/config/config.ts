@@ -550,7 +550,7 @@ export async function loadCliConfig(
   );
 
   let mcpServers = mergeMcpServers(settings, activeExtensions);
-  const question = argv.promptInteractive || argv.prompt || '';
+  const question = argv.promptInteractive || argv.prompt || argv.autonomous || '';
 
   // Determine approval mode with backward compatibility
   let approvalMode: ApprovalMode;
@@ -729,6 +729,8 @@ export async function loadCliConfig(
     shouldUseNodePtyShell: settings.tools?.usePty,
     skipNextSpeakerCheck: settings.model?.skipNextSpeakerCheck,
     enablePromptCompletion: settings.general?.enablePromptCompletion ?? false,
+    autonomousMode: !!argv.autonomous,
+    enableContinuousInput: !!argv.autonomous || !!argv.prompt,
   });
 }
 
