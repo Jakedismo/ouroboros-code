@@ -106,28 +106,50 @@ function getCurrentProvider(context: any): string | null {
 }
 
 async function switchProvider(context: any, provider: ProviderType, config: typeof PROVIDER_CONFIGS[ProviderType]) {
-  const successItem: Omit<HistoryItemInfo, 'id'> = {
-    type: MessageType.INFO,
-    text: `🔄 **Provider Switched**
+  try {
+    // Actually switch the provider in the config
+    if (context.config && typeof context.config.setProvider === 'function') {
+      await context.config.setProvider(provider);
+      console.log(`[Provider] Successfully switched to ${provider} with model ${config.defaultModel}`);
+    }
+
+    const successItem: Omit<HistoryItemInfo, 'id'> = {
+      type: MessageType.INFO,
+      text: `🔄 **Provider Switched Successfully**
 
 **New Provider:** ${config.name}
 **Default Model:** ${config.defaultModel}
 **Description:** ${config.description}
 
+**Provider is now active!**
+You can start using ${config.name} immediately for new messages.
+
 **Next Steps:**
-• Start a new conversation to use ${config.name}
-• Use \`/model\` to change the model within this provider
+• Use \`/model\` to see available models for this provider
 • Use \`/model ${config.defaultModel}\` to explicitly set the default model
 
-**Authentication Required:**
+**Authentication:**
 Make sure you have configured API keys for ${config.name}:
 ${getAuthInstructions(provider)}`,
-  };
-  context.ui.addItem(successItem, Date.now());
+    };
+    context.ui.addItem(successItem, Date.now());
+  } catch (error) {
+    const errorItem: Omit<HistoryItemInfo, 'id'> = {
+      type: MessageType.INFO,
+      text: `❌ **Failed to Switch Provider**
 
-  // TODO: Actually switch the provider in the config
-  // This should integrate with the config system to persist the change
-  console.log(`[Provider] Switched to ${provider} with model ${config.defaultModel}`);
+Error: ${error instanceof Error ? error.message : String(error)}
+
+**Troubleshooting:**
+• Make sure you have the required API key configured
+• Check that the provider is properly installed
+• Verify network connectivity
+
+Current provider remains unchanged.`,
+    };
+    context.ui.addItem(errorItem, Date.now());
+    console.error(`[Provider] Failed to switch to ${provider}:`, error);
+  }
 }
 
 function getAuthInstructions(provider: ProviderType): string {

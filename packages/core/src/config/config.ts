@@ -26,6 +26,8 @@ import { ReadManyFilesTool } from '../tools/read-many-files.js';
 import { MemoryTool, setGeminiMdFilename } from '../tools/memoryTool.js';
 import { WebSearchTool } from '../tools/web-search.js';
 import { GeminiClient } from '../core/client.js';
+import { LLMProviderFactory } from '../providers/factory.js';
+import type { Provider } from '../providers/types.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { GitService } from '../services/gitService.js';
 import type { TelemetryTarget } from '../telemetry/index.js';
@@ -245,6 +247,7 @@ export class Config {
   private readonly telemetrySettings: TelemetrySettings;
   private readonly usageStatisticsEnabled: boolean;
   private geminiClient!: GeminiClient;
+  private currentProvider?: Provider;
   private readonly fileFiltering: {
     respectGitIgnore: boolean;
     respectGeminiIgnore: boolean;
@@ -404,6 +407,10 @@ export class Config {
     }
     this.promptRegistry = new PromptRegistry();
     this.toolRegistry = await this.createToolRegistry();
+    
+    // Initialize the provider based on configuration
+    await this.initializeCurrentProvider();
+    
     logCliConfiguration(this, new StartSessionEvent(this, this.toolRegistry));
   }
 
@@ -414,7 +421,7 @@ export class Config {
       existingHistory = this.geminiClient.getHistory();
     }
 
-    // Create new content generator config
+    // Create new content generator config (provider-aware logic is now in createContentGenerator)
     const newContentGeneratorConfig = createContentGeneratorConfig(
       this,
       authMethod,
@@ -477,6 +484,72 @@ export class Config {
 
   getProviderUseOauth(): boolean {
     return this.providerUseOauth;
+  }
+
+  /**
+   * Get the current provider instance, creating it if necessary
+   */
+  async getCurrentProvider(): Promise<Provider> {
+    if (!this.currentProvider) {
+      await this.initializeCurrentProvider();
+    }
+    return this.currentProvider!;
+  }
+
+  /**
+   * Initialize the current provider based on configuration
+   */
+  private async initializeCurrentProvider(): Promise<void> {
+    const factory = LLMProviderFactory.getInstance();
+    
+    const providerOptions = {
+      apiKey: this.getEffectiveApiKey(),
+      model: this.getModel(),
+    };
+
+    this.currentProvider = factory.createProvider(this.provider, providerOptions);
+  }
+
+  /**
+   * Get the effective API key for the current provider
+   */
+  private getEffectiveApiKey(): string | undefined {
+    // First check explicit provider API key, then environment variables
+    if (this.providerApiKey) {
+      return this.providerApiKey;
+    }
+
+    switch (this.provider) {
+      case 'openai':
+        return process.env['OPENAI_API_KEY'];
+      case 'anthropic':
+        return process.env['ANTHROPIC_API_KEY'];
+      case 'gemini':
+        return process.env['GEMINI_API_KEY'] || process.env['GOOGLE_API_KEY'];
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Switch to a different provider
+   */
+  async setProvider(newProvider: 'openai' | 'anthropic' | 'gemini'): Promise<void> {
+    if (this.provider === newProvider) {
+      return; // Already using this provider
+    }
+
+    // Update the provider configuration
+    (this as any).provider = newProvider;
+    
+    // Clear the current provider to force recreation
+    this.currentProvider = undefined;
+    
+    // Initialize the new provider
+    await this.initializeCurrentProvider();
+
+    // Recreate the GeminiClient with the new provider (refreshAuth will handle the provider switching)
+    await this.refreshAuth(this.contentGeneratorConfig?.authType || AuthType.USE_GEMINI);
   }
 
   isInFallbackMode(): boolean {

@@ -37,11 +37,7 @@ import { setupGithubCommand } from '../ui/commands/setupGithubCommand.js';
 import { terminalSetupCommand } from '../ui/commands/terminalSetupCommand.js';
 import { 
   sagaCommand, 
-  sagaHistoryCommand, 
-  sagaStatusCommand,
-  sagaContinueCommand,
-  sagaIterateCommand,
-  sagaCancelCommand 
+  sagaHistoryCommand 
 } from '../ui/commands/sagaCommand.js';
 import { providerCommand } from '../ui/commands/providerCommand.js';
 import { modelCommand } from '../ui/commands/modelCommand.js';
@@ -92,10 +88,6 @@ export class BuiltinCommandLoader implements ICommandLoader {
       terminalSetupCommand,
       sagaCommand,
       sagaHistoryCommand,
-      sagaStatusCommand,
-      sagaContinueCommand,
-      sagaIterateCommand,
-      sagaCancelCommand,
       providerCommand,
       modelCommand,
     ];

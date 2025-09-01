@@ -108,6 +108,27 @@ export async function createContentGenerator(
   gcConfig: Config,
   sessionId?: string,
 ): Promise<ContentGenerator> {
+  // Check if we should use a non-Gemini provider
+  const provider = gcConfig.getProvider();
+  if (provider === 'openai') {
+    const { OpenAIContentGenerator } = await import('../providers/openai/content-generator.js');
+    const apiKey = gcConfig.getProviderApiKey() || process.env['OPENAI_API_KEY'];
+    if (!apiKey) {
+      throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable.');
+    }
+    return new OpenAIContentGenerator(apiKey, config.model);
+  }
+  
+  if (provider === 'anthropic') {
+    const { AnthropicContentGenerator } = await import('../providers/anthropic/content-generator.js');
+    const apiKey = gcConfig.getProviderApiKey() || process.env['ANTHROPIC_API_KEY'];
+    if (!apiKey) {
+      throw new Error('Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable.');
+    }
+    return new AnthropicContentGenerator(apiKey, config.model);
+  }
+  
+  // Default to Gemini for backward compatibility
   const version = process.env['CLI_VERSION'] || process.version;
   const userAgent = `GeminiCLI/${version} (${process.platform}; ${process.arch})`;
   const baseHeaders: Record<string, string> = {
