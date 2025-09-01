@@ -415,6 +415,19 @@ export class Config {
   }
 
   async refreshAuth(authMethod: AuthType) {
+    // Validate auth method for non-Gemini providers
+    const currentProvider = this.getProvider();
+    if (currentProvider !== 'gemini') {
+      // Non-Gemini providers don't support OAuth
+      if (authMethod === AuthType.LOGIN_WITH_GOOGLE || authMethod === AuthType.CLOUD_SHELL) {
+        throw new Error(
+          `OAuth authentication is not supported for ${currentProvider} provider. ` +
+          `Please use API key authentication instead. ` +
+          `Set ${currentProvider.toUpperCase()}_API_KEY environment variable or use --${currentProvider}-api-key flag.`
+        );
+      }
+    }
+
     // Save the current conversation history before creating a new client
     let existingHistory: Content[] = [];
     if (this.geminiClient && this.geminiClient.isInitialized()) {

@@ -733,6 +733,17 @@ export async function loadCliConfig(
   const providerType = (argv.provider || 'gemini') as 'openai' | 'anthropic' | 'gemini';
   const providerOptions = extractProviderOptions(argv, providerType);
   
+  // Validate OAuth usage with non-Gemini providers
+  if (providerType !== 'gemini' && providerOptions.useOauth) {
+    console.error(
+      `\n⚠️  OAuth authentication is not supported for ${providerType} provider.\n` +
+      `\nPlease use API key authentication instead:\n` +
+      `• Set ${providerType.toUpperCase()}_API_KEY environment variable\n` +
+      `• Or use --${providerType}-api-key flag\n`
+    );
+    throw new Error(`OAuth not supported for ${providerType} provider`);
+  }
+  
   if (debugMode) {
     console.debug(`[Config] Using provider: ${providerType} with model: ${providerOptions.model}`);
     console.debug(`[Config] API key provided: ${!!providerOptions.apiKey}`);
