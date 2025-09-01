@@ -565,6 +565,46 @@ export class Config {
     await this.refreshAuth(this.contentGeneratorConfig?.authType || AuthType.USE_GEMINI);
   }
 
+  /**
+   * Get the current system prompt
+   */
+  getSystemPrompt(): string {
+    return (this as any).agentSystemPrompt || '';
+  }
+
+  /**
+   * Set a custom system prompt (used by AgentManager)
+   */
+  async setSystemPrompt(prompt: string): Promise<void> {
+    (this as any).agentSystemPrompt = prompt;
+    
+    // Refresh the client to apply the new system prompt
+    if (this.contentGeneratorConfig && this.contentGeneratorConfig.authType) {
+      await this.refreshAuth(this.contentGeneratorConfig.authType);
+    }
+  }
+
+  /**
+   * Clear the custom system prompt and restore default
+   */
+  async clearSystemPrompt(): Promise<void> {
+    (this as any).agentSystemPrompt = undefined;
+    
+    // Refresh the client to restore the default system prompt
+    if (this.contentGeneratorConfig && this.contentGeneratorConfig.authType) {
+      await this.refreshAuth(this.contentGeneratorConfig.authType);
+    }
+  }
+
+  /**
+   * Initialize the agent manager
+   */
+  initializeAgentManager(): void {
+    const { AgentManager } = require('../agents/agentManager.js');
+    const agentManager = AgentManager.getInstance();
+    agentManager.initialize(this);
+  }
+
   isInFallbackMode(): boolean {
     return this.inFallbackMode;
   }

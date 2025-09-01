@@ -19,7 +19,7 @@ import process from 'node:process';
 import { isGitRepository } from '../utils/gitUtils.js';
 import { MemoryTool, GEMINI_CONFIG_DIR } from '../tools/memoryTool.js';
 
-export function getCoreSystemPrompt(userMemory?: string): string {
+export function getCoreSystemPrompt(userMemory?: string, config?: any): string {
   // if GEMINI_SYSTEM_MD is set (and not 0|false), override system prompt from file
   // default path is .gemini/system.md but can be modified via custom path in GEMINI_SYSTEM_MD
   let systemMdEnabled = false;
@@ -292,7 +292,18 @@ Your core function is efficient and safe assistance. Balance extreme conciseness
       ? `\n\n---\n\n${userMemory.trim()}`
       : '';
 
-  return `${basePrompt}${memorySuffix}`;
+  // Add agent system prompt if available
+  let agentPromptSuffix = '';
+  if (config && config.getSystemPrompt) {
+    const agentPrompt = config.getSystemPrompt();
+    // Check if this is an agent-modified prompt (different from base)
+    if (agentPrompt && agentPrompt !== basePrompt && agentPrompt.includes('ACTIVE SPECIALIST AGENTS')) {
+      // Use the full agent-modified prompt instead of just appending
+      return agentPrompt;
+    }
+  }
+
+  return `${basePrompt}${memorySuffix}${agentPromptSuffix}`;
 }
 
 /**

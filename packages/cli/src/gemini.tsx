@@ -226,6 +226,18 @@ export async function main() {
     argv,
   );
 
+  // Initialize AgentManager with the config instance
+  try {
+    const { AgentManager } = await import('@ouroboros/ouroboros-code-core');
+    const agentManager = AgentManager.getInstance();
+    agentManager.initialize(config);
+  } catch (error) {
+    // AgentManager is optional, continue if not available
+    if (config.getDebugMode()) {
+      console.warn('AgentManager initialization failed:', error);
+    }
+  }
+
   const consolePatcher = new ConsolePatcher({
     stderr: true,
     debugMode: config.getDebugMode(),
