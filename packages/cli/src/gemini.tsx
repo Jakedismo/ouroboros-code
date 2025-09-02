@@ -272,6 +272,16 @@ export async function main() {
         'selectedAuthType',
         AuthType.CLOUD_SHELL,
       );
+    } else {
+      // For non-Gemini providers, set API key auth type to avoid Google login prompt
+      const currentProvider = config.getProvider();
+      if (currentProvider !== 'gemini') {
+        settings.setValue(
+          SettingScope.User,
+          'security.auth.selectedType',
+          AuthType.USE_GEMINI, // USE_GEMINI represents API key mode for all providers
+        );
+      }
     }
   }
   // Empty key causes issues with the GoogleGenAI package.
