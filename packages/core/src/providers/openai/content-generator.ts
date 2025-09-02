@@ -15,7 +15,6 @@ import type {
   ContentListUnion,
 } from '@google/genai';
 import type { ContentGenerator } from '../../core/contentGenerator.js';
-import type { Provider } from '../types.js';
 import { OpenAIProvider } from './index.js';
 
 /**
@@ -23,7 +22,7 @@ import { OpenAIProvider } from './index.js';
  * using the OpenAI Provider for actual API calls
  */
 export class OpenAIContentGenerator implements ContentGenerator {
-  private provider: Provider;
+  private provider: OpenAIProvider;
 
   constructor(private apiKey: string, private model: string = 'gpt-4o') {
     this.provider = new OpenAIProvider({
@@ -40,6 +39,7 @@ export class OpenAIContentGenerator implements ContentGenerator {
     const messages = this.convertToMessages(request.contents);
     
     try {
+      // Pass model to provider so it can filter parameters appropriately
       const response = await this.provider.generateCompletion(messages, {
         model: this.model,
         temperature: request.config?.temperature,
