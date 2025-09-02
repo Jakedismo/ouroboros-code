@@ -18,9 +18,11 @@ export const useAuthCommand = (
   setAuthError: (error: string | null) => void,
   config: Config,
 ) => {
-  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(
-    settings.merged.security?.auth?.selectedType === undefined,
-  );
+  // For non-Gemini providers, don't open auth dialog automatically
+  const currentProvider = config.getProvider();
+  const shouldOpenAuthDialog = settings.merged.security?.auth?.selectedType === undefined && currentProvider === 'gemini';
+  
+  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(shouldOpenAuthDialog);
 
   const openAuthDialog = useCallback(() => {
     setIsAuthDialogOpen(true);
@@ -31,7 +33,15 @@ export const useAuthCommand = (
   useEffect(() => {
     const authFlow = async () => {
       const authType = settings.merged.security?.auth?.selectedType;
+      const currentProvider = config.getProvider();
+      
       if (isAuthDialogOpen || !authType) {
+        return;
+      }
+
+      // For non-Gemini providers, skip authentication flow
+      if (currentProvider !== 'gemini') {
+        console.log(`Using ${currentProvider} provider with API key authentication.`);
         return;
       }
 
