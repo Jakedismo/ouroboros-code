@@ -44,7 +44,7 @@ export class OpenAIContentGenerator implements ContentGenerator {
         model: this.model,
         temperature: request.config?.temperature,
         maxTokens: request.config?.maxOutputTokens,
-      });
+      }, request.config?.tools); // Pass tools as separate parameter
 
       // Convert back to Gemini response format
       return {
@@ -84,7 +84,7 @@ export class OpenAIContentGenerator implements ContentGenerator {
           model: self.model,
           temperature: request.config?.temperature,
           maxTokens: request.config?.maxOutputTokens,
-        });
+        }, request.config?.tools); // Pass tools as separate parameter
 
         for await (const chunk of stream) {
           if (chunk.content) {

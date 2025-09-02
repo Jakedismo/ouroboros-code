@@ -6,12 +6,17 @@ export class OpenAIProvider implements Provider {
   private client: OpenAI;
   private defaultModel: string;
   
-  // Models that don't support temperature and max_tokens parameters
+  // Models that don't support temperature and max_tokens parameters at all
   private readonly modelsWithoutParams = new Set([
-    'gpt-5',
-    'o3',
-    'o4-mini',
     'codex-mini-latest',
+    // Add more models here as needed
+  ]);
+  
+  // Models that use max_completion_tokens instead of max_tokens
+  private readonly modelsWithMaxCompletionTokens = new Set([
+    'gpt-5',
+    'o3', 
+    'o4-mini',
     // Add more models here as needed
   ]);
   
@@ -38,6 +43,7 @@ export class OpenAIProvider implements Provider {
   ): AsyncIterable<StreamingResponse> {
     const model = options.model || this.defaultModel;
     const includeParams = this.shouldIncludeParams(model);
+    const useMaxCompletionTokens = this.modelsWithMaxCompletionTokens.has(model);
     
     // Build request parameters conditionally
     const requestParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
@@ -59,6 +65,22 @@ export class OpenAIProvider implements Provider {
       if (options.maxTokens !== undefined) {
         requestParams.max_tokens = options.maxTokens;
       }
+    }
+    
+    // Handle models that need max_completion_tokens instead
+    if (useMaxCompletionTokens) {
+      if (options.temperature !== undefined) {
+        requestParams.temperature = options.temperature;
+      } else {
+        requestParams.temperature = 0.7;
+      }
+      if (options.maxTokens !== undefined) {
+        requestParams.max_completion_tokens = options.maxTokens;
+      } else {
+        requestParams.max_completion_tokens = 25000; // Default 25k tokens
+      }
+      // Remove max_tokens if it was set above
+      delete requestParams.max_tokens;
     }
     
     // Add tools if provided
@@ -107,6 +129,7 @@ export class OpenAIProvider implements Provider {
   ): Promise<string> {
     const model = options.model || this.defaultModel;
     const includeParams = this.shouldIncludeParams(model);
+    const useMaxCompletionTokens = this.modelsWithMaxCompletionTokens.has(model);
     
     // Build request parameters conditionally
     const requestParams: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
@@ -127,6 +150,22 @@ export class OpenAIProvider implements Provider {
       if (options.maxTokens !== undefined) {
         requestParams.max_tokens = options.maxTokens;
       }
+    }
+    
+    // Handle models that need max_completion_tokens instead
+    if (useMaxCompletionTokens) {
+      if (options.temperature !== undefined) {
+        requestParams.temperature = options.temperature;
+      } else {
+        requestParams.temperature = 0.7;
+      }
+      if (options.maxTokens !== undefined) {
+        requestParams.max_completion_tokens = options.maxTokens;
+      } else {
+        requestParams.max_completion_tokens = 25000; // Default 25k tokens
+      }
+      // Remove max_tokens if it was set above
+      delete requestParams.max_tokens;
     }
     
     // Add tools if provided

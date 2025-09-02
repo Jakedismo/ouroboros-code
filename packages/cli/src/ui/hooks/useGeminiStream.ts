@@ -711,6 +711,8 @@ export const useGeminiStream = (
           if (selectionResult.showSelectionFeedback) {
             showSelectionFeedback = selectionResult.showSelectionFeedback;
             previousAgentState = selectionResult.previousAgentState;
+            // Show feedback immediately after selection, not after response
+            showSelectionFeedback();
           }
         } catch (error) {
           console.error('Automatic agent selection failed:', error);
@@ -773,10 +775,7 @@ export const useGeminiStream = (
           handleLoopDetectedEvent();
         }
 
-        // Show agent selection feedback after successful completion
-        if (showSelectionFeedback) {
-          showSelectionFeedback();
-        }
+        // Agent selection feedback was already shown immediately after selection
       } catch (error: unknown) {
         if (error instanceof UnauthorizedError) {
           onAuthError();
