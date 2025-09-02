@@ -29,10 +29,13 @@ export class ConversationOrchestrator {
   }
 
   /**
-   * Initialize the orchestrator with OpenAI API key for agent selection
+   * Initialize the orchestrator with provider configuration for agent selection
+   * @param provider - Provider type ('openai', 'anthropic', 'gemini') or legacy API key
+   * @param apiKey - API key if provider is specified
+   * @param model - Optional model override
    */
-  async initialize(openaiApiKey: string): Promise<void> {
-    await this.agentSelectorService.initialize(openaiApiKey);
+  async initialize(provider: string, apiKey?: string, model?: string): Promise<void> {
+    await this.agentSelectorService.initialize(provider, apiKey, model);
   }
 
   /**
@@ -66,29 +69,20 @@ export class ConversationOrchestrator {
       // Store current agent state for restoration
       const previousAgentState = this.agentManager.getActiveAgents().map(a => a.id);
 
-      // Stream agent selection process
-      const selectionStream = this.agentSelectorService.analyzeAndSelectAgentsStream(userPrompt);
+      // Use non-streaming method for reliable JSON parsing
+      // The streaming version was causing JSON parsing failures
+      const selectionResult = await this.agentSelectorService.analyzeAndSelectAgents(userPrompt);
       
-      let finalResult: any = null;
-
-      for await (const event of selectionStream) {
-        if (event.type === 'progress') {
-          yield { type: 'progress', message: event.message };
-        } else if (event.type === 'complete') {
-          finalResult = event;
-        }
-      }
-
-      if (finalResult && finalResult.selectedAgents.length > 0) {
+      if (selectionResult && selectionResult.selectedAgents.length > 0) {
         // Temporarily activate selected agents
         await this.agentSelectorService.temporarilyActivateAgents(
-          finalResult.selectedAgents
+          selectionResult.selectedAgents
         );
 
         yield {
           type: 'complete',
           shouldProceed: true,
-          selectionFeedback: finalResult,
+          selectionFeedback: selectionResult,
           previousAgentState,
         };
       } else {

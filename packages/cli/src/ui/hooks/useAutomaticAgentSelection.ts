@@ -30,15 +30,40 @@ export const useAutomaticAgentSelection = (
         
         const instance = ConversationOrchestrator.getInstance();
         
-        // Try to get OpenAI API key from config
-        const openaiApiKey = config.getOpenAIApiKey?.() || process.env['OPENAI_API_KEY'];
+        // Get current provider configuration
+        const currentProvider = config.getProvider?.() || 'gemini';
+        let apiKey: string | undefined;
+        let model: string | undefined;
         
-        if (openaiApiKey) {
-          await instance.initialize(openaiApiKey);
+        // Get API key based on current provider
+        switch (currentProvider) {
+          case 'openai':
+            apiKey = config.getOpenAIApiKey?.() || process.env['OPENAI_API_KEY'];
+            // Use gpt-5-nano for fast agent selection with OpenAI
+            model = 'gpt-5-nano';
+            break;
+          case 'anthropic':
+            // Use provider API key for Anthropic
+            apiKey = config.getProviderApiKey?.() || process.env['ANTHROPIC_API_KEY'];
+            // Use Haiku for fast agent selection with Anthropic
+            model = 'claude-3-5-haiku-20241022';
+            break;
+          case 'gemini':
+          default:
+            // Use provider API key for Gemini
+            apiKey = config.getProviderApiKey?.() || process.env['GEMINI_API_KEY'];
+            // Use Flash Thinking for agent selection with Gemini
+            model = 'gemini-2.0-flash-thinking-exp-1219';
+            break;
+        }
+        
+        if (apiKey) {
+          await instance.initialize(currentProvider, apiKey, model);
           setOrchestrator(instance);
           setIsInitialized(true);
+          console.log(`[AutoAgentSelection] Initialized with ${currentProvider} provider`);
         } else {
-          console.warn('OpenAI API key not available, automatic agent selection disabled');
+          console.warn(`${currentProvider} API key not available, automatic agent selection disabled`);
         }
       } catch (error) {
         console.error('Failed to initialize ConversationOrchestrator:', error);

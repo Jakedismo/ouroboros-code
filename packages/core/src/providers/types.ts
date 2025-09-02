@@ -18,6 +18,7 @@ export interface ProviderOptions {
   temperature?: number;
   maxTokens?: number;
   systemPrompt?: string;
+  response_format?: { type: 'json_object' | 'text' };
 }
 
 export interface StreamingResponse {

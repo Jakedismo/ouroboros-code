@@ -120,6 +120,11 @@ export class OpenAIProvider implements Provider {
       console.log('[OpenAI Provider] Converted tools:', JSON.stringify(requestParams.tools, null, 2));
     }
     
+    // Add response_format if specified (for forcing JSON output)
+    if (options.response_format) {
+      (requestParams as any).response_format = options.response_format;
+    }
+    
     const stream = await this.client.chat.completions.create(requestParams);
     
     for await (const chunk of stream) {
@@ -204,6 +209,11 @@ export class OpenAIProvider implements Provider {
     // Add tools if provided
     if (tools && tools.length > 0) {
       requestParams.tools = convertToOpenAITools(tools);
+    }
+    
+    // Add response_format if specified (for forcing JSON output)
+    if (options.response_format) {
+      (requestParams as any).response_format = options.response_format;
     }
     
     const response = await this.client.chat.completions.create(requestParams);

@@ -5,6 +5,9 @@
  */
 
 import { OpenAIProvider } from '../providers/openai/index.js';
+import { AnthropicProvider } from '../providers/anthropic/index.js';
+import { GeminiProvider } from '../providers/gemini/index.js';
+import type { Provider } from '../providers/types.js';
 import { AgentManager } from './agentManager.js';
 import { AGENT_PERSONAS, getAgentById, type AgentPersona } from './personas.js';
 
@@ -14,7 +17,7 @@ import { AGENT_PERSONAS, getAgentById, type AgentPersona } from './personas.js';
  */
 export class AgentSelectorService {
   private static instance: AgentSelectorService | null = null;
-  private selectorProvider: OpenAIProvider | null = null;
+  private selectorProvider: Provider | null = null;
   private agentManager: AgentManager | null = null;
   private isAutoModeActive = false;
   private selectionHistory: Array<{
@@ -35,17 +38,46 @@ export class AgentSelectorService {
   }
 
   /**
-   * Initialize the agent selector service
+   * Initialize the agent selector service with provider configuration
+   * @param provider - The provider type ('openai', 'anthropic', 'gemini')
+   * @param apiKey - The API key for the provider
+   * @param model - Optional model override for agent selection
    */
-  async initialize(openaiApiKey: string): Promise<void> {
-    if (!openaiApiKey) {
-      throw new Error('OpenAI API key is required for agent selection service');
+  async initialize(provider: string = 'openai', apiKey?: string, model?: string): Promise<void> {
+    // For backward compatibility, if provider is actually an API key string, treat it as OpenAI
+    if (provider && !['openai', 'anthropic', 'gemini'].includes(provider) && !apiKey) {
+      // Legacy call with just API key
+      apiKey = provider;
+      provider = 'openai';
     }
 
-    this.selectorProvider = new OpenAIProvider({
-      apiKey: openaiApiKey,
-      model: 'gpt-5-nano', // Fast, lightweight model for agent selection
-    });
+    if (!apiKey) {
+      throw new Error(`${provider} API key is required for agent selection service`);
+    }
+
+    // Create the appropriate provider instance
+    switch (provider) {
+      case 'openai':
+        this.selectorProvider = new OpenAIProvider({
+          apiKey,
+          model: model || 'gpt-5-nano', // Fast, lightweight model for agent selection
+        });
+        break;
+      case 'anthropic':
+        this.selectorProvider = new AnthropicProvider({
+          apiKey,
+          model: model || 'claude-3-5-haiku-20241022', // Haiku for fast agent selection
+        });
+        break;
+      case 'gemini':
+        this.selectorProvider = new GeminiProvider({
+          apiKey,
+          model: model || 'gemini-2.0-flash-thinking-exp-1219', // Flash thinking for reasoning
+        });
+        break;
+      default:
+        throw new Error(`Unsupported provider: ${provider}`);
+    }
 
     this.agentManager = AgentManager.getInstance();
   }
@@ -100,15 +132,24 @@ export class AgentSelectorService {
       // Show progress before making the selection
       yield { type: 'progress', message: '⚡ **Evaluating specialist expertise...**' };
       
+      // For OpenAI provider, we need to add response_format to ensure JSON output
+      const providerOptions: any = {
+        model: 'gpt-5-nano',
+        temperature: 0.1, // Low temperature for consistent selection
+        maxTokens: 300,
+      };
+      
+      // Add response_format for OpenAI to ensure JSON output
+      // This forces the model to output valid JSON
+      if (this.selectorProvider.name === 'OpenAI') {
+        providerOptions.response_format = { type: 'json_object' };
+      }
+      
       // Use generateCompletion for complete JSON response (non-streaming)
       const completeResponse = await this.selectorProvider.generateCompletion([
         { role: 'system', content: selectionPrompt },
         { role: 'user', content: userPrompt },
-      ], {
-        model: 'gpt-5-nano',
-        temperature: 0.1, // Low temperature for consistent selection
-        maxTokens: 300,
-      });
+      ], providerOptions);
 
       yield { type: 'progress', message: '✅ **Finalizing specialist selection...**' };
 
@@ -175,14 +216,26 @@ export class AgentSelectorService {
       const selectionPrompt = this.buildSelectionPrompt(userPrompt);
       
       // Query GPT-5-nano for agent selection
-      const response = await this.selectorProvider.generateCompletion([
-        { role: 'system', content: selectionPrompt },
-        { role: 'user', content: userPrompt },
-      ], {
+      const providerOptions: any = {
         model: 'gpt-5-nano',
         temperature: 0.1, // Low temperature for consistent selection
         maxTokens: 300,
-      });
+      };
+      
+      // Add response_format for OpenAI to ensure JSON output
+      if (this.selectorProvider.name === 'OpenAI') {
+        providerOptions.response_format = { type: 'json_object' };
+        console.log('[Agent Selector] Using JSON mode for OpenAI provider');
+      }
+      
+      console.log('[Agent Selector] Provider:', this.selectorProvider.name, 'Options:', providerOptions);
+      
+      const response = await this.selectorProvider.generateCompletion([
+        { role: 'system', content: selectionPrompt },
+        { role: 'user', content: userPrompt },
+      ], providerOptions);
+
+      console.log('[Agent Selector] Raw response:', response.substring(0, 200));
 
       // Parse the response
       const selection = this.parseSelectionResponse(response);
@@ -295,7 +348,7 @@ SELECTION CRITERIA:
 5. Consider the full context and intent, not just keywords
 
 OUTPUT FORMAT:
-Respond with ONLY valid JSON in this exact format, nothing else:
+You must respond with a valid JSON object containing these fields:
 {
   "agentIds": ["agent-id-1", "agent-id-2"],
   "reasoning": "Clear explanation of why these agents were selected",
@@ -303,7 +356,12 @@ Respond with ONLY valid JSON in this exact format, nothing else:
   "taskCategory": "category-name"
 }
 
-IMPORTANT: Your entire response must be valid JSON. Do not include any text before or after the JSON.
+CRITICAL: You MUST output valid JSON. The response will be parsed as JSON, so ensure:
+- agentIds is an array of strings (agent IDs from the list above)
+- reasoning is a string explaining your selection
+- confidence is a number between 0 and 1
+- taskCategory is an optional string
+- Do not include any text outside the JSON object
 
 EXAMPLES:
 User: "Optimize my React component rendering performance"
