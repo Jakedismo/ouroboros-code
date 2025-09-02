@@ -48,6 +48,7 @@ import { RadioButtonSelect } from './components/shared/RadioButtonSelect.js';
 import { Colors } from './colors.js';
 import { loadHierarchicalGeminiMemory } from '../config/config.js';
 import type { LoadedSettings } from '../config/settings.js';
+import type { GeminiClient } from '@ouroboros/ouroboros-code-core';
 import { SettingScope } from '../config/settings.js';
 import { Tips } from './components/Tips.js';
 import { ConsolePatcher } from './utils/ConsolePatcher.js';
@@ -220,6 +221,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const [showErrorDetails, setShowErrorDetails] = useState<boolean>(false);
   const [showToolDescriptions, setShowToolDescriptions] =
     useState<boolean>(false);
+  // Handle case where GeminiClient may not be initialized yet in interactive mode
+  const [geminiClient, setGeminiClient] = useState<GeminiClient | null>(null);
 
   const [ctrlCPressedOnce, setCtrlCPressedOnce] = useState(false);
   const [quittingMessages, setQuittingMessages] = useState<
@@ -349,12 +352,26 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
       settings.merged.security?.auth?.selectedType &&
       !settings.merged.security?.auth?.useExternal
     ) {
-      const error = validateAuthMethod(
-        settings.merged.security.auth.selectedType,
-      );
-      if (error) {
-        setAuthError(error);
-        openAuthDialog();
+      // For non-Gemini providers, skip traditional auth validation
+      const currentProvider = config.getProvider();
+      if (currentProvider === 'gemini') {
+        const error = validateAuthMethod(
+          settings.merged.security.auth.selectedType,
+        );
+        if (error) {
+          setAuthError(error);
+          openAuthDialog();
+        }
+      } else {
+        // For non-Gemini providers, verify API key is available
+        const apiKey = config.getProviderApiKey();
+        if (!apiKey) {
+          const envVarName = currentProvider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+          setAuthError(
+            `Please set ${envVarName} environment variable or use --${currentProvider}-api-key flag for ${currentProvider} provider authentication.`
+          );
+          openAuthDialog();
+        }
       }
     }
   }, [
@@ -362,15 +379,16 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     settings.merged.security?.auth?.useExternal,
     openAuthDialog,
     setAuthError,
+    config,
   ]);
 
   // Sync user tier from config when authentication changes
   useEffect(() => {
-    // Only sync when not currently authenticating
-    if (!isAuthenticating) {
-      setUserTier(config.getGeminiClient()?.getUserTier());
+    // Only sync when not currently authenticating and client is available
+    if (!isAuthenticating && geminiClient) {
+      setUserTier(geminiClient.getUserTier());
     }
-  }, [config, isAuthenticating]);
+  }, [config, isAuthenticating, geminiClient]);
 
   const {
     isEditorDialogOpen,
@@ -661,6 +679,15 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   // Stable reference for cancel handler to avoid circular dependency
   const cancelHandlerRef = useRef<() => void>(() => {});
 
+  // Create a placeholder GeminiClient if not ready yet to satisfy hook requirements
+  // The actual client will be set once authentication completes
+  const clientForHook = geminiClient || {
+    // Minimal mock to prevent crashes - these won't be called while loading
+    sendMessageStream: () => { throw new Error('GeminiClient not initialized'); },
+    getUserTier: () => undefined,
+    setHistory: () => {},
+  } as any;
+
   const {
     streamingState,
     submitQuery,
@@ -669,7 +696,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     thought,
     cancelOngoingRequest,
   } = useGeminiStream(
-    config.getGeminiClient(),
+    clientForHook,
     history,
     addItem,
     config,
@@ -998,7 +1025,21 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   }, [settings.merged.context?.fileName]);
 
   const initialPrompt = useMemo(() => config.getQuestion(), [config]);
-  const geminiClient = config.getGeminiClient();
+  useEffect(() => {
+    // Try to get GeminiClient when auth completes
+    if (!geminiClient && !isAuthenticating) {
+      try {
+        const client = config.getGeminiClient();
+        if (client) {
+          console.log('[App] Setting GeminiClient after auth completed');
+          setGeminiClient(client);
+        }
+      } catch (error) {
+        // Client not ready yet, will be set when auth completes
+        // The useAuthCommand hook will handle the auth flow
+      }
+    }
+  }, [config, geminiClient, isAuthenticating]);
 
   useEffect(() => {
     if (
@@ -1061,6 +1102,12 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   return (
     <StreamingContext.Provider value={streamingState}>
       <Box flexDirection="column" width="90%">
+        {!geminiClient ? (
+          <Box paddingTop={1}>
+            <Text color="yellow">Initializing {config.getProvider()} provider...</Text>
+          </Box>
+        ) : (
+          <>
             {/*
          * The Static component is an Ink intrinsic in which there can only be 1 per application.
          * Because of this restriction we're hacking it slightly by having a 'header' item here to
@@ -1458,6 +1505,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
             />
           )}
         </Box>
+          </>
+        )}
       </Box>
     </StreamingContext.Provider>
   );

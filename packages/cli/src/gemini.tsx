@@ -305,7 +305,9 @@ export async function main() {
     );
   }
 
+  console.log('[main] About to initialize config');
   await config.initialize();
+  console.log('[main] Config initialized');
 
   if (spinnerInstance) {
     // Small UX detail to show the completion message for a bit before unmounting.
@@ -343,13 +345,28 @@ export async function main() {
       ) {
         // Validate authentication here because the sandbox will interfere with the Oauth2 web redirect.
         try {
-          const err = validateAuthMethod(
-            settings.merged.security.auth.selectedType,
-          );
-          if (err) {
-            throw new Error(err);
+          // For non-Gemini providers, skip traditional auth validation
+          const currentProvider = config.getProvider();
+          if (currentProvider === 'gemini') {
+            const err = validateAuthMethod(
+              settings.merged.security.auth.selectedType,
+            );
+            if (err) {
+              throw new Error(err);
+            }
+          } else {
+            // For non-Gemini providers, verify API key is available
+            const apiKey = config.getProviderApiKey();
+            if (!apiKey) {
+              const envVarName = currentProvider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+              throw new Error(
+                `Please set ${envVarName} environment variable or use --${currentProvider}-api-key flag for ${currentProvider} provider authentication.`
+              );
+            }
           }
+          console.log('[main] About to call refreshAuth in sandbox mode');
           await config.refreshAuth(settings.merged.security.auth.selectedType);
+          console.log('[main] refreshAuth completed in sandbox mode');
         } catch (err) {
           console.error('Error authenticating:', err);
           process.exit(1);

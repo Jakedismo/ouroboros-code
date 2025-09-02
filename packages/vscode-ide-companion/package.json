@@ -2,7 +2,7 @@
   "name": "ouroboros-code-vscode-ide-companion",
   "displayName": "Ouroboros Code Companion",
   "description": "Enable Ouroboros Code with direct access to your IDE workspace.",
-  "version": "1.0.0-beta.4",
+  "version": "1.0.0-beta.5",
   "publisher": "google",
   "icon": "assets/icon.png",
   "repository": {

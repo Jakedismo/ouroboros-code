@@ -415,6 +415,8 @@ export class Config {
   }
 
   async refreshAuth(authMethod: AuthType) {
+    console.log(`[Config.refreshAuth] Called with authMethod: ${authMethod}, provider: ${this.getProvider()}`);
+    
     // Validate auth method for non-Gemini providers
     const currentProvider = this.getProvider();
     if (currentProvider !== 'gemini') {
@@ -436,14 +438,19 @@ export class Config {
     }
 
     // Create new content generator config (provider-aware logic is now in createContentGenerator)
+    console.log(`[Config.refreshAuth] Creating content generator config`);
     const newContentGeneratorConfig = createContentGeneratorConfig(
       this,
       authMethod,
     );
+    console.log(`[Config.refreshAuth] Content generator config created`);
 
     // Create and initialize new client in local variable first
+    console.log(`[Config.refreshAuth] Creating new GeminiClient`);
     const newGeminiClient = new GeminiClient(this);
+    console.log(`[Config.refreshAuth] About to initialize GeminiClient`);
     await newGeminiClient.initialize(newContentGeneratorConfig);
+    console.log(`[Config.refreshAuth] GeminiClient initialized`);
 
     // Vertex and Genai have incompatible encryption and sending history with
     // throughtSignature from Genai to Vertex will fail, we need to strip them
@@ -464,6 +471,7 @@ export class Config {
 
     // Reset the session flag since we're explicitly changing auth and using default model
     this.inFallbackMode = false;
+    console.log(`[Config.refreshAuth] Completed successfully`);
   }
 
   getSessionId(): string {

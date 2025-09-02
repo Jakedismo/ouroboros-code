@@ -738,6 +738,17 @@ export const useGeminiStream = (
       setInitError(null);
 
       try {
+        console.log('[useGeminiStream] About to call sendMessageStream');
+        console.log('[useGeminiStream] geminiClient exists:', !!geminiClient);
+        console.log('[useGeminiStream] sendMessageStream exists:', !!geminiClient?.sendMessageStream);
+        
+        if (!geminiClient) {
+          throw new Error('GeminiClient is undefined in useGeminiStream');
+        }
+        if (!geminiClient.sendMessageStream) {
+          throw new Error('sendMessageStream method is undefined on GeminiClient');
+        }
+        
         const stream = geminiClient.sendMessageStream(
           queryToSend,
           abortSignal,

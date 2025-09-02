@@ -55,10 +55,13 @@ export async function validateNonInteractiveAuth(
   }
 
   if (!useExternalAuth) {
-    const err = validateAuthMethod(effectiveAuthType);
-    if (err != null) {
-      console.error(err);
-      process.exit(1);
+    // For non-Gemini providers, skip traditional auth validation since we already verified API keys above
+    if (currentProvider === 'gemini') {
+      const err = validateAuthMethod(effectiveAuthType);
+      if (err != null) {
+        console.error(err);
+        process.exit(1);
+      }
     }
   }
 

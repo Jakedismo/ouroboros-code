@@ -39,16 +39,21 @@ export const useAuthCommand = (
         return;
       }
 
-      // For non-Gemini providers, skip authentication flow
-      if (currentProvider !== 'gemini') {
-        console.log(`Using ${currentProvider} provider with API key authentication.`);
-        return;
-      }
-
       try {
         setIsAuthenticating(true);
-        await config.refreshAuth(authType);
-        console.log(`Authenticated via "${authType}".`);
+        
+        // For non-Gemini providers, still need to call refreshAuth to create GeminiClient
+        if (currentProvider !== 'gemini') {
+          console.log(`[useAuthCommand] Using ${currentProvider} provider with API key authentication.`);
+          console.log(`[useAuthCommand] About to call refreshAuth for ${currentProvider}`);
+          // Use USE_GEMINI auth type for API key-based authentication
+          await config.refreshAuth(AuthType.USE_GEMINI);
+          console.log(`[useAuthCommand] ${currentProvider} provider initialized with API key authentication.`);
+        } else {
+          console.log(`[useAuthCommand] About to call refreshAuth for Gemini with authType: ${authType}`);
+          await config.refreshAuth(authType);
+          console.log(`[useAuthCommand] Authenticated via "${authType}".`);
+        }
       } catch (e) {
         setAuthError(`Failed to login. Message: ${getErrorMessage(e)}`);
         openAuthDialog();
