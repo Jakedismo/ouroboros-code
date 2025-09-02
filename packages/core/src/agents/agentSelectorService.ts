@@ -97,7 +97,11 @@ export class AgentSelectorService {
       yield { type: 'progress', message: '🧠 **AI reasoning about optimal specialist combination...**' };
       
       // Stream the GPT-5-nano agent selection process
-      const responseStream = this.selectorProvider.generateResponse([
+      // Show progress before making the selection
+      yield { type: 'progress', message: '⚡ **Evaluating specialist expertise...**' };
+      
+      // Use generateCompletion for complete JSON response (non-streaming)
+      const completeResponse = await this.selectorProvider.generateCompletion([
         { role: 'system', content: selectionPrompt },
         { role: 'user', content: userPrompt },
       ], {
@@ -106,30 +110,10 @@ export class AgentSelectorService {
         maxTokens: 300,
       });
 
-      let accumulatedResponse = '';
-      let reasoningShown = false;
-
-      for await (const chunk of responseStream) {
-        if (chunk.content) {
-          accumulatedResponse += chunk.content;
-          
-          // Show progressive reasoning if we detect reasoning patterns
-          if (!reasoningShown && (
-            accumulatedResponse.includes('reasoning') || 
-            accumulatedResponse.includes('because') || 
-            accumulatedResponse.includes('best suited') ||
-            accumulatedResponse.length > 50
-          )) {
-            yield { type: 'progress', message: '⚡ **Evaluating specialist expertise...**' };
-            reasoningShown = true;
-          }
-        }
-      }
-
       yield { type: 'progress', message: '✅ **Finalizing specialist selection...**' };
 
       // Parse the complete response
-      const selection = this.parseSelectionResponse(accumulatedResponse);
+      const selection = this.parseSelectionResponse(completeResponse);
       const selectedAgents = selection.agentIds
         .map(id => getAgentById(id))
         .filter(Boolean) as AgentPersona[];
@@ -310,13 +294,16 @@ SELECTION CRITERIA:
 4. For ambiguous requests, favor general-purpose agents like systems-architect
 5. Consider the full context and intent, not just keywords
 
-OUTPUT FORMAT (JSON):
+OUTPUT FORMAT:
+Respond with ONLY valid JSON in this exact format, nothing else:
 {
   "agentIds": ["agent-id-1", "agent-id-2"],
   "reasoning": "Clear explanation of why these agents were selected",
   "confidence": 0.8,
   "taskCategory": "category-name"
 }
+
+IMPORTANT: Your entire response must be valid JSON. Do not include any text before or after the JSON.
 
 EXAMPLES:
 User: "Optimize my React component rendering performance"
@@ -343,32 +330,74 @@ Select the most appropriate agents for this user request:`;
     confidence: number;
     taskCategory?: string;
   } {
+    // Clean the response - trim whitespace and remove potential markdown formatting
+    let cleanedResponse = response.trim();
+    
+    // Try to extract JSON if wrapped in markdown code blocks
+    const codeBlockMatch = cleanedResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch) {
+      cleanedResponse = codeBlockMatch[1];
+    }
+    
+    // Try to find JSON object in the response
+    const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleanedResponse = jsonMatch[0];
+    }
+    
     try {
       // Try to parse JSON response
-      const parsed = JSON.parse(response);
+      const parsed = JSON.parse(cleanedResponse);
+      
+      // Validate and extract fields with defaults
+      const agentIds = Array.isArray(parsed.agentIds) ? parsed.agentIds.filter((id: any) => typeof id === 'string') : [];
+      
+      if (agentIds.length === 0) {
+        throw new Error('No valid agent IDs found in JSON response');
+      }
       
       return {
-        agentIds: Array.isArray(parsed.agentIds) ? parsed.agentIds : [],
-        reasoning: parsed.reasoning || 'No reasoning provided',
-        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
+        agentIds: agentIds,
+        reasoning: parsed.reasoning || 'Agent selection completed',
+        confidence: typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0.75,
         taskCategory: parsed.taskCategory,
       };
     } catch (error) {
-      // Fallback parsing for non-JSON responses
-      console.warn('Failed to parse JSON response, attempting text parsing:', error);
+      // Enhanced fallback parsing for non-JSON responses
+      console.warn('Failed to parse JSON response, attempting enhanced text parsing');
+      console.debug('Parse error:', error);
+      console.debug('Raw response (first 300 chars):', response.substring(0, 300));
       
-      // Look for agent IDs in the response text
+      // Look for agent IDs mentioned in the text
       const agentIds: string[] = [];
+      const responseLower = response.toLowerCase();
+      
+      // First, try to find exact agent IDs
       for (const agent of AGENT_PERSONAS) {
-        if (response.toLowerCase().includes(agent.id)) {
+        // Check for exact ID match or agent name mention
+        if (responseLower.includes(agent.id.toLowerCase()) || 
+            responseLower.includes(agent.name.toLowerCase().replace(' specialist', '').replace(' engineer', ''))) {
           agentIds.push(agent.id);
+        }
+      }
+      
+      // If still no agents, look for specialty keywords
+      if (agentIds.length === 0) {
+        const words = responseLower.split(/\s+/);
+        for (const agent of AGENT_PERSONAS) {
+          const specialtyKeywords = agent.specialties.join(' ').toLowerCase().split(/\s+/);
+          if (words.some(word => specialtyKeywords.includes(word) && word.length > 4)) {
+            agentIds.push(agent.id);
+            if (agentIds.length >= 2) break;
+          }
         }
       }
 
       return {
-        agentIds: agentIds.slice(0, 3), // Limit to 3 agents
-        reasoning: 'Parsed from text response due to JSON parsing failure',
+        agentIds: agentIds.length > 0 ? agentIds.slice(0, 3) : ['systems-architect'], // Default to systems-architect if nothing found
+        reasoning: 'Parsed from text response due to JSON formatting issue',
         confidence: 0.3,
+        taskCategory: undefined,
       };
     }
   }
