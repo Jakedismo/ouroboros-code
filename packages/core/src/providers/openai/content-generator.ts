@@ -196,26 +196,48 @@ export class OpenAIContentGenerator implements ContentGenerator {
       return [{ role: 'user', content: contents }];
     }
 
-    // Handle array of parts
-    if (Array.isArray(contents) && contents.length > 0 && typeof contents[0] === 'object' && 'text' in contents[0]) {
-      // This is Part[]
-      const text = contents.map(part => (part as any).text || '').join('');
-      return [{ role: 'user', content: text }];
+    if (!Array.isArray(contents)) {
+      throw new Error('Contents must be string or array');
     }
 
-    // Handle Content[]
-    const contentArray = contents as Content[];
-    return contentArray.map(content => {
-      const role = content.role === 'user' ? 'user' : content.role === 'model' ? 'assistant' : 'system';
-      const text = content.parts?.map(part => {
-        if ((part as any).text) {
-          return (part as any).text;
-        }
-        // Handle other part types as needed
-        return JSON.stringify(part);
-      }).join('') || '';
+    const messages: Array<{role: 'user' | 'assistant' | 'system', content: string}> = [];
 
-      return { role, content: text };
-    });
+    // Process each item in the array
+    for (const item of contents) {
+      if (typeof item === 'string') {
+        // Raw string - treat as user message
+        messages.push({ role: 'user', content: item });
+      } else if (item && typeof item === 'object') {
+        if ('role' in item && 'parts' in item) {
+          // This is a Content object
+          const content = item as Content;
+          const role = content.role === 'user' ? 'user' : content.role === 'model' ? 'assistant' : 'system';
+          const text = content.parts?.map(part => {
+            if ((part as any).text) {
+              return (part as any).text;
+            }
+            // Handle other part types safely
+            if ((part as any).functionCall || (part as any).functionResponse) {
+              // Don't stringify function calls/responses, they should be handled separately
+              return '';
+            }
+            // For other part types, try to extract meaningful content
+            return String(part);
+          }).join('') || '';
+
+          if (text.trim()) {
+            messages.push({ role, content: text });
+          }
+        } else if ('text' in item) {
+          // This is a Part object - treat as user message
+          const text = (item as any).text || '';
+          if (text.trim()) {
+            messages.push({ role: 'user', content: text });
+          }
+        }
+      }
+    }
+
+    return messages;
   }
 }
