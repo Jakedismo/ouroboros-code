@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { OpenAIProvider } from '../providers/openai/index.js';
-import { AnthropicProvider } from '../providers/anthropic/index.js';
-import { GeminiProvider } from '../providers/gemini/index.js';
+import type { ContentGenerator } from '../core/contentGenerator.js';
 import type { Provider } from '../providers/types.js';
 import { AgentManager } from './agentManager.js';
 import { AGENT_PERSONAS, getAgentById, type AgentPersona } from './personas.js';
@@ -18,7 +16,9 @@ import { AGENT_PERSONAS, getAgentById, type AgentPersona } from './personas.js';
 export class AgentSelectorService {
   private static instance: AgentSelectorService | null = null;
   private selectorProvider: Provider | null = null;
+  private contentGenerator: ContentGenerator | null = null;
   private agentManager: AgentManager | null = null;
+  private selectedModel: string | null = null;
   private isAutoModeActive = false;
   private selectionHistory: Array<{
     prompt: string;
@@ -35,6 +35,22 @@ export class AgentSelectorService {
       AgentSelectorService.instance = new AgentSelectorService();
     }
     return AgentSelectorService.instance;
+  }
+
+  /**
+   * Get default model for the specified provider
+   */
+  private getDefaultModel(provider: string): string {
+    switch (provider) {
+      case 'openai':
+        return 'gpt-4o'; // Use working model instead of gpt-5-nano
+      case 'anthropic':
+        return 'claude-3-5-haiku-20241022';
+      case 'gemini':
+        return 'gemini-2.0-flash-thinking-exp-1219';
+      default:
+        throw new Error(`Unsupported provider: ${provider}`);
+    }
   }
 
   /**
@@ -55,29 +71,25 @@ export class AgentSelectorService {
       throw new Error(`${provider} API key is required for agent selection service`);
     }
 
-    // Create the appropriate provider instance
-    switch (provider) {
-      case 'openai':
-        this.selectorProvider = new OpenAIProvider({
-          apiKey,
-          model: model || 'gpt-5-nano', // Fast, lightweight model for agent selection
-        });
-        break;
-      case 'anthropic':
-        this.selectorProvider = new AnthropicProvider({
-          apiKey,
-          model: model || 'claude-3-5-haiku-20241022', // Haiku for fast agent selection
-        });
-        break;
-      case 'gemini':
-        this.selectorProvider = new GeminiProvider({
-          apiKey,
-          model: model || 'gemini-2.0-flash-thinking-exp-1219', // Flash thinking for reasoning
-        });
-        break;
-      default:
-        throw new Error(`Unsupported provider: ${provider}`);
+    // Create ContentGenerator instance based on provider
+    this.selectedModel = model || this.getDefaultModel(provider);
+    
+    if (provider === 'openai') {
+      const { OpenAIContentGenerator } = await import('../providers/openai/content-generator.js');
+      this.contentGenerator = new OpenAIContentGenerator(apiKey, this.selectedModel);
+    } else if (provider === 'anthropic') {
+      const { AnthropicContentGenerator } = await import('../providers/anthropic/content-generator.js');
+      this.contentGenerator = new AnthropicContentGenerator(apiKey, this.selectedModel);
+    } else if (provider === 'gemini') {
+      // For Gemini, we'd need to create a proper Gemini ContentGenerator
+      // For now, fallback to a mock implementation
+      throw new Error('Gemini provider not yet supported in agent selection');
+    } else {
+      throw new Error(`Unsupported provider: ${provider}`);
     }
+    
+    // Keep the provider reference for backwards compatibility
+    this.selectorProvider = (this.contentGenerator as any).provider;
 
     this.agentManager = AgentManager.getInstance();
   }
@@ -149,7 +161,7 @@ export class AgentSelectorService {
     console.log('[AgentSelector] DEBUG - analyzeAndSelectAgents (NON-STREAMING) called');
     const startTime = Date.now();
 
-    if (!this.isAutoModeActive || !this.selectorProvider) {
+    if (!this.isAutoModeActive || !this.contentGenerator) {
       return {
         selectedAgents: [],
         reasoning: 'Auto mode disabled or service not initialized',
@@ -169,17 +181,33 @@ export class AgentSelectorService {
       };
       
       // Add response_format for OpenAI to ensure JSON output
-      if (this.selectorProvider.name === 'OpenAI') {
+      if (this.selectorProvider?.name === 'OpenAI') {
         providerOptions.response_format = { type: 'json_object' };
         console.log('[Agent Selector] Using JSON mode for OpenAI provider');
       }
       
-      console.log('[Agent Selector] Provider:', this.selectorProvider.name, 'Options:', providerOptions);
+      console.log('[Agent Selector] Provider:', this.selectorProvider?.name || 'Unknown', 'Options:', providerOptions);
       
-      const response = await this.selectorProvider.generateCompletion([
-        { role: 'system', content: selectionPrompt },
-        { role: 'user', content: userPrompt },
-      ], providerOptions);
+      // Use ContentGenerator instead of direct provider call
+      // Convert messages to Gemini format that ContentGenerator expects
+      const geminiContent = [
+        {
+          role: 'user',
+          parts: [{ text: `${selectionPrompt}\n\nUser prompt: ${userPrompt}` }]
+        }
+      ];
+
+      const contentGenResponse = await this.contentGenerator.generateContent({
+        model: this.selectedModel || 'gpt-4o',
+        contents: geminiContent,
+        config: {
+          temperature: providerOptions.temperature,
+          maxOutputTokens: providerOptions.maxTokens,
+          ...(providerOptions.response_format && { response_format: providerOptions.response_format })
+        }
+      }, 'agent-selection');
+
+      const response = contentGenResponse.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
       console.log('[Agent Selector] Raw response:', response.substring(0, 200));
 
