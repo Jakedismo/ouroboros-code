@@ -162,9 +162,8 @@ export class AgentSelectorService {
       // Create the agent selection prompt
       const selectionPrompt = this.buildSelectionPrompt(userPrompt);
       
-      // Query GPT-5-nano for agent selection
+      // Query the configured model for agent selection
       const providerOptions: any = {
-        model: 'gpt-5-nano',
         temperature: 0.1, // Low temperature for consistent selection
         maxTokens: 300,
       };
