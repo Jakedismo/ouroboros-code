@@ -42,9 +42,9 @@ export async function validateNonInteractiveAuth(
       process.exit(1);
     }
     
-    // Skip Gemini auth validation for non-Gemini providers
-    // These providers handle authentication through their own ContentGenerator implementations
-    return nonInteractiveConfig;
+    // For non-Gemini providers, use API key authentication but still initialize GeminiClient
+    // The GeminiClient acts as a universal interface that can work with all providers
+    effectiveAuthType = AuthType.USE_GEMINI; // This represents API key authentication for all providers
   }
 
   if (!effectiveAuthType) {
