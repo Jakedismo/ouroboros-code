@@ -291,9 +291,12 @@ export class Turn {
       }
 
       const contextForReport = [...this.chat.getHistory(/*curated*/ true), req];
+      // Get the current provider name from the chat's config
+      const providerName = (this.chat as any).config?.getProvider?.() || 'Gemini';
+      const providerDisplayName = providerName.charAt(0).toUpperCase() + providerName.slice(1);
       await reportError(
         error,
-        'Error when talking to Gemini API',
+        `Error when talking to ${providerDisplayName} API`,
         contextForReport,
         'Turn.run-sendMessageStream',
       );

@@ -30,7 +30,15 @@ export async function reportError(
   reportingDir = os.tmpdir(), // for testing
 ): Promise<void> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const reportFileName = `gemini-client-error-${type}-${timestamp}.json`;
+  // Extract provider name from baseMessage if it contains "Error when talking to X API"
+  let providerPrefix = 'ai-client';
+  const providerMatch = baseMessage.match(/Error when talking to (\w+) API/);
+  if (providerMatch) {
+    providerPrefix = providerMatch[1].toLowerCase() + '-client';
+  } else if (baseMessage.includes('Gemini')) {
+    providerPrefix = 'gemini-client';
+  }
+  const reportFileName = `${providerPrefix}-error-${type}-${timestamp}.json`;
   const reportPath = path.join(reportingDir, reportFileName);
 
   let errorToReport: { message: string; stack?: string };
