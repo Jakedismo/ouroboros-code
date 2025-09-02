@@ -159,6 +159,7 @@ export const useGeminiStream = (
 
   const {
     processPromptWithAutoSelection,
+    processPromptWithAutoSelectionStream,
     restorePreviousAgentState,
     isAutoModeEnabled,
   } = useAutomaticAgentSelection(config, addItem);
@@ -695,7 +696,7 @@ export const useGeminiStream = (
         prompt_id = config.getSessionId() + '########' + getPromptCount();
       }
 
-      // Handle automatic agent selection for new queries (not continuations)
+      // Handle automatic agent selection for new queries (not continuations) with streaming
       let previousAgentState: string[] | undefined;
       let showSelectionFeedback: (() => void) | undefined;
       
@@ -706,16 +707,25 @@ export const useGeminiStream = (
             ? query.map(part => typeof part === 'string' ? part : (part as any).text || '').join(' ')
             : typeof query === 'string' ? query : (query as any).text || '';
           
-          const selectionResult = await processPromptWithAutoSelection(queryText);
+          // Stream the agent selection process with progressive feedback
+          const selectionStream = processPromptWithAutoSelectionStream(queryText);
           
-          if (selectionResult.showSelectionFeedback) {
-            showSelectionFeedback = selectionResult.showSelectionFeedback;
-            previousAgentState = selectionResult.previousAgentState;
-            // Show feedback immediately after selection, not after response
-            showSelectionFeedback();
+          for await (const event of selectionStream) {
+            if (event.type === 'progress') {
+              // Progress messages are already shown by the stream
+              continue;
+            } else if (event.type === 'complete') {
+              if (event.showSelectionFeedback) {
+                showSelectionFeedback = event.showSelectionFeedback;
+                previousAgentState = event.previousAgentState;
+                // Show final selection feedback immediately
+                showSelectionFeedback();
+              }
+              break;
+            }
           }
         } catch (error) {
-          console.error('Automatic agent selection failed:', error);
+          console.error('Streaming agent selection failed:', error);
           // Continue with normal processing if agent selection fails
         }
       }
@@ -750,12 +760,61 @@ export const useGeminiStream = (
         if (!geminiClient.sendMessageStream) {
           throw new Error('sendMessageStream method is undefined on GeminiClient');
         }
+
+        // Show immediate thinking feedback for selected provider
+        const currentProvider = config.getProvider();
+        const providerEmojis = {
+          gemini: '🧠',
+          openai: '🤖', 
+          anthropic: '🔮'
+        };
+        const providerNames = {
+          gemini: 'Gemini',
+          openai: 'OpenAI',
+          anthropic: 'Anthropic'
+        };
+        
+        addItem(
+          {
+            type: MessageType.INFO,
+            text: `${providerEmojis[currentProvider] || '🤔'} **${providerNames[currentProvider] || config.getModel()} is thinking deeply about your request...**`,
+          },
+          userMessageTimestamp,
+        );
+
+        // Advanced thinking progress with timeout-based updates
+        const thinkingProgressInterval = setInterval(() => {
+          if (abortSignal.aborted) {
+            clearInterval(thinkingProgressInterval);
+            return;
+          }
+          
+          const advancedMessages = [
+            `💭 **Analyzing context and requirements...**`,
+            `🔍 **Considering multiple solution approaches...**`, 
+            `⚡ **Optimizing response quality...**`,
+            `🎯 **Preparing comprehensive answer...**`
+          ];
+          
+          const randomMessage = advancedMessages[Math.floor(Math.random() * advancedMessages.length)];
+          addItem(
+            {
+              type: MessageType.INFO,
+              text: randomMessage,
+            },
+            Date.now(),
+          );
+        }, 3000); // Show progress every 3 seconds during thinking
         
         const stream = geminiClient.sendMessageStream(
           queryToSend,
           abortSignal,
           prompt_id!,
         );
+        
+        // Clear the thinking progress once streaming starts
+        clearInterval(thinkingProgressInterval);
+        
         const processingStatus = await processGeminiStreamEvents(
           stream,
           userMessageTimestamp,

@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import type { Message, Provider, ProviderOptions, StreamingResponse, ToolCall } from '../types.js';
+import { convertToOpenAITools } from './tool-adapter.js';
 
 export class OpenAIProvider implements Provider {
   name = 'OpenAI';
@@ -15,9 +16,21 @@ export class OpenAIProvider implements Provider {
   // Models that use max_completion_tokens instead of max_tokens
   private readonly modelsWithMaxCompletionTokens = new Set([
     'gpt-5',
+    'gpt-5-nano',
     'o3', 
     'o4-mini',
     // Add more models here as needed
+  ]);
+  
+  // Models that only support default temperature (don't support custom temperature)
+  private readonly modelsWithDefaultTemperatureOnly = new Set([
+    'gpt-5',
+    'gpt-5-nano',
+    'o3',
+    'o3-mini', 
+    'o3-pro',
+    'o4-mini',
+    // Add more reasoning models here as needed
   ]);
   
   constructor(options: ProviderOptions = {}) {
@@ -36,6 +49,15 @@ export class OpenAIProvider implements Provider {
     return shouldInclude;
   }
   
+  private supportsCustomTemperature(model: string): boolean {
+    // Check if the model supports custom temperature values
+    const supportsCustomTemp = !this.modelsWithDefaultTemperatureOnly.has(model);
+    if (!supportsCustomTemp) {
+      console.log(`[OpenAI] Model ${model} only supports default temperature (1), excluding custom temperature from request`);
+    }
+    return supportsCustomTemp;
+  }
+  
   async *generateResponse(
     messages: Message[],
     options: ProviderOptions = {},
@@ -44,6 +66,7 @@ export class OpenAIProvider implements Provider {
     const model = options.model || this.defaultModel;
     const includeParams = this.shouldIncludeParams(model);
     const useMaxCompletionTokens = this.modelsWithMaxCompletionTokens.has(model);
+    const supportsCustomTemp = this.supportsCustomTemperature(model);
     
     // Build request parameters conditionally
     const requestParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
@@ -55,13 +78,17 @@ export class OpenAIProvider implements Provider {
       stream: true,
     };
     
-    // Only add temperature and max_tokens for models that support them
-    if (includeParams) {
+    // Add temperature only for models that support custom temperature
+    if (includeParams && supportsCustomTemp) {
       if (options.temperature !== undefined) {
         requestParams.temperature = options.temperature;
       } else {
         requestParams.temperature = 0.7;
       }
+    }
+    
+    // Add max_tokens only for models that support it (non-max_completion_tokens models)
+    if (includeParams && !useMaxCompletionTokens) {
       if (options.maxTokens !== undefined) {
         requestParams.max_tokens = options.maxTokens;
       }
@@ -69,10 +96,13 @@ export class OpenAIProvider implements Provider {
     
     // Handle models that need max_completion_tokens instead
     if (useMaxCompletionTokens) {
-      if (options.temperature !== undefined) {
-        requestParams.temperature = options.temperature;
-      } else {
-        requestParams.temperature = 0.7;
+      // Only add temperature for models that support custom temperature
+      if (supportsCustomTemp) {
+        if (options.temperature !== undefined) {
+          requestParams.temperature = options.temperature;
+        } else {
+          requestParams.temperature = 0.7;
+        }
       }
       if (options.maxTokens !== undefined) {
         requestParams.max_completion_tokens = options.maxTokens;
@@ -85,14 +115,9 @@ export class OpenAIProvider implements Provider {
     
     // Add tools if provided
     if (tools && tools.length > 0) {
-      requestParams.tools = tools.map(tool => ({
-        type: 'function' as const,
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters,
-        },
-      }));
+      console.log('[OpenAI Provider] Tools before conversion:', JSON.stringify(tools, null, 2));
+      requestParams.tools = convertToOpenAITools(tools);
+      console.log('[OpenAI Provider] Converted tools:', JSON.stringify(requestParams.tools, null, 2));
     }
     
     const stream = await this.client.chat.completions.create(requestParams);
@@ -130,6 +155,7 @@ export class OpenAIProvider implements Provider {
     const model = options.model || this.defaultModel;
     const includeParams = this.shouldIncludeParams(model);
     const useMaxCompletionTokens = this.modelsWithMaxCompletionTokens.has(model);
+    const supportsCustomTemp = this.supportsCustomTemperature(model);
     
     // Build request parameters conditionally
     const requestParams: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
@@ -140,13 +166,17 @@ export class OpenAIProvider implements Provider {
       })),
     };
     
-    // Only add temperature and max_tokens for models that support them
-    if (includeParams) {
+    // Add temperature only for models that support custom temperature
+    if (includeParams && supportsCustomTemp) {
       if (options.temperature !== undefined) {
         requestParams.temperature = options.temperature;
       } else {
         requestParams.temperature = 0.7;
       }
+    }
+    
+    // Add max_tokens only for models that support it (non-max_completion_tokens models)
+    if (includeParams && !useMaxCompletionTokens) {
       if (options.maxTokens !== undefined) {
         requestParams.max_tokens = options.maxTokens;
       }
@@ -154,10 +184,13 @@ export class OpenAIProvider implements Provider {
     
     // Handle models that need max_completion_tokens instead
     if (useMaxCompletionTokens) {
-      if (options.temperature !== undefined) {
-        requestParams.temperature = options.temperature;
-      } else {
-        requestParams.temperature = 0.7;
+      // Only add temperature for models that support custom temperature
+      if (supportsCustomTemp) {
+        if (options.temperature !== undefined) {
+          requestParams.temperature = options.temperature;
+        } else {
+          requestParams.temperature = 0.7;
+        }
       }
       if (options.maxTokens !== undefined) {
         requestParams.max_completion_tokens = options.maxTokens;
@@ -170,14 +203,7 @@ export class OpenAIProvider implements Provider {
     
     // Add tools if provided
     if (tools && tools.length > 0) {
-      requestParams.tools = tools.map(tool => ({
-        type: 'function' as const,
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters,
-        },
-      }));
+      requestParams.tools = convertToOpenAITools(tools);
     }
     
     const response = await this.client.chat.completions.create(requestParams);

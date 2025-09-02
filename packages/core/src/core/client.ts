@@ -51,9 +51,60 @@ import {
 } from '../telemetry/types.js';
 import type { IdeContext, File } from '../ide/ideContext.js';
 
-function isThinkingSupported(model: string) {
-  if (model.startsWith('gemini-2.5')) return true;
+function isThinkingSupported(model: string, provider: string) {
+  // Enable thinking for supported models across all providers
+  if (provider === 'gemini' && model.startsWith('gemini-2.5')) return true;
+  if (provider === 'openai' && (model.startsWith('gpt-5') || model.startsWith('o3') || model.startsWith('o4'))) return true;
+  if (provider === 'anthropic' && (model.startsWith('claude-') || model.includes('opus') || model.includes('sonnet'))) return true;
   return false;
+}
+
+function getThinkingConfig(provider: string, optimizeForStreaming: boolean = false): any {
+  if (optimizeForStreaming) {
+    // Streaming-optimized thinking configs for faster response start
+    switch (provider) {
+      case 'gemini':
+        return {
+          thinkingBudget: 2000, // Limited budget for faster streaming
+          includeThoughts: true,
+        };
+      case 'openai':
+        return {
+          reasoning_effort: 'medium', // Balanced effort for streaming
+          includeThoughts: true,
+        };
+      case 'anthropic':
+        return {
+          budget_tokens: 8000, // Reduced budget for faster streaming
+          includeThoughts: true,
+        };
+      default:
+        return {};
+    }
+  }
+  
+  // High-quality thinking configs (original)
+  switch (provider) {
+    case 'gemini':
+      return {
+        thinkingBudget: -1,
+        includeThoughts: true,
+      };
+    case 'openai':
+      // OpenAI uses reasoning_effort for thinking
+      return {
+        reasoning_effort: 'high',
+        includeThoughts: true,
+      };
+    case 'anthropic':
+      // Anthropic uses budget_tokens for thinking
+      return {
+        budget_tokens: 64000,
+        includeThoughts: true,
+      };
+    default:
+      return {};
+  }
 }
 
 /**
@@ -245,15 +296,20 @@ export class GeminiClient {
     try {
       const userMemory = this.config.getUserMemory();
       const systemInstruction = getCoreSystemPrompt(userMemory, this.config);
+      const currentProvider = this.config.getProvider();
+      const currentModel = this.config.getModel();
+      
+      // Check if agents are active to optimize thinking for streaming responsiveness
+      // For now, we'll optimize thinking for better streaming by default when supported
+      const optimizeForStreaming = true; // TODO: Implement proper agent detection
+      
       const generateContentConfigWithThinking = isThinkingSupported(
-        this.config.getModel(),
+        currentModel,
+        currentProvider,
       )
         ? {
             ...this.generateContentConfig,
-            thinkingConfig: {
-              thinkingBudget: -1,
-              includeThoughts: true,
-            },
+            thinkingConfig: getThinkingConfig(currentProvider, optimizeForStreaming),
           }
         : this.generateContentConfig;
       return new GeminiChat(
@@ -542,6 +598,7 @@ export class GeminiClient {
         this.getChat(),
         this,
         signal,
+        this.config,
       );
       logNextSpeakerCheck(
         this.config,

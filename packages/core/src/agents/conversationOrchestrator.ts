@@ -36,7 +36,72 @@ export class ConversationOrchestrator {
   }
 
   /**
-   * Process a user prompt with automatic agent selection if enabled
+   * Process a user prompt with streaming agent selection
+   */
+  async *processPromptWithAutoSelectionStream(userPrompt: string): AsyncGenerator<{
+    type: 'progress' | 'complete';
+    message?: string;
+    shouldProceed?: boolean;
+    selectionFeedback?: {
+      selectedAgents: AgentPersona[];
+      reasoning: string;
+      confidence: number;
+      processingTime: number;
+    };
+    previousAgentState?: string[];
+  }> {
+    // Check if we should apply automatic agent selection
+    if (!this.agentSelectorService.isAutoModeEnabled()) {
+      yield { type: 'complete', shouldProceed: true };
+      return;
+    }
+
+    // Skip automatic selection for slash commands and @ commands
+    if (this.isCommand(userPrompt)) {
+      yield { type: 'complete', shouldProceed: true };
+      return;
+    }
+
+    try {
+      // Store current agent state for restoration
+      const previousAgentState = this.agentManager.getActiveAgents().map(a => a.id);
+
+      // Stream agent selection process
+      const selectionStream = this.agentSelectorService.analyzeAndSelectAgentsStream(userPrompt);
+      
+      let finalResult: any = null;
+
+      for await (const event of selectionStream) {
+        if (event.type === 'progress') {
+          yield { type: 'progress', message: event.message };
+        } else if (event.type === 'complete') {
+          finalResult = event;
+        }
+      }
+
+      if (finalResult && finalResult.selectedAgents.length > 0) {
+        // Temporarily activate selected agents
+        await this.agentSelectorService.temporarilyActivateAgents(
+          finalResult.selectedAgents
+        );
+
+        yield {
+          type: 'complete',
+          shouldProceed: true,
+          selectionFeedback: finalResult,
+          previousAgentState,
+        };
+      } else {
+        yield { type: 'complete', shouldProceed: true };
+      }
+    } catch (error) {
+      console.error('Automatic agent selection failed:', error);
+      yield { type: 'complete', shouldProceed: true };
+    }
+  }
+
+  /**
+   * Process a user prompt with automatic agent selection if enabled (legacy method)
    * Returns selection info and feedback for the user
    */
   async processPromptWithAutoSelection(userPrompt: string, promptParts: any[]): Promise<{

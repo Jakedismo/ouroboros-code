@@ -8,6 +8,7 @@ import type { Content } from '@google/genai';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
 import type { GeminiClient } from '../core/client.js';
 import type { GeminiChat } from '../core/geminiChat.js';
+import type { Config } from '../config/config.js';
 import { isFunctionResponse } from './messageInspectors.js';
 
 const CHECK_PROMPT = `Analyze *only* the content and structure of your immediately preceding response (your last turn in the conversation history). Based *strictly* on that response, determine who should logically speak next: the 'user' or the 'model' (you).
@@ -43,6 +44,7 @@ export async function checkNextSpeaker(
   chat: GeminiChat,
   geminiClient: GeminiClient,
   abortSignal: AbortSignal,
+  config?: Config,
 ): Promise<NextSpeakerResponse | null> {
   // We need to capture the curated history because there are many moments when the model will return invalid turns
   // that when passed back up to the endpoint will break subsequent calls. An example of this is when the model decides
@@ -108,12 +110,79 @@ export async function checkNextSpeaker(
   ];
 
   try {
-    const parsedResponse = (await geminiClient.generateJson(
-      contents,
-      RESPONSE_SCHEMA,
-      abortSignal,
-      DEFAULT_GEMINI_FLASH_MODEL,
-    )) as unknown as NextSpeakerResponse;
+    // Use the configured provider instead of hardcoded Gemini
+    let jsonResponse: string;
+    
+    if (config) {
+      const currentProvider = config.getProvider();
+      if (currentProvider !== 'gemini') {
+        // Use the current provider for JSON generation
+        const provider = await config.getCurrentProvider();
+        
+        // Convert Gemini Content[] to provider Message[]
+        const messages = contents.map(content => ({
+          role: content.role === 'model' ? 'assistant' as const : content.role as 'user' | 'system',
+          content: content.parts?.map(part => (part as any).text || '').join('') || ''
+        }));
+        
+        const promptWithSchema = messages[messages.length - 1].content + 
+          '\n\nRespond with valid JSON matching this schema:\n' + 
+          JSON.stringify(RESPONSE_SCHEMA, null, 2) + 
+          '\n\nResponse (JSON only):';
+        
+        messages[messages.length - 1] = { ...messages[messages.length - 1], content: promptWithSchema };
+        
+        jsonResponse = await provider.generateCompletion(messages, {
+          temperature: 0.1, // Low temperature for consistent JSON formatting
+          maxTokens: 500
+        });
+      } else {
+        // Fall back to Gemini generateJson for Gemini provider
+        const parsedResponse = (await geminiClient.generateJson(
+          contents,
+          RESPONSE_SCHEMA,
+          abortSignal,
+          DEFAULT_GEMINI_FLASH_MODEL,
+        )) as unknown as NextSpeakerResponse;
+        
+        if (
+          parsedResponse &&
+          parsedResponse.next_speaker &&
+          ['user', 'model'].includes(parsedResponse.next_speaker)
+        ) {
+          return parsedResponse;
+        }
+        return null;
+      }
+    } else {
+      // Fallback to original Gemini method if no config provided
+      const parsedResponse = (await geminiClient.generateJson(
+        contents,
+        RESPONSE_SCHEMA,
+        abortSignal,
+        DEFAULT_GEMINI_FLASH_MODEL,
+      )) as unknown as NextSpeakerResponse;
+
+      if (
+        parsedResponse &&
+        parsedResponse.next_speaker &&
+        ['user', 'model'].includes(parsedResponse.next_speaker)
+      ) {
+        return parsedResponse;
+      }
+      return null;
+    }
+
+    // Parse JSON response from non-Gemini providers
+    let parsedResponse: NextSpeakerResponse;
+    try {
+      // Clean response - some providers might wrap JSON in markdown
+      const cleanedResponse = jsonResponse.replace(/```json\n?|\n?```/g, '').trim();
+      parsedResponse = JSON.parse(cleanedResponse);
+    } catch (parseError) {
+      console.warn('Failed to parse JSON response from provider:', parseError, 'Raw response:', jsonResponse);
+      return null;
+    }
 
     if (
       parsedResponse &&
@@ -124,8 +193,9 @@ export async function checkNextSpeaker(
     }
     return null;
   } catch (error) {
+    const providerName = config?.getProvider() || 'Gemini';
     console.warn(
-      'Failed to talk to Gemini endpoint when seeing if conversation should continue.',
+      `Failed to talk to ${providerName} endpoint when seeing if conversation should continue.`,
       error,
     );
     return null;

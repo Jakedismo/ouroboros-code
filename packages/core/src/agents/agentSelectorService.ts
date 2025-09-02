@@ -65,7 +65,109 @@ export class AgentSelectorService {
   }
 
   /**
-   * Analyze a user prompt and automatically select the best agents
+   * Analyze a user prompt and automatically select the best agents with streaming feedback
+   */
+  async *analyzeAndSelectAgentsStream(userPrompt: string): AsyncGenerator<{
+    type: 'progress' | 'complete';
+    message?: string;
+    selectedAgents?: AgentPersona[];
+    reasoning?: string;
+    confidence?: number;
+    processingTime?: number;
+  }> {
+    const startTime = Date.now();
+
+    if (!this.isAutoModeActive || !this.selectorProvider) {
+      yield {
+        type: 'complete',
+        selectedAgents: [],
+        reasoning: 'Auto mode disabled or service not initialized',
+        confidence: 0,
+        processingTime: Date.now() - startTime,
+      };
+      return;
+    }
+
+    try {
+      yield { type: 'progress', message: '🤖 **Analyzing request for specialist selection...**' };
+      
+      // Create the agent selection prompt
+      const selectionPrompt = this.buildSelectionPrompt(userPrompt);
+      
+      yield { type: 'progress', message: '🧠 **AI reasoning about optimal specialist combination...**' };
+      
+      // Stream the GPT-5-nano agent selection process
+      const responseStream = this.selectorProvider.generateResponse([
+        { role: 'system', content: selectionPrompt },
+        { role: 'user', content: userPrompt },
+      ], {
+        model: 'gpt-5-nano',
+        temperature: 0.1, // Low temperature for consistent selection
+        maxTokens: 300,
+      });
+
+      let accumulatedResponse = '';
+      let reasoningShown = false;
+
+      for await (const chunk of responseStream) {
+        if (chunk.content) {
+          accumulatedResponse += chunk.content;
+          
+          // Show progressive reasoning if we detect reasoning patterns
+          if (!reasoningShown && (
+            accumulatedResponse.includes('reasoning') || 
+            accumulatedResponse.includes('because') || 
+            accumulatedResponse.includes('best suited') ||
+            accumulatedResponse.length > 50
+          )) {
+            yield { type: 'progress', message: '⚡ **Evaluating specialist expertise...**' };
+            reasoningShown = true;
+          }
+        }
+      }
+
+      yield { type: 'progress', message: '✅ **Finalizing specialist selection...**' };
+
+      // Parse the complete response
+      const selection = this.parseSelectionResponse(accumulatedResponse);
+      const selectedAgents = selection.agentIds
+        .map(id => getAgentById(id))
+        .filter(Boolean) as AgentPersona[];
+
+      // Validate selection and apply fallbacks
+      const finalSelection = this.validateAndEnhanceSelection(selectedAgents, userPrompt);
+
+      // Record selection history
+      this.recordSelection(userPrompt, finalSelection.map(a => a.id), selection.reasoning);
+
+      yield {
+        type: 'complete',
+        selectedAgents: finalSelection,
+        reasoning: selection.reasoning,
+        confidence: selection.confidence,
+        processingTime: Date.now() - startTime,
+      };
+
+    } catch (error) {
+      console.error('Agent selection failed:', error);
+      
+      yield { type: 'progress', message: '⚠️ **Using fallback specialist selection...**' };
+      
+      // Fallback to heuristic-based selection
+      const fallbackAgents = this.fallbackSelection(userPrompt);
+      
+      yield {
+        type: 'complete',
+        selectedAgents: fallbackAgents,
+        reasoning: `AI selection failed, using fallback heuristics: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        confidence: 0.3,
+        processingTime: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Analyze a user prompt and automatically select the best agents (legacy method)
    */
   async analyzeAndSelectAgents(userPrompt: string): Promise<{
     selectedAgents: AgentPersona[];

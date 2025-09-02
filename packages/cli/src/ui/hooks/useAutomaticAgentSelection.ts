@@ -50,7 +50,73 @@ export const useAutomaticAgentSelection = (
   }, [config]);
 
   /**
-   * Process a user prompt with potential automatic agent selection
+   * Process a user prompt with streaming agent selection
+   */
+  const processPromptWithAutoSelectionStream = useCallback(
+    async function* (userPrompt: string): AsyncGenerator<{
+      type: 'progress' | 'complete';
+      message?: string;
+      shouldProceed?: boolean;
+      previousAgentState?: string[];
+      showSelectionFeedback?: () => void;
+    }> {
+      if (!orchestrator || !isInitialized) {
+        yield { type: 'complete', shouldProceed: true };
+        return;
+      }
+
+      try {
+        const selectionStream = orchestrator.processPromptWithAutoSelectionStream(userPrompt);
+        
+        for await (const event of selectionStream) {
+          if (event.type === 'progress' && event.message) {
+            // Show streaming progress messages immediately
+            addItem(
+              {
+                type: MessageType.INFO,
+                text: event.message,
+              },
+              Date.now(),
+            );
+            yield { type: 'progress' };
+          } else if (event.type === 'complete' && event.selectionFeedback) {
+            // Create final selection feedback
+            const showSelectionFeedback = () => {
+              const feedbackMessage = orchestrator.generateSelectionFeedback(event.selectionFeedback);
+              addItem(
+                {
+                  type: MessageType.INFO,
+                  text: feedbackMessage.text,
+                },
+                Date.now(),
+              );
+            };
+
+            yield {
+              type: 'complete',
+              shouldProceed: event.shouldProceed || true,
+              previousAgentState: event.previousAgentState,
+              showSelectionFeedback,
+            };
+            return;
+          } else if (event.type === 'complete') {
+            yield {
+              type: 'complete',
+              shouldProceed: event.shouldProceed || true,
+            };
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Streaming agent selection failed:', error);
+        yield { type: 'complete', shouldProceed: true };
+      }
+    },
+    [orchestrator, isInitialized, addItem],
+  );
+
+  /**
+   * Process a user prompt with potential automatic agent selection (legacy method)
    */
   const processPromptWithAutoSelection = useCallback(
     async (userPrompt: string): Promise<{
@@ -119,6 +185,7 @@ export const useAutomaticAgentSelection = (
 
   return {
     processPromptWithAutoSelection,
+    processPromptWithAutoSelectionStream,
     restorePreviousAgentState,
     isAutoModeEnabled,
     isInitialized,

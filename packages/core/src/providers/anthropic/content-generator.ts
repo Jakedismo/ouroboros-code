@@ -40,11 +40,14 @@ export class AnthropicContentGenerator implements ContentGenerator {
     const messages = this.convertToMessages(request.contents);
     
     try {
+      // Extract tools from config (they come from GeminiChat's generationConfig.tools)
+      const tools = request.config?.tools || [];
+      
       const response = await this.provider.generateCompletion(messages, {
         model: this.model,
         temperature: request.config?.temperature,
         maxTokens: request.config?.maxOutputTokens,
-      }, request.config?.tools); // Pass tools as separate parameter
+      }, tools); // Pass tools as separate parameter
 
       // Convert back to Gemini response format
       return {
@@ -80,11 +83,14 @@ export class AnthropicContentGenerator implements ContentGenerator {
       const messages = self.convertToMessages(request.contents);
       
       try {
+        // Extract tools from config (they come from GeminiChat's generationConfig.tools)
+        const tools = request.config?.tools || [];
+        
         const stream = self.provider.generateResponse(messages, {
           model: self.model,
           temperature: request.config?.temperature,
           maxTokens: request.config?.maxOutputTokens,
-        }, request.config?.tools); // Pass tools as separate parameter
+        }, tools); // Pass tools as separate parameter
 
         for await (const chunk of stream) {
           if (chunk.content) {

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Message, Provider, ProviderOptions, StreamingResponse, ToolCall } from '../types.js';
+import { convertToAnthropicTools } from './tool-adapter.js';
 
 export class AnthropicProvider implements Provider {
   name = 'Anthropic';
@@ -32,11 +33,7 @@ export class AnthropicProvider implements Provider {
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens || 4096,
       stream: true,
-      tools: tools?.map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        input_schema: tool.parameters,
-      })),
+      tools: tools && tools.length > 0 ? convertToAnthropicTools(tools) : undefined,
     });
     
     for await (const event of stream) {
@@ -85,11 +82,7 @@ export class AnthropicProvider implements Provider {
       system: systemMessage,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens || 4096,
-      tools: tools?.map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        input_schema: tool.parameters,
-      })),
+      tools: tools && tools.length > 0 ? convertToAnthropicTools(tools) : undefined,
     });
     
     if (response.content[0]?.type === 'text') {
