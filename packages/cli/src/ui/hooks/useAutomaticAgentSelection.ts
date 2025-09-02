@@ -39,8 +39,8 @@ export const useAutomaticAgentSelection = (
         switch (currentProvider) {
           case 'openai':
             apiKey = config.getOpenAIApiKey?.() || process.env['OPENAI_API_KEY'];
-            // Use gpt-5-nano for fast agent selection with OpenAI
-            model = 'gpt-5-nano';
+            // Use gpt-4o for reliable agent selection with OpenAI (gpt-5-nano may not be available)
+            model = 'gpt-4o';
             break;
           case 'anthropic':
             // Use provider API key for Anthropic
