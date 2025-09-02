@@ -17,7 +17,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, cpSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { glob } from 'glob';
@@ -35,6 +35,17 @@ if (!existsSync(bundleDir)) {
 const sbFiles = glob.sync('packages/**/*.sb', { cwd: root });
 for (const file of sbFiles) {
   copyFileSync(join(root, file), join(bundleDir, basename(file)));
+}
+
+// Copy the agent prompts directory to the bundle
+const promptsSourceDir = join(root, 'packages/core/src/agents/prompts');
+const promptsBundleDir = join(bundleDir, 'prompts');
+
+if (existsSync(promptsSourceDir)) {
+  cpSync(promptsSourceDir, promptsBundleDir, { recursive: true });
+  console.log('Agent prompts copied to bundle/prompts/');
+} else {
+  console.warn('Warning: Agent prompts directory not found at', promptsSourceDir);
 }
 
 console.log('Assets copied to bundle/');
