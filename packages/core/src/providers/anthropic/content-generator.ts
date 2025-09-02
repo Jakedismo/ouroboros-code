@@ -112,6 +112,34 @@ export class AnthropicContentGenerator implements ContentGenerator {
               },
             } as GenerateContentResponse;
           }
+          
+          // Handle tool calls from Anthropic
+          if (chunk.toolCalls && chunk.toolCalls.length > 0) {
+            const functionCalls = chunk.toolCalls.map(tc => ({
+              name: tc.function.name,
+              args: tc.function.arguments ? JSON.parse(tc.function.arguments) : {},
+            }));
+            
+            yield {
+              candidates: [
+                {
+                  content: {
+                    parts: functionCalls.map(fc => ({
+                      functionCall: fc,
+                    })),
+                    role: 'model',
+                  },
+                  finishReason: chunk.done ? ('STOP' as any) : undefined,
+                  index: 0,
+                },
+              ],
+              usageMetadata: {
+                promptTokenCount: 0,
+                candidatesTokenCount: 0,
+                totalTokenCount: 0,
+              },
+            } as GenerateContentResponse;
+          }
         }
       } catch (error) {
         throw new Error(`Anthropic API error: ${error instanceof Error ? error.message : String(error)}`);

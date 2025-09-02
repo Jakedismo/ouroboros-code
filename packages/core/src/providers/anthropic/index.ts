@@ -36,12 +36,16 @@ export class AnthropicProvider implements Provider {
       tools: tools && tools.length > 0 ? convertToAnthropicTools(tools) : undefined,
     });
     
+    // Buffer for accumulating tool arguments
+    const toolCallsInProgress: Map<string, ToolCall> = new Map();
+    
     for await (const event of stream) {
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
         yield { content: event.delta.text };
       }
       
       if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+        // Start of a new tool call
         const toolCall: ToolCall = {
           id: event.content_block.id,
           type: 'function',
@@ -50,15 +54,34 @@ export class AnthropicProvider implements Provider {
             arguments: '',
           },
         };
-        yield { toolCalls: [toolCall] };
+        toolCallsInProgress.set(event.content_block.id, toolCall);
       }
       
       if (event.type === 'content_block_delta' && event.delta.type === 'input_json_delta') {
-        // Accumulate tool arguments - in production, you'd buffer these
-        yield { content: event.delta.partial_json };
+        // Accumulate tool arguments
+        const blockId = (event as any).index || 'default';
+        const toolCall = toolCallsInProgress.get(blockId);
+        if (toolCall) {
+          toolCall.function.arguments += event.delta.partial_json;
+        }
+      }
+      
+      if (event.type === 'content_block_stop' && (event as any).content_block?.type === 'tool_use') {
+        // Tool call is complete, yield it
+        const blockId = (event as any).content_block?.id;
+        const toolCall = toolCallsInProgress.get(blockId);
+        if (toolCall) {
+          yield { toolCalls: [toolCall] };
+          toolCallsInProgress.delete(blockId);
+        }
       }
       
       if (event.type === 'message_stop') {
+        // Yield any remaining tool calls
+        if (toolCallsInProgress.size > 0) {
+          yield { toolCalls: Array.from(toolCallsInProgress.values()) };
+          toolCallsInProgress.clear();
+        }
         yield { done: true };
       }
     }
