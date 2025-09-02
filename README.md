@@ -1,19 +1,21 @@
-# Gemini CLI
+# Ouroboros Code
 
-[![Gemini CLI CI](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/npm/v/@google/gemini-cli)](https://www.npmjs.com/package/@google/gemini-cli)
-[![License](https://img.shields.io/github/license/google-gemini/gemini-cli)](https://github.com/google-gemini/gemini-cli/blob/main/LICENSE)
+[![Ouroboros Code CI](https://github.com/ouroboros-ai/ouroboros-code/actions/workflows/ci.yml/badge.svg)](https://github.com/ouroboros-ai/ouroboros-code/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/npm/v/@ouroboros/ouroboros-code)](https://www.npmjs.com/package/@ouroboros/ouroboros-code)
+[![License](https://img.shields.io/github/license/ouroboros-ai/ouroboros-code)](https://github.com/ouroboros-ai/ouroboros-code/blob/main/LICENSE)
 
-![Gemini CLI Screenshot](./docs/assets/gemini-screenshot.png)
+![Ouroboros Code Screenshot](./docs/assets/ouroboros-screenshot.png)
 
-Gemini CLI is an open-source AI agent that brings the power of Gemini directly into your terminal. It provides lightweight access to Gemini, giving you the most direct path from your prompt to our model.
+Ouroboros Code is an advanced multi-agent AI framework that brings the power of **multiple LLM providers** (Gemini, OpenAI, Anthropic) directly into your terminal. It features **dynamic agent selection**, where GPT-5-nano intelligently chooses the best specialists for every task, transforming your terminal into a truly adaptive problem-solving environment.
 
-## 🚀 Why Gemini CLI?
+## 🚀 Why Ouroboros Code?
 
-- **🎯 Free tier**: 60 requests/min and 1,000 requests/day with personal Google account
-- **🧠 Powerful Gemini 2.5 Pro**: Access to 1M token context window
-- **🔧 Built-in tools**: Google Search grounding, file operations, shell commands, web fetching
-- **🔌 Extensible**: MCP (Model Context Protocol) support for custom integrations
+- **🤖 Dynamic Agent Selection**: GPT-5-nano automatically chooses the best specialists (from 50+ agents) for every prompt
+- **⚡ Multi-Provider Power**: Seamlessly switch between Gemini, OpenAI, and Anthropic with unified tools
+- **🎯 Zero Learning Curve**: Works with any prompt - just type naturally and watch agents adapt
+- **🧠 50+ Specialist Agents**: Architecture, AI/ML, Security, Performance, DevOps, Frontend, Backend experts
+- **🔧 Universal Built-in Tools**: 11 tools work identically across all providers (files, web, search, shell)
+- **🔌 Advanced MCP Support**: Enhanced Model Context Protocol integration with webhooks and connection pooling
 - **💻 Terminal-first**: Designed for developers who live in the command line
 - **🛡️ Open source**: Apache 2.0 licensed
 
@@ -25,19 +27,19 @@ Gemini CLI is an open-source AI agent that brings the power of Gemini directly i
 
 ```bash
 # Using npx (no installation required)
-npx https://github.com/google-gemini/gemini-cli
+npx @ouroboros/ouroboros-code
 ```
 
 #### Install globally with npm
 
 ```bash
-npm install -g @google/gemini-cli
+npm install -g @ouroboros/ouroboros-code
 ```
 
 #### Install globally with Homebrew (macOS/Linux)
 
 ```bash
-brew install gemini-cli
+brew install ouroboros-code
 ```
 
 #### System Requirements
@@ -75,23 +77,58 @@ npm install -g @google/gemini-cli@nightly
 
 ## 📋 Key Features
 
+### 🤖 Dynamic Agent Selection System
+
+- **Automatic Specialist Selection**: GPT-5-nano intelligently chooses the best agents for each prompt
+- **50+ Expert Agents**: Covering Architecture, AI/ML, Security, Performance, DevOps, Frontend, Backend, and more
+- **Zero Configuration**: Just enable `/agents on` and every prompt gets the right expertise automatically
+- **Transparent Process**: See which agents were selected and why, with confidence scores
+- **Smart Context**: Temporary agent activation per conversation turn, automatic state restoration
+
+```bash
+# Enable automatic agent selection
+/agents on
+
+# Every prompt now gets intelligent agent selection:
+"Optimize my React component performance" 
+# → Auto-selects: React Specialist + Web Performance Specialist
+
+"Design a REST API for user authentication"
+# → Auto-selects: API Designer + Security Auditor + Microservices Architect
+
+"My database queries are slow"
+# → Auto-selects: Database Optimizer
+
+# Check what happened
+/agents history
+/agents stats
+```
+
+### ⚡ Multi-Provider Architecture
+
+- **Unified Tool Experience**: 11 builtin tools work identically across OpenAI, Anthropic, and Gemini
+- **Seamless Provider Switching**: Zero functionality loss when changing providers
+- **Provider-Specific Optimization**: Tailored configurations for each LLM's strengths
+- **Advanced MCP Integration**: Enhanced Model Context Protocol with connection pooling and webhooks
+
+### 🔧 Universal Built-in Tools
+
+All tools work identically across every provider:
+- **File Operations**: `read_file`, `write_file`, `edit_file`, `read_many_files`, `ls`, `glob`, `grep`
+- **Web Operations**: `web_fetch`, `google_web_search`
+- **System Operations**: `run_shell_command`, `save_memory`
+
 ### Code Understanding & Generation
 
-- Query and edit large codebases
+- Query and edit large codebases with specialist agent expertise
 - Generate new apps from PDFs, images, or sketches using multimodal capabilities
-- Debug issues and troubleshoot with natural language
+- Debug issues and troubleshoot with natural language, automatically getting the right specialist help
 
 ### Automation & Integration
 
-- Automate operational tasks like querying pull requests or handling complex rebases
-- Use MCP servers to connect new capabilities, including [media generation with Imagen, Veo or Lyria](https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio/tree/main/experiments/mcp-genmedia)
-- Run non-interactively in scripts for workflow automation
-
-### Advanced Capabilities
-
-- Ground your queries with built-in [Google Search](https://ai.google.dev/gemini-api/docs/grounding) for real-time information
-- Conversation checkpointing to save and resume complex sessions
-- Custom context files (GEMINI.md) to tailor behavior for your projects
+- Automate operational tasks with dynamic agent selection for optimal results
+- Advanced MCP servers with webhook callbacks for asynchronous tool execution
+- Run non-interactively in scripts with pre-configured agent preferences
 
 ### GitHub Integration
 

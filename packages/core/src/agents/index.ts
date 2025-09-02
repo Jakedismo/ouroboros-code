@@ -14,3 +14,5 @@ export {
 } from './personas.js';
 
 export { AgentManager } from './agentManager.js';
+export { AgentSelectorService } from './agentSelectorService.js';
+export { ConversationOrchestrator } from './conversationOrchestrator.js';

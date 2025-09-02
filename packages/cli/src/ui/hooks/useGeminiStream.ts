@@ -43,6 +43,7 @@ import { StreamingState, MessageType, ToolCallStatus } from '../types.js';
 import { isAtCommand, isSlashCommand } from '../utils/commandUtils.js';
 import { useShellCommandProcessor } from './shellCommandProcessor.js';
 import { handleAtCommand } from './atCommandProcessor.js';
+import { useAutomaticAgentSelection } from './useAutomaticAgentSelection.js';
 import { findLastSafeSplitPoint } from '../utils/markdownUtilities.js';
 import { useStateAndRef } from './useStateAndRef.js';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
@@ -155,6 +156,12 @@ export const useGeminiStream = (
     config,
     geminiClient,
   );
+
+  const {
+    processPromptWithAutoSelection,
+    restorePreviousAgentState,
+    isAutoModeEnabled,
+  } = useAutomaticAgentSelection(config, addItem);
 
   const streamingState = useMemo(() => {
     if (toolCalls.some((tc) => tc.status === 'awaiting_approval')) {
@@ -688,6 +695,29 @@ export const useGeminiStream = (
         prompt_id = config.getSessionId() + '########' + getPromptCount();
       }
 
+      // Handle automatic agent selection for new queries (not continuations)
+      let previousAgentState: string[] | undefined;
+      let showSelectionFeedback: (() => void) | undefined;
+      
+      if (!options?.isContinuation && isAutoModeEnabled()) {
+        try {
+          // Extract text from query parts for agent selection
+          const queryText = Array.isArray(query) 
+            ? query.map(part => typeof part === 'string' ? part : (part as any).text || '').join(' ')
+            : typeof query === 'string' ? query : (query as any).text || '';
+          
+          const selectionResult = await processPromptWithAutoSelection(queryText);
+          
+          if (selectionResult.showSelectionFeedback) {
+            showSelectionFeedback = selectionResult.showSelectionFeedback;
+            previousAgentState = selectionResult.previousAgentState;
+          }
+        } catch (error) {
+          console.error('Automatic agent selection failed:', error);
+          // Continue with normal processing if agent selection fails
+        }
+      }
+
       const { queryToSend, shouldProceed } = await prepareQueryForGemini(
         query,
         userMessageTimestamp,
@@ -731,6 +761,11 @@ export const useGeminiStream = (
           loopDetectedRef.current = false;
           handleLoopDetectedEvent();
         }
+
+        // Show agent selection feedback after successful completion
+        if (showSelectionFeedback) {
+          showSelectionFeedback();
+        }
       } catch (error: unknown) {
         if (error instanceof UnauthorizedError) {
           onAuthError();
@@ -751,6 +786,15 @@ export const useGeminiStream = (
         }
       } finally {
         setIsResponding(false);
+        
+        // Restore previous agent state after conversation turn completes
+        if (previousAgentState) {
+          try {
+            await restorePreviousAgentState(previousAgentState);
+          } catch (error) {
+            console.error('Failed to restore agent state:', error);
+          }
+        }
       }
     },
     [
@@ -768,6 +812,9 @@ export const useGeminiStream = (
       startNewPrompt,
       getPromptCount,
       handleLoopDetectedEvent,
+      processPromptWithAutoSelection,
+      restorePreviousAgentState,
+      isAutoModeEnabled,
     ],
   );
 

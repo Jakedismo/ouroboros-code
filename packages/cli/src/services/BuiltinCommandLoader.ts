@@ -9,6 +9,7 @@ import type { SlashCommand } from '../ui/commands/types.js';
 import type { Config } from '@ouroboros/ouroboros-code-core';
 import { aboutCommand } from '../ui/commands/aboutCommand.js';
 import { agentCommand } from '../ui/commands/agentCommand.js';
+import { agentsCommand } from '../ui/commands/agentsCommand.js';
 import { authCommand } from '../ui/commands/authCommand.js';
 import { bugCommand } from '../ui/commands/bugCommand.js';
 import { chatCommand } from '../ui/commands/chatCommand.js';
@@ -60,6 +61,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
     const allDefinitions: Array<SlashCommand | null> = [
       aboutCommand,
       agentCommand,
+      agentsCommand,
       authCommand,
       bugCommand,
       chatCommand,

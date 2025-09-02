@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2025-01-09
+
+### Added
+
+#### Dynamic Agent Selection System 🤖⚡
+- **Automatic `/agents` command** - GPT-5-nano intelligently selects the best specialists for every prompt
+- **Complete autonomous workflow**: Analyze → Select → Activate → Process → Restore → Feedback
+- **GPT-5-nano dispatcher** with specialized agent selection prompts and 2-3 second response time
+- **Transparent agent selection** with reasoning, confidence scores, and processing time display
+- **AgentSelectorService architecture** with intelligent fallbacks and error recovery
+- **ConversationOrchestrator integration** for seamless conversation flow management
+- **Comprehensive `/agents` command suite**:
+  - `/agents on` - Enable automatic selection mode
+  - `/agents off` - Disable automatic selection  
+  - `/agents status` - View current mode and statistics
+  - `/agents history` - See recent automatic selections with reasoning
+  - `/agents test "prompt"` - Test selection without execution
+  - `/agents stats` - Detailed analytics and usage patterns
+- **Smart context preservation** - Temporary agent activation per conversation turn
+- **Selection analytics** - Track patterns, confidence scores, and performance metrics
+- **Command-aware skipping** - Automatically skips agent selection for slash commands and @ commands
+
+#### Advanced Agent Selection Features
+- **Multi-layer fallback systems** - Heuristic selection if AI selection fails
+- **Selection confidence scoring** - 0-100% confidence with visual indicators
+- **Performance optimization** - Minimal 2-3 second overhead per prompt
+- **Session persistence** - Remembers auto-mode preference across sessions
+- **Error resilient design** - Graceful handling of API failures and timeouts
+- **Usage pattern analysis** - Most selected agents, single vs multi-agent patterns
+- **Real-time feedback** - Shows selected agents, reasoning, and processing time after each response
+
+### Technical Implementation
+
+#### Dynamic Agent Selection Architecture
+```
+packages/core/src/agents/
+├── agentSelectorService.ts     # GPT-5-nano agent selection engine
+├── conversationOrchestrator.ts # Conversation flow management
+└── prompts/                    # Enhanced with tool integration
+```
+
+#### Integration Points
+- **useGeminiStream.ts** - Seamless conversation flow integration with pre/post processing
+- **useAutomaticAgentSelection.ts** - React hook for agent selection lifecycle
+- **Config.ts** - OpenAI API key management for GPT-5-nano dispatcher
+- **BuiltinCommandLoader.ts** - `/agents` command registration
+
+#### Key Features
+- **Zero learning curve** - Works with any existing prompt automatically
+- **Intelligent agent matching** - Selects 1-3 most relevant specialists per task
+- **Context-aware selection** - Understands task complexity and specialist requirements
+- **Performance monitoring** - Tracks selection accuracy and user satisfaction patterns
+- **Backward compatibility** - Full compatibility with existing `/agent` manual commands
+
+### Usage Examples
+```bash
+# Enable automatic agent selection
+/agents on
+
+# Every prompt now gets intelligent agent selection:
+"Optimize my React component performance" 
+# → Auto-selects: React Specialist + Web Performance Specialist
+
+"Design a REST API for user authentication"
+# → Auto-selects: API Designer + Security Auditor + Microservices Architect
+
+"My database queries are slow"
+# → Auto-selects: Database Optimizer
+
+# Check selection history and analytics
+/agents history
+/agents stats
+
+# Test selection logic
+/agents test "Review Python code for security issues"
+
+# Disable when not needed
+/agents off
+```
+
+### Configuration
+- **OpenAI API Key Required**: Set `OPENAI_API_KEY` environment variable for GPT-5-nano selection engine
+- **Automatic Initialization**: Service initializes automatically when API key is available
+- **Graceful Degradation**: Falls back to manual agent selection if service unavailable
+
 ## [1.1.0] - 2025-01-09
 
 ### Added

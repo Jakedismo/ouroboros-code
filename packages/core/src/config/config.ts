@@ -545,6 +545,13 @@ export class Config {
   }
 
   /**
+   * Get OpenAI API key specifically for agent selection service
+   */
+  getOpenAIApiKey(): string | undefined {
+    return process.env['OPENAI_API_KEY'];
+  }
+
+  /**
    * Switch to a different provider
    */
   async setProvider(newProvider: 'openai' | 'anthropic' | 'gemini'): Promise<void> {
