@@ -107,88 +107,33 @@ export class AgentSelectorService {
     confidence?: number;
     processingTime?: number;
   }> {
-    console.log('[AgentSelector] DEBUG - analyzeAndSelectAgentsStream (STREAMING) called - THIS SHOULD NOT BE CALLED!');
-    const startTime = Date.now();
-
-    if (!this.isAutoModeActive || !this.selectorProvider) {
+    console.log('[AgentSelector] DEBUG - analyzeAndSelectAgentsStream (STREAMING) called - REDIRECTING TO NON-STREAMING');
+    
+    // Redirect to the non-streaming version to avoid JSON parsing issues
+    try {
+      yield { type: 'progress', message: '⚡ **Evaluating specialist expertise...**' };
+      yield { type: 'progress', message: '✅ **Finalizing specialist selection...**' };
+      
+      const result = await this.analyzeAndSelectAgents(userPrompt);
+      
+      yield {
+        type: 'complete',
+        selectedAgents: result.selectedAgents,
+        reasoning: result.reasoning,
+        confidence: result.confidence,
+        processingTime: result.processingTime,
+      };
+      return;
+    } catch (error) {
+      console.error('[AgentSelector] Error in streaming wrapper:', error);
       yield {
         type: 'complete',
         selectedAgents: [],
-        reasoning: 'Auto mode disabled or service not initialized',
+        reasoning: 'Error occurred during agent selection',
         confidence: 0,
-        processingTime: Date.now() - startTime,
+        processingTime: 0,
       };
       return;
-    }
-
-    try {
-      yield { type: 'progress', message: '🤖 **Analyzing request for specialist selection...**' };
-      
-      // Create the agent selection prompt
-      const selectionPrompt = this.buildSelectionPrompt(userPrompt);
-      
-      yield { type: 'progress', message: '🧠 **AI reasoning about optimal specialist combination...**' };
-      
-      // Stream the GPT-5-nano agent selection process
-      // Show progress before making the selection
-      yield { type: 'progress', message: '⚡ **Evaluating specialist expertise...**' };
-      
-      // For OpenAI provider, we need to add response_format to ensure JSON output
-      const providerOptions: any = {
-        model: 'gpt-5-nano',
-        temperature: 0.1, // Low temperature for consistent selection
-        maxTokens: 300,
-      };
-      
-      // Add response_format for OpenAI to ensure JSON output
-      // This forces the model to output valid JSON
-      if (this.selectorProvider.name === 'OpenAI') {
-        providerOptions.response_format = { type: 'json_object' };
-      }
-      
-      // Use generateCompletion for complete JSON response (non-streaming)
-      const completeResponse = await this.selectorProvider.generateCompletion([
-        { role: 'system', content: selectionPrompt },
-        { role: 'user', content: userPrompt },
-      ], providerOptions);
-
-      yield { type: 'progress', message: '✅ **Finalizing specialist selection...**' };
-
-      // Parse the complete response
-      const selection = this.parseSelectionResponse(completeResponse);
-      const selectedAgents = selection.agentIds
-        .map(id => getAgentById(id))
-        .filter(Boolean) as AgentPersona[];
-
-      // Validate selection and apply fallbacks
-      const finalSelection = this.validateAndEnhanceSelection(selectedAgents, userPrompt);
-
-      // Record selection history
-      this.recordSelection(userPrompt, finalSelection.map(a => a.id), selection.reasoning);
-
-      yield {
-        type: 'complete',
-        selectedAgents: finalSelection,
-        reasoning: selection.reasoning,
-        confidence: selection.confidence,
-        processingTime: Date.now() - startTime,
-      };
-
-    } catch (error) {
-      console.error('Agent selection failed:', error);
-      
-      yield { type: 'progress', message: '⚠️ **Using fallback specialist selection...**' };
-      
-      // Fallback to heuristic-based selection
-      const fallbackAgents = this.fallbackSelection(userPrompt);
-      
-      yield {
-        type: 'complete',
-        selectedAgents: fallbackAgents,
-        reasoning: `AI selection failed, using fallback heuristics: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        confidence: 0.3,
-        processingTime: Date.now() - startTime,
-      };
     }
   }
 
