@@ -423,7 +423,8 @@ export class Config {
         throw new Error(
           `OAuth authentication is not supported for ${currentProvider} provider. ` +
           `Please use API key authentication instead. ` +
-          `Set ${currentProvider.toUpperCase()}_API_KEY environment variable or use --${currentProvider}-api-key flag.`
+          `Set ${currentProvider.toUpperCase()}_API_KEY environment variable or use --${currentProvider}-api-key flag. ` +
+          `You can switch to ${currentProvider} using: /provider ${currentProvider}`
         );
       }
     }
@@ -568,8 +569,19 @@ export class Config {
     // Initialize the new provider
     await this.initializeCurrentProvider();
 
-    // Recreate the GeminiClient with the new provider (refreshAuth will handle the provider switching)
-    await this.refreshAuth(this.contentGeneratorConfig?.authType || AuthType.USE_GEMINI);
+    // Determine appropriate auth type for the new provider
+    let authType = this.contentGeneratorConfig?.authType || AuthType.USE_GEMINI;
+    
+    // For non-Gemini providers, force API key authentication
+    if (newProvider !== 'gemini') {
+      // OAuth methods are not supported for OpenAI/Anthropic, use API key instead
+      if (authType === AuthType.LOGIN_WITH_GOOGLE || authType === AuthType.CLOUD_SHELL || authType === AuthType.USE_VERTEX_AI) {
+        authType = AuthType.USE_GEMINI; // This represents API key authentication
+      }
+    }
+
+    // Recreate the GeminiClient with the new provider
+    await this.refreshAuth(authType);
   }
 
   /**

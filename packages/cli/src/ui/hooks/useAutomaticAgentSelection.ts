@@ -9,13 +9,7 @@ import type { Config } from '@ouroboros/ouroboros-code-core';
 import type { HistoryItemWithoutId } from '../types.js';
 import { MessageType } from '../types.js';
 
-// Import ConversationOrchestrator with fallback for environments where it's not available
-let ConversationOrchestrator: any;
-try {
-  ConversationOrchestrator = require('@ouroboros/ouroboros-code-core/dist/src/agents/conversationOrchestrator.js').ConversationOrchestrator;
-} catch (error) {
-  console.warn('ConversationOrchestrator not available:', error);
-}
+// ConversationOrchestrator will be dynamically imported in the hook
 
 /**
  * Custom hook for integrating automatic agent selection into conversation flow
@@ -29,13 +23,11 @@ export const useAutomaticAgentSelection = (
 
   // Initialize the orchestrator
   useEffect(() => {
-    if (!ConversationOrchestrator) {
-      console.warn('ConversationOrchestrator not available, automatic agent selection disabled');
-      return;
-    }
-
     const initOrchestrator = async () => {
       try {
+        // Dynamically import ConversationOrchestrator
+        const { ConversationOrchestrator } = await import('@ouroboros/ouroboros-code-core/dist/src/agents/conversationOrchestrator.js');
+        
         const instance = ConversationOrchestrator.getInstance();
         
         // Try to get OpenAI API key from config
@@ -50,6 +42,7 @@ export const useAutomaticAgentSelection = (
         }
       } catch (error) {
         console.error('Failed to initialize ConversationOrchestrator:', error);
+        console.warn('ConversationOrchestrator not available, automatic agent selection disabled');
       }
     };
 

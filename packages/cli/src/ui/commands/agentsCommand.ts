@@ -7,28 +7,34 @@
 import { MessageType } from '../types.js';
 import { CommandKind, type SlashCommand } from './types.js';
 
-// Import AgentSelectorService for automatic agent selection
+// Dynamic imports for agent services
 let AgentSelectorService: any;
-try {
-  AgentSelectorService = require('@ouroboros/ouroboros-code-core/dist/src/agents/agentSelectorService.js').AgentSelectorService;
-} catch (error) {
-  console.warn('AgentSelectorService not available:', error);
-}
+let AgentManager: any;
 
 // Get AgentSelectorService instance
-function getAgentSelectorService() {
+async function getAgentSelectorService() {
+  if (!AgentSelectorService) {
+    try {
+      const module = await import('@ouroboros/ouroboros-code-core/dist/src/agents/agentSelectorService.js');
+      AgentSelectorService = module.AgentSelectorService;
+    } catch (error) {
+      console.warn('AgentSelectorService not available:', error);
+      return null;
+    }
+  }
   return AgentSelectorService ? AgentSelectorService.getInstance() : null;
 }
 
-// Get AgentManager for status checks
-let AgentManager: any;
-try {
-  AgentManager = require('@ouroboros/ouroboros-code-core/dist/src/agents/agentManager.js').AgentManager;
-} catch (error) {
-  console.warn('AgentManager not available:', error);
-}
-
-function getAgentManager() {
+async function getAgentManager() {
+  if (!AgentManager) {
+    try {
+      const module = await import('@ouroboros/ouroboros-code-core/dist/src/agents/agentManager.js');
+      AgentManager = module.AgentManager;
+    } catch (error) {
+      console.warn('AgentManager not available:', error);
+      return null;
+    }
+  }
   return AgentManager ? AgentManager.getInstance() : null;
 }
 
@@ -43,7 +49,7 @@ export const agentsCommand: SlashCommand = {
       description: 'Enable automatic agent selection for all prompts',
       kind: CommandKind.BUILT_IN,
       action: async (context, args) => {
-        const selectorService = getAgentSelectorService();
+        const selectorService = await getAgentSelectorService();
         
         if (!selectorService) {
           context.ui.addItem({
@@ -96,7 +102,7 @@ Please check your OpenAI API key configuration and try again.`,
       description: 'Disable automatic agent selection',
       kind: CommandKind.BUILT_IN,
       action: async (context, _args) => {
-        const selectorService = getAgentSelectorService();
+        const selectorService = await getAgentSelectorService();
         
         if (!selectorService) {
           context.ui.addItem({
@@ -129,8 +135,8 @@ The system will now operate in manual mode:
       description: 'Show automatic agent selection status and statistics',
       kind: CommandKind.BUILT_IN,
       action: async (context, _args) => {
-        const selectorService = getAgentSelectorService();
-        const agentManager = getAgentManager();
+        const selectorService = await getAgentSelectorService();
+        const agentManager = await getAgentManager();
         
         if (!selectorService) {
           context.ui.addItem({
@@ -186,7 +192,7 @@ ${stats.mostSelectedAgents.slice(0, 5).map((s: any) => `  • ${s.agentId}: ${s.
       description: 'Show recent automatic agent selections',
       kind: CommandKind.BUILT_IN,
       action: async (context, args) => {
-        const selectorService = getAgentSelectorService();
+        const selectorService = await getAgentSelectorService();
         
         if (!selectorService) {
           context.ui.addItem({
@@ -259,7 +265,7 @@ Please provide a prompt to test agent selection.
           return;
         }
 
-        const selectorService = getAgentSelectorService();
+        const selectorService = await getAgentSelectorService();
         
         if (!selectorService) {
           context.ui.addItem({
@@ -328,7 +334,7 @@ Please check your OpenAI configuration and try again.`,
       description: 'Show detailed agent selection analytics',
       kind: CommandKind.BUILT_IN,
       action: async (context, _args) => {
-        const selectorService = getAgentSelectorService();
+        const selectorService = await getAgentSelectorService();
         
         if (!selectorService) {
           context.ui.addItem({

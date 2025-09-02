@@ -16,20 +16,24 @@ import {
 
 // Import AgentManager for actual agent management
 let AgentManager: any;
-try {
-  AgentManager = require('@ouroboros/ouroboros-code-core/dist/src/agents/agentManager.js').AgentManager;
-} catch (error) {
-  console.warn('AgentManager not available:', error);
-}
 
 // Get AgentManager instance
-function getAgentManager() {
+async function getAgentManager() {
+  if (!AgentManager) {
+    try {
+      const module = await import('@ouroboros/ouroboros-code-core/dist/src/agents/agentManager.js');
+      AgentManager = module.AgentManager;
+    } catch (error) {
+      console.warn('AgentManager not available:', error);
+      return null;
+    }
+  }
   return AgentManager ? AgentManager.getInstance() : null;
 }
 
 // Format agent list for display
-function formatAgentList(agents: AgentPersona[]): string {
-  const agentManager = getAgentManager();
+async function formatAgentList(agents: AgentPersona[]): Promise<string> {
+  const agentManager = await getAgentManager();
   const grouped = agents.reduce((acc, agent) => {
     if (!acc[agent.category]) {
       acc[agent.category] = [];
@@ -50,8 +54,8 @@ function formatAgentList(agents: AgentPersona[]): string {
 }
 
 // Format detailed agent info
-function formatAgentDetails(agent: AgentPersona): string {
-  const agentManager = getAgentManager();
+async function formatAgentDetails(agent: AgentPersona): Promise<string> {
+  const agentManager = await getAgentManager();
   const active = agentManager?.isAgentActive(agent.id) ? '✅ Active' : '⭕ Inactive';
   return `${agent.emoji} **${agent.name}** (${agent.id})
 ${active}
@@ -99,7 +103,7 @@ export const agentCommand: SlashCommand = {
           context.ui.addItem(
             {
               type: MessageType.INFO,
-              text: `📋 **Agents in ${category}:**\n${formatAgentList(categoryAgents)}`,
+              text: `📋 **Agents in ${category}:**\n${await formatAgentList(categoryAgents)}`,
             },
             Date.now(),
           );
@@ -109,7 +113,7 @@ export const agentCommand: SlashCommand = {
             {
               type: MessageType.INFO,
               text: `📋 **Available Specialist Agents (${AGENT_PERSONAS.length} total):**
-${formatAgentList(AGENT_PERSONAS)}
+${await formatAgentList(AGENT_PERSONAS)}
 
 **Usage:**
 • \`/agent info <agent-id>\` - Get detailed info about an agent
@@ -157,7 +161,7 @@ ${Object.values(AGENT_CATEGORIES).map(c => `• ${c}`).join('\n')}`,
         context.ui.addItem(
           {
             type: MessageType.INFO,
-            text: formatAgentDetails(agent),
+            text: await formatAgentDetails(agent),
           },
           Date.now(),
         );
@@ -193,7 +197,7 @@ ${Object.values(AGENT_CATEGORIES).map(c => `• ${c}`).join('\n')}`,
           return;
         }
         
-        const agentManager = getAgentManager();
+        const agentManager = await getAgentManager();
         if (!agentManager) {
           context.ui.addItem(
             {
@@ -261,7 +265,7 @@ The agent's expertise has been integrated into the system prompt and will affect
           return;
         }
         
-        const agentManager = getAgentManager();
+        const agentManager = await getAgentManager();
         if (!agentManager) {
           context.ui.addItem(
             {
@@ -300,7 +304,7 @@ The agent's expertise has been integrated into the system prompt and will affect
       description: 'Show active agents status',
       kind: CommandKind.BUILT_IN,
       action: async (context, _args) => {
-        const agentManager = getAgentManager();
+        const agentManager = await getAgentManager();
         const activeAgentsList = agentManager?.getActiveAgents() || [];
         
         if (activeAgentsList.length === 0) {
@@ -386,7 +390,7 @@ Use \`/agent deactivate <agent-id>\` to deactivate an agent.`,
         context.ui.addItem(
           {
             type: MessageType.INFO,
-            text: `🔍 **Agents matching "${searchTerm}" (${matches.length} found):**\n${formatAgentList(matches)}`,
+            text: `🔍 **Agents matching "${searchTerm}" (${matches.length} found):**\n${await formatAgentList(matches)}`,
           },
           Date.now(),
         );

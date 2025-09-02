@@ -27,7 +27,25 @@ export async function validateNonInteractiveAuth(
   useExternalAuth: boolean | undefined,
   nonInteractiveConfig: Config,
 ) {
-  const effectiveAuthType = configuredAuthType || getAuthTypeFromEnv();
+  let effectiveAuthType = configuredAuthType || getAuthTypeFromEnv();
+
+  // For non-Gemini providers, handle authentication separately
+  const currentProvider = nonInteractiveConfig.getProvider();
+  if (currentProvider !== 'gemini') {
+    // Check if API key is available for the current provider
+    const apiKey = nonInteractiveConfig.getProviderApiKey();
+    if (!apiKey) {
+      const envVarName = currentProvider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+      console.error(
+        `Please set ${envVarName} environment variable or use --${currentProvider}-api-key flag for ${currentProvider} provider authentication.`
+      );
+      process.exit(1);
+    }
+    
+    // Skip Gemini auth validation for non-Gemini providers
+    // These providers handle authentication through their own ContentGenerator implementations
+    return nonInteractiveConfig;
+  }
 
   if (!effectiveAuthType) {
     console.error(
