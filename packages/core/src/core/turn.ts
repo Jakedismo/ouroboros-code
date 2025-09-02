@@ -294,6 +294,9 @@ export class Turn {
       // Get the current provider name from the chat's config
       const providerName = (this.chat as any).config?.getProvider?.() || 'Gemini';
       const providerDisplayName = providerName.charAt(0).toUpperCase() + providerName.slice(1);
+      console.log(`[Turn] Debug - providerName: ${providerName}, providerDisplayName: ${providerDisplayName}`);
+      console.log(`[Turn] Debug - chat has config:`, !!(this.chat as any).config);
+      console.log(`[Turn] Debug - config has getProvider:`, typeof (this.chat as any).config?.getProvider);
       await reportError(
         error,
         `Error when talking to ${providerDisplayName} API`,

@@ -107,6 +107,7 @@ export class AgentSelectorService {
     confidence?: number;
     processingTime?: number;
   }> {
+    console.log('[AgentSelector] DEBUG - analyzeAndSelectAgentsStream (STREAMING) called - THIS SHOULD NOT BE CALLED!');
     const startTime = Date.now();
 
     if (!this.isAutoModeActive || !this.selectorProvider) {
@@ -200,6 +201,7 @@ export class AgentSelectorService {
     confidence: number;
     processingTime: number;
   }> {
+    console.log('[AgentSelector] DEBUG - analyzeAndSelectAgents (NON-STREAMING) called');
     const startTime = Date.now();
 
     if (!this.isAutoModeActive || !this.selectorProvider) {
