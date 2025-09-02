@@ -6,6 +6,7 @@
 import type { SlashCommand } from './types.js';
 import { CommandKind } from './types.js';
 import { MessageType, type HistoryItemInfo } from '../types.js';
+import { appEvents, AppEvent } from '../../utils/events.js';
 
 // Provider configurations with default models
 const PROVIDER_CONFIGS = {
@@ -100,8 +101,12 @@ Use \`/provider\` to see all options.`,
 };
 
 function getCurrentProvider(context: any): string | null {
-  // Try to get from context or config
-  // This is a simplified implementation - should integrate with actual config
+  // Get current provider from config's getProvider method
+  if (context.config && typeof context.config.getProvider === 'function') {
+    return context.config.getProvider();
+  }
+  
+  // Fallback to environment or default
   return context.config?.provider || process.env['OUROBOROS_PROVIDER'] || 'gemini';
 }
 
@@ -111,7 +116,16 @@ async function switchProvider(context: any, provider: ProviderType, config: type
     if (context.config && typeof context.config.setProvider === 'function') {
       await context.config.setProvider(provider);
       console.log(`[Provider] Successfully switched to ${provider} with model ${config.defaultModel}`);
+      
+      // Also switch to the default model for this provider
+      if (typeof context.config.setModel === 'function') {
+        await context.config.setModel(config.defaultModel);
+        console.log(`[Provider] Set default model to ${config.defaultModel}`);
+      }
     }
+
+    // Emit provider change event for immediate UI updates
+    appEvents.emit(AppEvent.ProviderChanged, { provider, model: config.defaultModel });
 
     const successItem: Omit<HistoryItemInfo, 'id'> = {
       type: MessageType.INFO,

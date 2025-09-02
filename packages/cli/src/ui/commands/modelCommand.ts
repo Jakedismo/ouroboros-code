@@ -6,6 +6,7 @@
 import type { SlashCommand } from './types.js';
 import { CommandKind } from './types.js';
 import { MessageType, type HistoryItemInfo } from '../types.js';
+import { appEvents, AppEvent } from '../../utils/events.js';
 
 // Model configurations organized by provider
 const MODEL_CONFIGS = {
@@ -158,15 +159,19 @@ function getCurrentProvider(context: any): string | null {
 }
 
 function getCurrentModel(context: any, provider: string): string | null {
-  // Get current model from context or return provider default
+  // Get current model from config's getModel method
+  if (context.config && typeof context.config.getModel === 'function') {
+    return context.config.getModel();
+  }
+  
+  // Fallback to provider defaults
   const providerDefaults = {
     openai: 'gpt-5',
     anthropic: 'claude-opus-4-1-20250805',
     gemini: 'gemini-2.5-pro',
   } as const;
   
-  return context.config?.model || context.config?.[`${provider}Model`] || 
-         providerDefaults[provider as keyof typeof providerDefaults] || null;
+  return providerDefaults[provider as keyof typeof providerDefaults] || null;
 }
 
 function getProviderDisplayName(provider: string): string {
@@ -180,9 +185,21 @@ function getProviderDisplayName(provider: string): string {
 }
 
 async function switchModel(context: any, provider: string, modelName: string, modelConfig: any) {
-  const successItem: Omit<HistoryItemInfo, 'id'> = {
-    type: MessageType.INFO,
-    text: `🔄 **Model Switched**
+  try {
+    // Actually switch the model in the config
+    if (context.config && typeof context.config.setModel === 'function') {
+      await context.config.setModel(modelName);
+      console.log(`[Model] Successfully switched to ${modelName} for provider ${provider}`);
+    } else {
+      console.warn('[Model] Config.setModel not available, model switch may not persist');
+    }
+
+    // Emit provider change event for immediate UI updates (model change affects status bar)
+    appEvents.emit(AppEvent.ProviderChanged, { provider, model: modelName });
+
+    const successItem: Omit<HistoryItemInfo, 'id'> = {
+      type: MessageType.INFO,
+      text: `🔄 **Model Switched**
 
 **Provider:** ${getProviderDisplayName(provider)}
 **New Model:** ${modelName}
@@ -193,10 +210,18 @@ async function switchModel(context: any, provider: string, modelName: string, mo
 **✅ Active Now:** All new messages will use ${modelName}
 
 **Tip:** Use \`/model\` to switch models anytime, or \`/provider\` to change providers.`,
-  };
-  context.ui.addItem(successItem, Date.now());
+    };
+    context.ui.addItem(successItem, Date.now());
+  } catch (error) {
+    const errorItem: Omit<HistoryItemInfo, 'id'> = {
+      type: MessageType.INFO,
+      text: `❌ **Failed to Switch Model**
 
-  // TODO: Actually switch the model in the config
-  // This should integrate with the config system to update the model
-  console.log(`[Model] Switched to ${modelName} for provider ${provider}`);
+Error: ${error instanceof Error ? error.message : String(error)}
+
+The model selection was not applied. Please try again or check your configuration.`,
+    };
+    context.ui.addItem(errorItem, Date.now());
+    console.error(`[Model] Failed to switch to ${modelName}:`, error);
+  }
 }

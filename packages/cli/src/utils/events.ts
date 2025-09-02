@@ -19,6 +19,8 @@ export enum AppEvent {
   ResetUILayout = 'reset-ui-layout',
   SetFocusRegion = 'set-focus-region',
   SetLayoutMode = 'set-layout-mode',
+  // Provider events
+  ProviderChanged = 'provider-changed',
 }
 
 export const appEvents = new EventEmitter();

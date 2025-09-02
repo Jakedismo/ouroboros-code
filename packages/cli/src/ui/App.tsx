@@ -284,8 +284,15 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     const toggleContext = () => setShowContextPanel(prev => !prev);
     // const toggleWorkflow = () => setShowWorkflowProgress(prev => !prev);
     
+    // Provider change handler for immediate status bar update
+    const handleProviderChange = (data: { provider: string, model: string }) => {
+      setCurrentModel(data.model);
+      console.log(`[UI] Status bar updated: ${data.provider} -> ${data.model}`);
+    };
+    
     appEvents.on(AppEvent.ToggleSidebar, toggleSidebar);
     appEvents.on(AppEvent.ToggleContextPanel, toggleContext);
+    appEvents.on(AppEvent.ProviderChanged, handleProviderChange);
     // appEvents.on(AppEvent.ToggleWorkflowProgress, toggleWorkflow);
 
     return () => {
@@ -293,6 +300,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
       appEvents.off(AppEvent.LogError, logErrorHandler);
       appEvents.off(AppEvent.ToggleSidebar, toggleSidebar);
       appEvents.off(AppEvent.ToggleContextPanel, toggleContext);
+      appEvents.off(AppEvent.ProviderChanged, handleProviderChange);
       // appEvents.off(AppEvent.ToggleWorkflowProgress, toggleWorkflow);
     };
   }, [handleNewMessage]);
