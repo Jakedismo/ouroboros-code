@@ -216,8 +216,13 @@ export class OpenAIProvider implements Provider {
       (requestParams as any).response_format = options.response_format;
     }
     
+    console.log('[OpenAI Provider] Request params:', JSON.stringify(requestParams, null, 2));
+    
     const response = await this.client.chat.completions.create(requestParams);
     
-    return response.choices[0]?.message?.content || '';
+    const content = response.choices[0]?.message?.content || '';
+    console.log('[OpenAI Provider] Raw response content (first 500 chars):', content.substring(0, 500));
+    
+    return content;
   }
 }

@@ -44,10 +44,20 @@ export class OpenAIContentGenerator implements ContentGenerator {
       console.log('[OpenAI Content Generator] Tools received:', JSON.stringify(tools, null, 2));
       
       // Pass model to provider so it can filter parameters appropriately
+      // Use the model from request if provided, otherwise fall back to this.model
+      const modelToUse = request.model || this.model;
+      console.log('[OpenAI Content Generator] Model to use:', modelToUse, 'Request model:', request.model, 'Default model:', this.model);
+      
+      // Extract all config parameters for debugging
+      console.log('[OpenAI Content Generator] Full config:', JSON.stringify(request.config, null, 2));
+      
       const response = await this.provider.generateCompletion(messages, {
-        model: this.model,
+        model: modelToUse,
         temperature: request.config?.temperature,
         maxTokens: request.config?.maxOutputTokens,
+        // Pass through any reasoning/thinking parameters if they exist
+        ...((request.config as any)?.reasoning_effort && { reasoning_effort: (request.config as any).reasoning_effort }),
+        ...((request.config as any)?.response_format && { response_format: (request.config as any).response_format }),
       }, tools); // Pass tools as separate parameter
 
       // Convert back to Gemini response format
@@ -87,10 +97,16 @@ export class OpenAIContentGenerator implements ContentGenerator {
         // Extract tools from config (they come from GeminiChat's generationConfig.tools)
         const tools = request.config?.tools || [];
         
+        // Use the model from request if provided, otherwise fall back to self.model
+        const modelToUse = request.model || self.model;
+        console.log('[OpenAI Streaming] Model to use:', modelToUse, 'Config:', JSON.stringify(request.config, null, 2));
+        
         const stream = self.provider.generateResponse(messages, {
-          model: self.model,
+          model: modelToUse,
           temperature: request.config?.temperature,
           maxTokens: request.config?.maxOutputTokens,
+          // Pass through any reasoning/thinking parameters if they exist
+          ...((request.config as any)?.reasoning_effort && { reasoning_effort: (request.config as any).reasoning_effort }),
         }, tools); // Pass tools as separate parameter
 
         for await (const chunk of stream) {
@@ -191,21 +207,43 @@ export class OpenAIContentGenerator implements ContentGenerator {
   }
 
   private convertToMessages(contents: ContentListUnion): Array<{role: 'user' | 'assistant' | 'system', content: string}> {
+    // Add debugging to see what we're receiving
+    console.log('[OpenAI ContentGenerator] convertToMessages input type:', typeof contents);
+    console.log('[OpenAI ContentGenerator] convertToMessages isArray:', Array.isArray(contents));
+    if (Array.isArray(contents)) {
+      console.log('[OpenAI ContentGenerator] Array length:', contents.length);
+      contents.forEach((item, index) => {
+        console.log(`[OpenAI ContentGenerator] Item ${index} type:`, typeof item);
+        if (typeof item === 'object' && item !== null) {
+          console.log(`[OpenAI ContentGenerator] Item ${index} keys:`, Object.keys(item));
+        }
+        if (typeof item === 'string') {
+          console.log(`[OpenAI ContentGenerator] Item ${index} string value (first 100 chars):`, item.substring(0, 100));
+        }
+      });
+    }
+    
     // Handle string contents
     if (typeof contents === 'string') {
+      console.log('[OpenAI ContentGenerator] Processing single string as user message');
       return [{ role: 'user', content: contents }];
     }
 
     if (!Array.isArray(contents)) {
+      console.error('[OpenAI ContentGenerator] Invalid contents type:', typeof contents);
       throw new Error('Contents must be string or array');
     }
 
     const messages: Array<{role: 'user' | 'assistant' | 'system', content: string}> = [];
 
     // Process each item in the array
-    for (const item of contents) {
+    for (let i = 0; i < contents.length; i++) {
+      const item = contents[i];
+      console.log(`[OpenAI ContentGenerator] Processing item ${i}, type: ${typeof item}`);
+      
       if (typeof item === 'string') {
         // Raw string - treat as user message
+        console.log(`[OpenAI ContentGenerator] Adding raw string as user message at index ${i}`);
         messages.push({ role: 'user', content: item });
       } else if (item && typeof item === 'object') {
         if ('role' in item && 'parts' in item) {
@@ -226,17 +264,28 @@ export class OpenAIContentGenerator implements ContentGenerator {
           }).join('') || '';
 
           if (text.trim()) {
+            console.log(`[OpenAI ContentGenerator] Adding Content object as ${role} message at index ${i}`);
             messages.push({ role, content: text });
           }
         } else if ('text' in item) {
           // This is a Part object - treat as user message
           const text = (item as any).text || '';
           if (text.trim()) {
+            console.log(`[OpenAI ContentGenerator] Adding Part object as user message at index ${i}`);
             messages.push({ role: 'user', content: text });
           }
+        } else {
+          console.warn(`[OpenAI ContentGenerator] Unhandled object type at index ${i}:`, Object.keys(item));
         }
+      } else {
+        console.warn(`[OpenAI ContentGenerator] Skipping invalid item at index ${i}, type: ${typeof item}`);
       }
     }
+
+    console.log('[OpenAI ContentGenerator] Final messages count:', messages.length);
+    messages.forEach((msg, index) => {
+      console.log(`[OpenAI ContentGenerator] Message ${index}: role=${msg.role}, content length=${msg.content.length}`);
+    });
 
     return messages;
   }
