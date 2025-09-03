@@ -290,7 +290,13 @@ export class Turn {
         throw error;
       }
 
-      const contextForReport = [...this.chat.getHistory(/*curated*/ true), req];
+      // Wrap the request in a proper message object if it's a raw string
+      const wrappedReq = typeof req === 'string' 
+        ? { role: 'user', parts: [{ text: req }] }
+        : Array.isArray(req)
+        ? { role: 'user', parts: req }
+        : req;
+      const contextForReport = [...this.chat.getHistory(/*curated*/ true), wrappedReq];
       // Get the current provider name from the chat's config
       const providerName = (this.chat as any).config?.getProvider?.() || 'Gemini';
       const providerDisplayName = providerName.charAt(0).toUpperCase() + providerName.slice(1);
