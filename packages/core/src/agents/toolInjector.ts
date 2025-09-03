@@ -41,39 +41,124 @@ const TOOL_NAME_MAP = {
  */
 const TOOL_USAGE_EXAMPLES = `
 
-## Tool Usage Guidelines for Agents
+## Comprehensive Tool Usage Guidelines for Agents
 
-When providing assistance, you have access to the following tools. Use them appropriately based on your expertise:
+You have access to 60+ specialized tools across multiple categories. Use them strategically based on your expertise:
 
-### Core File Operations
-- **${ReadFileTool.Name}**: Read and analyze files to understand project structure and code
-- **${WriteFileTool.Name}**: Create new files when implementing solutions
-- **${EditTool.Name}**: Modify existing files with precise changes
-- **${ReadManyFilesTool.Name}**: Read multiple files efficiently for broader context
+### 📁 Core File Operations
+- **read_file**: Read and analyze files to understand project structure and code
+- **write_file**: Create new files when implementing solutions
+- **replace**: Modify existing files with precise changes (preferred for edits)
+- **read_many_files**: Read multiple files efficiently for broader context
+- **list_directory**: List directory contents to understand project structure
+- **glob**: Find files using patterns (e.g., "**/*.ts" for TypeScript files)
+- **search_file_content**: Search for specific patterns in code or text
 
-### Discovery and Search
-- **${GlobTool.Name}**: Find files using patterns (e.g., "**/*.ts" for TypeScript files)
-- **${GrepTool.Name}**: Search for specific patterns in code or text
-- **${LSTool.Name}**: List directory contents to understand project structure
+### 🔧 Ouroboros Command Tools (Use these for specialized tasks!)
+- **analyze**: Deep analysis of code, architecture, or patterns
+- **codereview**: Comprehensive code review with detailed feedback
+- **debug**: Debug issues, trace problems, analyze error logs
+- **docgen**: Generate documentation for code, APIs, or projects
+- **testgen**: Generate comprehensive test suites and test cases
+- **refactor**: Refactor code while preserving functionality
+- **secaudit**: Security audit code for vulnerabilities and best practices
+- **precommit**: Run pre-commit checks and validations
+- **planner**: Create detailed project plans and task breakdowns
+- **tracer**: Trace code execution paths and dependencies
+- **thinkdeep**: Deep reasoning and analysis for complex problems
 
-### Execution and Validation
-- **${ShellTool.Name}**: Execute commands to build, test, lint, or validate changes
-- **${MemoryTool.Name}**: Remember important user preferences and project-specific information
+### 🌐 External Integration Tools
+- **web_fetch**: Fetch content from URLs for research and analysis
+- **google_web_search**: Search the web for current information
+- **get-library-docs**: Get up-to-date documentation for libraries
+- **resolve-library-id**: Find correct library identifiers
+- **searchGitHub**: Search GitHub for code examples and repositories
 
-### Tool Usage Best Practices
-1. **Always use absolute paths** when referencing files
-2. **Read before writing** - understand existing code patterns and conventions
-3. **Validate changes** by running appropriate build/test commands
-4. **Search efficiently** using parallel tool calls when gathering information
-5. **Follow security guidelines** by explaining potentially destructive commands
+### 🤖 Swarm & Collaboration Tools
+- **swarm_agent**: Spawn and manage other AI agents for parallel work
+- **swarm_orchestrate**: Coordinate multiple agents on complex tasks
+- **swarm_notify**: Send notifications between agents
+- **swarm_task**: Create and manage distributed tasks
+- **swarm_memory**: Share memory between swarm agents
+- **swarm_persona**: Manage agent personalities and capabilities
+- **swarm_pipeline**: Create processing pipelines with multiple agents
 
-### Example Workflow Pattern:
-1. Use ${GrepTool.Name} or ${GlobTool.Name} to find relevant files
-2. Use ${ReadFileTool.Name} or ${ReadManyFilesTool.Name} to understand current implementation
-3. Use ${EditTool.Name} or ${WriteFileTool.Name} to implement changes
-4. Use ${ShellTool.Name} to validate changes (build, test, lint)
+### 🏗️ Worktree & Git Management
+- **worktree_manager**: Manage Git worktrees for parallel development
+- **worktree_sync**: Synchronize changes across worktrees
+- **worktree_workflow**: Automate worktree-based development workflows
+- **worktree**: Basic worktree operations
 
-Apply these tools strategically within your domain of expertise to provide comprehensive assistance.`;
+### 🧠 Memory & Evolution Tools
+- **save_memory**: Remember user preferences and project information
+- **file_memory_read**: Read from persistent memory storage
+- **file_memory_write**: Write to persistent memory storage
+- **file_memory_search**: Search through stored memories
+- **request_evolution**: Request system evolution and improvements
+- **persona_evolution_load**: Load evolved agent personalities
+- **persona_evolution_save**: Save agent personality improvements
+- **evolution_system_status**: Check system evolution status
+
+### 🔗 A2A (Agent-to-Agent) Communication
+- **a2a_network**: Manage agent network connections
+- **a2a_registry**: Register and discover other agents
+- **a2a_coordinate**: Coordinate with external agent systems
+
+### 📊 Project & Progress Management
+- **project_metadata**: Access and update project metadata
+- **progress_create**: Create progress tracking instances
+- **progress_update**: Update progress on tasks
+- **progress_complete**: Mark tasks as completed
+- **notification_create**: Create system notifications
+- **notifications_list**: List active notifications
+- **notifications_stats**: Get notification statistics
+
+### 🛠️ System & Execution
+- **run_shell_command**: Execute shell commands safely
+- **resource_discover**: Discover available system resources
+
+## Strategic Tool Usage Patterns
+
+### 🎯 For Code Analysis Tasks:
+1. **analyze** - Deep code analysis and patterns
+2. **read_file** / **read_many_files** - Understand codebase
+3. **search_file_content** - Find specific implementations
+4. **codereview** - Comprehensive review with feedback
+
+### 🔍 For Research & Documentation:
+1. **get-library-docs** - Get current library documentation  
+2. **google_web_search** - Research latest practices
+3. **docgen** - Generate comprehensive documentation
+4. **web_fetch** - Fetch additional resources
+
+### ⚡ For Development & Testing:
+1. **testgen** - Generate test suites
+2. **run_shell_command** - Build, test, validate
+3. **precommit** - Run pre-commit checks
+4. **debug** - Trace and fix issues
+
+### 🤝 For Complex Multi-Agent Tasks:
+1. **planner** - Create detailed task plans
+2. **swarm_agent** - Spawn specialized agents
+3. **swarm_orchestrate** - Coordinate parallel work
+4. **a2a_coordinate** - Connect with external systems
+
+### 🧠 For Learning & Evolution:
+1. **thinkdeep** - Deep reasoning on complex problems
+2. **persona_evolution_save** - Improve capabilities
+3. **file_memory_write** - Remember insights
+4. **request_evolution** - Request system improvements
+
+## Tool Usage Best Practices
+1. **Use specialized tools** - Prefer **analyze** over basic file reading for code analysis
+2. **Leverage documentation tools** - Use **get-library-docs** for accurate, current info
+3. **Generate comprehensive outputs** - Use **docgen**, **testgen** for complete solutions
+4. **Coordinate intelligently** - Use swarm tools for complex, parallel tasks
+5. **Remember and evolve** - Use memory and evolution tools to improve over time
+6. **Always validate** - Use **run_shell_command** to test changes
+7. **Think deeply** - Use **thinkdeep** for complex problem-solving
+
+Choose tools that match your expertise and the task complexity. These specialized tools make you far more effective than basic file operations alone!`;
 
 /**
  * Injects tool usage examples and resolves tool name placeholders in an agent prompt
@@ -112,27 +197,76 @@ function getRecommendedToolsForSpecialties(specialties: string[]): string {
   // Convert specialties to lowercase for matching
   const lowerSpecialties = specialties.map(s => s.toLowerCase());
   
-  // File system and code analysis tools for most agents
+  // Code analysis and development
   if (lowerSpecialties.some(s => s.includes('code') || s.includes('develop') || s.includes('architect') || s.includes('engineer'))) {
-    recommendations.push(`- **${ReadFileTool.Name}** & **${EditTool.Name}**: Essential for code analysis and modification`);
-    recommendations.push(`- **${GrepTool.Name}** & **${GlobTool.Name}**: Crucial for understanding codebase patterns`);
+    recommendations.push(`- **analyze**: Deep code analysis and architectural insights`);
+    recommendations.push(`- **codereview**: Comprehensive code review and quality assessment`);
+    recommendations.push(`- **refactor**: Safely refactor code while preserving functionality`);
+    recommendations.push(`- **${ReadFileTool.Name}** & **replace**: Read and modify code files`);
   }
   
-  // Shell commands for DevOps, testing, and build-related specialties
-  if (lowerSpecialties.some(s => s.includes('devops') || s.includes('deploy') || s.includes('test') || s.includes('build') || s.includes('ci/cd'))) {
-    recommendations.push(`- **${ShellTool.Name}**: Critical for deployment, testing, and automation tasks`);
+  // Testing and quality assurance
+  if (lowerSpecialties.some(s => s.includes('test') || s.includes('qa') || s.includes('quality'))) {
+    recommendations.push(`- **testgen**: Generate comprehensive test suites`);
+    recommendations.push(`- **debug**: Debug issues and trace problems`);
+    recommendations.push(`- **secaudit**: Security audit for vulnerabilities`);
+    recommendations.push(`- **precommit**: Run pre-commit validation checks`);
   }
   
-  // Memory tool for configuration and preferences
-  if (lowerSpecialties.some(s => s.includes('config') || s.includes('setup') || s.includes('manage'))) {
-    recommendations.push(`- **${MemoryTool.Name}**: Useful for remembering project-specific configurations`);
+  // DevOps, deployment, and automation
+  if (lowerSpecialties.some(s => s.includes('devops') || s.includes('deploy') || s.includes('build') || s.includes('ci/cd') || s.includes('infra'))) {
+    recommendations.push(`- **${ShellTool.Name}**: Execute deployment and build commands`);
+    recommendations.push(`- **worktree_manager**: Manage parallel development workflows`);
+    recommendations.push(`- **precommit**: Automate pre-commit validations`);
+    recommendations.push(`- **resource_discover**: Discover system resources`);
+  }
+  
+  // Documentation and technical writing
+  if (lowerSpecialties.some(s => s.includes('doc') || s.includes('write') || s.includes('technical'))) {
+    recommendations.push(`- **docgen**: Generate comprehensive documentation`);
+    recommendations.push(`- **get-library-docs**: Get current library documentation`);
+    recommendations.push(`- **analyze**: Deep analysis for documentation insights`);
+    recommendations.push(`- **google_web_search**: Research current practices`);
+  }
+  
+  // Research and analysis
+  if (lowerSpecialties.some(s => s.includes('research') || s.includes('analysis') || s.includes('data'))) {
+    recommendations.push(`- **thinkdeep**: Deep reasoning on complex problems`);
+    recommendations.push(`- **google_web_search**: Research latest information`);
+    recommendations.push(`- **web_fetch**: Fetch external resources for analysis`);
+    recommendations.push(`- **searchGitHub**: Find code examples and patterns`);
+  }
+  
+  // Project management and planning
+  if (lowerSpecialties.some(s => s.includes('manage') || s.includes('plan') || s.includes('project') || s.includes('lead'))) {
+    recommendations.push(`- **planner**: Create detailed project plans and breakdowns`);
+    recommendations.push(`- **project_metadata**: Access and manage project information`);
+    recommendations.push(`- **progress_create**: Track task progress`);
+    recommendations.push(`- **swarm_orchestrate**: Coordinate multi-agent workflows`);
+  }
+  
+  // AI/ML and system evolution
+  if (lowerSpecialties.some(s => s.includes('ai') || s.includes('ml') || s.includes('machine') || s.includes('intelligence'))) {
+    recommendations.push(`- **swarm_agent**: Spawn and coordinate AI agents`);
+    recommendations.push(`- **persona_evolution_save**: Improve agent capabilities`);
+    recommendations.push(`- **request_evolution**: Request system improvements`);
+    recommendations.push(`- **thinkdeep**: Apply deep reasoning capabilities`);
+  }
+  
+  // Security and auditing
+  if (lowerSpecialties.some(s => s.includes('security') || s.includes('audit') || s.includes('cyber'))) {
+    recommendations.push(`- **secaudit**: Comprehensive security audits`);
+    recommendations.push(`- **debug**: Trace security issues and vulnerabilities`);
+    recommendations.push(`- **analyze**: Deep security analysis`);
+    recommendations.push(`- **search_file_content**: Find security-related code patterns`);
   }
   
   // Default recommendations if no specific matches
   if (recommendations.length === 0) {
-    recommendations.push(`- **${ReadFileTool.Name}**: Start by understanding the current state`);
-    recommendations.push(`- **${GrepTool.Name}**: Search for relevant patterns in your domain`);
-    recommendations.push(`- **${EditTool.Name}**: Apply changes based on your expertise`);
+    recommendations.push(`- **analyze**: Deep analysis in your domain of expertise`);
+    recommendations.push(`- **thinkdeep**: Apply deep reasoning to complex problems`);
+    recommendations.push(`- **${ReadFileTool.Name}**: Understand the current state`);
+    recommendations.push(`- **docgen**: Generate comprehensive documentation`);
   }
   
   return '\n' + recommendations.join('\n');
