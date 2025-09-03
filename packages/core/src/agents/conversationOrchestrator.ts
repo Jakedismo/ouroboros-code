@@ -6,6 +6,7 @@
 
 import { AgentSelectorService } from './agentSelectorService.js';
 import { AgentManager } from './agentManager.js';
+import type { Config } from '../config/config.js';
 import type { AgentPersona } from './personas.js';
 
 /**
@@ -29,13 +30,11 @@ export class ConversationOrchestrator {
   }
 
   /**
-   * Initialize the orchestrator with provider configuration for agent selection
-   * @param provider - Provider type ('openai', 'anthropic', 'gemini') or legacy API key
-   * @param apiKey - API key if provider is specified
-   * @param model - Optional model override
+   * Initialize the orchestrator with the same ContentGenerator as regular chat
+   * @param config - The Config instance that contains the GeminiClient with ContentGenerator
    */
-  async initialize(provider: string, apiKey?: string, model?: string): Promise<void> {
-    await this.agentSelectorService.initialize(provider, apiKey, model);
+  async initialize(config: Config): Promise<void> {
+    await this.agentSelectorService.initialize(config);
   }
 
   /**

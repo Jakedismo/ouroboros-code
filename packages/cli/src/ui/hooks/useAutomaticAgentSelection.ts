@@ -30,41 +30,12 @@ export const useAutomaticAgentSelection = (
         
         const instance = ConversationOrchestrator.getInstance();
         
-        // Get current provider configuration
-        const currentProvider = config.getProvider?.() || 'gemini';
-        let apiKey: string | undefined;
-        let model: string | undefined;
-        
-        // Get API key based on current provider
-        switch (currentProvider) {
-          case 'openai':
-            apiKey = config.getOpenAIApiKey?.() || process.env['OPENAI_API_KEY'];
-            // Use gpt-4o for reliable agent selection with OpenAI (gpt-5-nano may not be available)
-            model = 'gpt-4o';
-            break;
-          case 'anthropic':
-            // Use provider API key for Anthropic
-            apiKey = config.getProviderApiKey?.() || process.env['ANTHROPIC_API_KEY'];
-            // Use Haiku for fast agent selection with Anthropic
-            model = 'claude-3-5-haiku-20241022';
-            break;
-          case 'gemini':
-          default:
-            // Use provider API key for Gemini
-            apiKey = config.getProviderApiKey?.() || process.env['GEMINI_API_KEY'];
-            // Use Flash Thinking for agent selection with Gemini
-            model = 'gemini-2.0-flash-thinking-exp-1219';
-            break;
-        }
-        
-        if (apiKey) {
-          await instance.initialize(currentProvider, apiKey, model);
-          setOrchestrator(instance);
-          setIsInitialized(true);
-          console.log(`[AutoAgentSelection] Initialized with ${currentProvider} provider`);
-        } else {
-          console.warn(`${currentProvider} API key not available, automatic agent selection disabled`);
-        }
+        // Initialize with the SAME Config that regular chat uses
+        // This ensures both systems use the exact same ContentGenerator
+        await instance.initialize(config);
+        setOrchestrator(instance);
+        setIsInitialized(true);
+        console.log('[AutoAgentSelection] Initialized with same ContentGenerator as regular chat');
       } catch (error) {
         console.error('Failed to initialize ConversationOrchestrator:', error);
         console.warn('ConversationOrchestrator not available, automatic agent selection disabled');

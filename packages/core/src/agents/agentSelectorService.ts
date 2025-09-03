@@ -6,6 +6,7 @@
 
 import type { ContentGenerator } from '../core/contentGenerator.js';
 import type { Provider } from '../providers/types.js';
+import type { Config } from '../config/config.js';
 import { AgentManager } from './agentManager.js';
 import { AGENT_PERSONAS, getAgentById, type AgentPersona } from './personas.js';
 
@@ -37,59 +38,20 @@ export class AgentSelectorService {
     return AgentSelectorService.instance;
   }
 
-  /**
-   * Get default model for the specified provider
-   */
-  private getDefaultModel(provider: string): string {
-    switch (provider) {
-      case 'openai':
-        return 'gpt-4o'; // Use working model instead of gpt-5-nano
-      case 'anthropic':
-        return 'claude-3-5-haiku-20241022';
-      case 'gemini':
-        return 'gemini-2.0-flash-thinking-exp-1219';
-      default:
-        throw new Error(`Unsupported provider: ${provider}`);
-    }
-  }
 
   /**
-   * Initialize the agent selector service with provider configuration
-   * @param provider - The provider type ('openai', 'anthropic', 'gemini')
-   * @param apiKey - The API key for the provider
-   * @param model - Optional model override for agent selection
+   * Initialize the agent selector service with the same ContentGenerator as regular chat
+   * @param config - The Config instance that contains the GeminiClient with ContentGenerator
    */
-  async initialize(provider: string = 'openai', apiKey?: string, model?: string): Promise<void> {
-    // For backward compatibility, if provider is actually an API key string, treat it as OpenAI
-    if (provider && !['openai', 'anthropic', 'gemini'].includes(provider) && !apiKey) {
-      // Legacy call with just API key
-      apiKey = provider;
-      provider = 'openai';
-    }
-
-    if (!apiKey) {
-      throw new Error(`${provider} API key is required for agent selection service`);
-    }
-
-    // Create ContentGenerator instance based on provider
-    this.selectedModel = model || this.getDefaultModel(provider);
-    
-    if (provider === 'openai') {
-      const { OpenAIContentGenerator } = await import('../providers/openai/content-generator.js');
-      this.contentGenerator = new OpenAIContentGenerator(apiKey, this.selectedModel);
-    } else if (provider === 'anthropic') {
-      const { AnthropicContentGenerator } = await import('../providers/anthropic/content-generator.js');
-      this.contentGenerator = new AnthropicContentGenerator(apiKey, this.selectedModel);
-    } else if (provider === 'gemini') {
-      // For Gemini, we'd need to create a proper Gemini ContentGenerator
-      // For now, fallback to a mock implementation
-      throw new Error('Gemini provider not yet supported in agent selection');
-    } else {
-      throw new Error(`Unsupported provider: ${provider}`);
-    }
+  async initialize(config: Config): Promise<void> {
+    // Use the SAME ContentGenerator that regular chat uses - this ensures unified behavior
+    this.contentGenerator = config.getGeminiClient().getContentGenerator();
     
     // Keep the provider reference for backwards compatibility
     this.selectorProvider = (this.contentGenerator as any).provider;
+
+    // Store the current model from config
+    this.selectedModel = config.getModel();
 
     this.agentManager = AgentManager.getInstance();
   }
