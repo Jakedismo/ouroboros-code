@@ -86,6 +86,20 @@ export function normalizeTools(tools: unknown[]): NormalizedTool[] {
 }
 
 /**
+ * Sanitizes a string for safe JSON serialization
+ */
+function sanitizeForJson(str: string): string {
+  if (typeof str !== 'string') return str;
+  
+  // Replace problematic characters that can break JSON parsing
+  // Note: We let JSON.stringify handle the escaping naturally instead of manual escaping
+  return str
+    .replace(/\r\n/g, '\n')  // Normalize Windows line endings
+    .replace(/\r/g, '\n')    // Normalize Mac line endings
+    .trim();                 // Remove leading/trailing whitespace
+}
+
+/**
  * Converts normalized tools to OpenAI format
  */
 export function toOpenAITools(normalizedTools: NormalizedTool[]): OpenAITool[] {
@@ -93,8 +107,8 @@ export function toOpenAITools(normalizedTools: NormalizedTool[]): OpenAITool[] {
     type: 'function' as const,
     function: {
       name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
+      description: sanitizeForJson(tool.description),
+      parameters: tool.parameters, // Parameters are already objects, not strings
     },
   }));
 }

@@ -58,6 +58,9 @@ export class OpenAIContentGenerator implements ContentGenerator {
         // Pass through any reasoning/thinking parameters if they exist
         ...((request.config as any)?.reasoning_effort && { reasoning_effort: (request.config as any).reasoning_effort }),
         ...((request.config as any)?.response_format && { response_format: (request.config as any).response_format }),
+        // Pass through modern OpenAI function calling parameters
+        ...((request.config as any)?.tool_choice && { tool_choice: (request.config as any).tool_choice }),
+        ...((request.config as any)?.parallel_tool_calls !== undefined && { parallel_tool_calls: (request.config as any).parallel_tool_calls }),
       }, tools); // Pass tools as separate parameter
 
       // Convert back to Gemini response format
@@ -107,6 +110,9 @@ export class OpenAIContentGenerator implements ContentGenerator {
           maxTokens: request.config?.maxOutputTokens,
           // Pass through any reasoning/thinking parameters if they exist
           ...((request.config as any)?.reasoning_effort && { reasoning_effort: (request.config as any).reasoning_effort }),
+          // Pass through modern OpenAI function calling parameters
+          ...((request.config as any)?.tool_choice && { tool_choice: (request.config as any).tool_choice }),
+          ...((request.config as any)?.parallel_tool_calls !== undefined && { parallel_tool_calls: (request.config as any).parallel_tool_calls }),
         }, tools); // Pass tools as separate parameter
 
         for await (const chunk of stream) {

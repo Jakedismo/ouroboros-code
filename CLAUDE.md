@@ -8,6 +8,33 @@ This is **Ouroboros** - an open-source multi-agent AI framework that brings the 
 
 ## 🚨 CRITICAL: Merging Without Breaking Ouroboros Features
 
+### Multi-Provider Tool Usage Fixes (2025-09-03)
+
+**Problem**: OpenAI and Anthropic providers weren't using tools properly in both regular chat and `/agents` mode
+- Error: "Model stream completed without any chunks" when using OpenAI
+- Root cause: Turn class was hardcoded to route all requests through GeminiChat
+- Agent issue: Agent prompts lacked tool usage instructions, only had domain expertise
+
+**Solution Implemented**:
+1. **Provider Routing Fix** (`packages/core/src/core/turn.ts`)
+   - Turn class now accepts `config` and `contentGenerator` parameters
+   - Added provider detection: non-Gemini providers use `runWithContentGenerator()`
+   - Created `turn-provider-support.ts` with provider-specific handlers
+
+2. **Tool Instruction Inheritance** (`packages/core/src/agents/toolInjector.ts`)
+   - Extracts core tool instructions from main Gemini prompt
+   - Automatically injects tool usage workflow into ALL agent prompts
+   - Removed restrictive conditional tool recommendations
+   - All agents now have access to ALL tools
+
+**Files Modified**:
+- `packages/core/src/core/turn.ts` - Added provider detection and routing
+- `packages/core/src/core/turn-provider-support.ts` - NEW: Provider-specific streaming handlers
+- `packages/core/src/core/client.ts` - Pass config/contentGenerator to Turn
+- `packages/core/src/agents/toolInjector.ts` - Complete rewrite for tool instruction inheritance
+- `packages/core/src/providers/openai/index.ts` - Modern function calling patterns
+- `packages/core/src/providers/anthropic/content-generator.ts` - Anthropic tool handling
+
 ### Latest TUI Integration & Branding Updates (2025-08-29)
 
 **Successfully Fixed Issues**:

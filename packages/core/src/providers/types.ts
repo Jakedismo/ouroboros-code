@@ -18,7 +18,10 @@ export interface ProviderOptions {
   temperature?: number;
   maxTokens?: number;
   systemPrompt?: string;
-  response_format?: { type: 'json_object' | 'text' };
+  response_format?: { type: 'json_object' | 'text' | 'json_schema', json_schema?: any };
+  tool_choice?: 'none' | 'auto' | 'required' | { type: 'function', function: { name: string } };
+  parallel_tool_calls?: boolean;
+  reasoning_effort?: string;
 }
 
 export interface StreamingResponse {

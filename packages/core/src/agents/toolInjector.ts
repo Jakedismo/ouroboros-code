@@ -37,199 +37,152 @@ const TOOL_NAME_MAP = {
 } as const;
 
 /**
- * Tool usage examples that should be appended to agent prompts
+ * Core tool usage instructions extracted from the main system prompt
+ * This provides the fundamental workflow and tool usage patterns
  */
-const TOOL_USAGE_EXAMPLES = `
+const CORE_TOOL_INSTRUCTIONS = `
 
-## Tool Usage Guidelines for Agents
+# Core Tool Usage Instructions
 
-You have access to core file operations plus powerful Ouroboros command tools. Use them strategically:
+## Primary Workflows
 
-### 📁 Core File Operations
-- **read_file**: Read and analyze files to understand project structure and code
-- **write_file**: Create new files when implementing solutions
-- **replace**: Modify existing files with precise changes (preferred for edits)
-- **read_many_files**: Read multiple files efficiently for broader context
-- **list_directory**: List directory contents to understand project structure
-- **glob**: Find files using patterns (e.g., "**/*.ts" for TypeScript files)
-- **search_file_content**: Search for specific patterns in code or text
-- **run_shell_command**: Execute shell commands safely
-- **save_memory**: Remember user preferences and project information
+### Software Engineering Tasks
+When requested to perform tasks like fixing bugs, adding features, refactoring, or explaining code, follow this sequence:
+1. **Understand:** Think about the user's request and the relevant codebase context. Use '${GrepTool.Name}' and '${GlobTool.Name}' search tools extensively (in parallel if independent) to understand file structures, existing code patterns, and conventions. Use '${ReadFileTool.Name}' and '${ReadManyFilesTool.Name}' to understand context and validate any assumptions you may have.
+2. **Plan:** Build a coherent and grounded (based on the understanding in step 1) plan for how you intend to resolve the user's task. Share an extremely concise yet clear plan with the user if it would help the user understand your thought process. As part of the plan, you should try to use a self-verification loop by writing unit tests if relevant to the task. Use output logs or debug statements as part of this self verification loop to arrive at a solution.
+3. **Implement:** Use the available tools (e.g., '${EditTool.Name}', '${WriteFileTool.Name}' '${ShellTool.Name}' ...) to act on the plan, strictly adhering to the project's established conventions.
+4. **Verify (Tests):** If applicable and feasible, verify the changes using the project's testing procedures. Identify the correct test commands and frameworks by examining 'README' files, build/package configuration (e.g., 'package.json'), or existing test execution patterns. NEVER assume standard test commands.
+5. **Verify (Standards):** VERY IMPORTANT: After making code changes, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards.
 
-### 🔧 Ouroboros Command Tools (Powerful specialized commands!)
+## Tool Usage Guidelines
 
-These are custom slash commands with advanced capabilities. Use them for professional-grade work:
+- **File Paths:** Always use absolute paths when referring to files with tools like '${ReadFileTool.Name}' or '${WriteFileTool.Name}'. Relative paths are not supported. You must provide an absolute path.
+- **Parallelism:** Execute multiple independent tool calls in parallel when feasible (i.e. searching the codebase).
+- **Command Execution:** Use the '${ShellTool.Name}' tool for running shell commands, remembering the safety rule to explain modifying commands first.
+- **Background Processes:** Use background processes (via \`&\`) for commands that are unlikely to stop on their own, e.g. \`node server.js &\`.
+- **Interactive Commands:** Try to avoid shell commands that are likely to require user interaction. Use non-interactive versions of commands when available.
+- **Remembering Facts:** Use the '${MemoryTool.Name}' tool to remember specific, *user-related* facts or preferences when the user explicitly asks.
+- **Respect User Confirmations:** Most tool calls will first require confirmation from the user. If a user cancels a function call, respect their choice and do _not_ try to make the function call again unless requested.
 
-- **analyze**: Deep analysis of code, architecture, patterns, or any complex topic
-  - Use for comprehensive code analysis, architectural reviews, pattern detection
-  - More powerful than basic file reading - provides insights and recommendations
-  
-- **codereview**: Comprehensive code review with detailed feedback  
-  - Professional-grade code reviews with security, performance, style analysis
-  - Identifies issues, suggests improvements, checks best practices
-  
-- **debug**: Debug issues, trace problems, analyze error logs
-  - Systematic debugging approach with root cause analysis
-  - Trace execution paths, analyze stack traces, identify issues
-  
-- **docgen**: Generate comprehensive documentation for code, APIs, or projects
-  - Creates professional documentation with examples, usage guides
-  - Supports multiple formats and documentation standards
-  
-- **testgen**: Generate comprehensive test suites and test cases
-  - Creates thorough test coverage including unit, integration, edge cases
-  - Follows testing best practices and frameworks
-  
-- **refactor**: Safely refactor code while preserving functionality
-  - Intelligent code restructuring with safety checks
-  - Maintains functionality while improving code quality
-  
-- **secaudit**: Security audit code for vulnerabilities and best practices
-  - Comprehensive security analysis covering common vulnerabilities
-  - Provides remediation guidance and security recommendations
-  
-- **precommit**: Run pre-commit checks and validations
-  - Automated validation before code commits
-  - Runs linting, testing, formatting, and quality checks
-  
-- **planner**: Create detailed project plans and task breakdowns
-  - Strategic planning with timelines, dependencies, resource allocation
-  - Breaks complex projects into manageable tasks
-  
-- **tracer**: Trace code execution paths and dependencies
-  - Map code flow, identify dependencies, trace data flow
-  - Useful for understanding complex systems
-  
-- **thinkdeep**: Deep reasoning and analysis for complex problems
-  - Advanced reasoning capabilities for difficult problems
-  - Multi-perspective analysis with detailed conclusions
+## Available Tools
 
-## Strategic Usage Patterns
+### File Operations
+- **${ReadFileTool.Name}**: Read file contents to understand code structure and implementation
+- **${WriteFileTool.Name}**: Create new files when implementing features or tests
+- **${EditTool.Name}**: Modify existing files with precise replacements (preferred for editing)
+- **${ReadManyFilesTool.Name}**: Read multiple files efficiently for broader context
+- **${LSTool.Name}**: List directory contents to understand project structure
 
-### 🎯 For Code Analysis:
-1. **analyze** → **codereview** → **refactor** (comprehensive code improvement)
-2. **tracer** → **debug** (understanding and fixing issues)
+### Search Tools
+- **${GlobTool.Name}**: Find files using patterns (e.g., "**/*.ts" for TypeScript files)
+- **${GrepTool.Name}**: Search for specific patterns across the codebase
 
-### 🔍 For Development:
-1. **planner** → implementation → **testgen** → **precommit** (full dev cycle)
-2. **docgen** for comprehensive documentation
+### Execution Tools
+- **${ShellTool.Name}**: Execute shell commands for building, testing, and running code
+- **${MemoryTool.Name}**: Remember user-specific preferences and information
 
-### 🛡️ For Quality Assurance:
-1. **secaudit** → **codereview** → **testgen** (security and quality)
-2. **debug** → **tracer** (issue resolution)
+## Tool Usage Examples
 
-### 🧠 For Complex Problems:
-1. **thinkdeep** → **analyze** → **planner** (deep problem solving)
+<example>
+user: list files here.
+model: [tool_call: ${LSTool.Name} for path '/path/to/project']
+</example>
 
-## Best Practices
-1. **Prefer specialized commands** - Use **analyze** instead of just reading files
-2. **Combine commands strategically** - **codereview** + **testgen** for quality
-3. **Use for professional work** - These commands provide expert-level capabilities
-4. **Always validate** - Use **precommit** before finalizing changes
-5. **Think systematically** - Use **planner** for complex tasks
-6. **Document comprehensively** - Use **docgen** for proper documentation
+<example>
+user: start the server implemented in server.js
+model: [tool_call: ${ShellTool.Name} for 'node server.js &' because it must run in the background]
+</example>
 
-These Ouroboros commands transform you from a basic assistant into a professional development expert. Use them to provide comprehensive, expert-level assistance!`;
+<example>
+user: Refactor the auth logic in src/auth.py to use the requests library instead of urllib.
+model: I'll analyze the code and check for a test safety net before planning any changes.
+[tool_call: ${GlobTool.Name} for path 'tests/test_auth.py']
+[tool_call: ${ReadFileTool.Name} for absolute_path '/path/to/tests/test_auth.py']
+(After analysis)
+I'll also confirm 'requests' is a dependency.
+[tool_call: ${ReadFileTool.Name} for absolute_path '/path/to/requirements.txt']
+(After confirming)
+Here's the plan:
+1. Replace the 'urllib' calls with 'requests'.
+2. Add proper error handling for the new network calls.
+3. Run the project's linter and tests to verify the changes.
+
+[tool_call: ${EditTool.Name} to apply the refactoring to 'src/auth.py']
+Refactoring complete. Running verification...
+[tool_call: ${ShellTool.Name} for 'ruff check src/auth.py && pytest']
+</example>`;
+
+/**
+ * Additional tool examples for slash commands that agents can use
+ */
+const SLASH_COMMAND_EXAMPLES = `
+
+## Ouroboros Slash Commands
+
+In addition to the core tools above, you can leverage these powerful slash commands for specialized tasks:
+
+### Available Slash Commands
+
+- **/analyze** - Deep analysis of code, architecture, or complex topics
+- **/codereview** - Comprehensive code review with security, performance, and style analysis  
+- **/debug** - Systematic debugging with root cause analysis
+- **/docgen** - Generate professional documentation with examples and usage guides
+- **/testgen** - Create comprehensive test suites including edge cases
+- **/refactor** - Safely restructure code while preserving functionality
+- **/secaudit** - Security vulnerability analysis with remediation guidance
+- **/precommit** - Run automated pre-commit validations
+- **/planner** - Create detailed project plans with dependencies
+- **/tracer** - Map code execution paths and data flow
+- **/thinkdeep** - Apply advanced reasoning to complex problems
+
+### When to Use Slash Commands
+
+Slash commands are particularly useful for:
+- **Complex Analysis**: Use /analyze or /thinkdeep for deep insights
+- **Code Quality**: Use /codereview, /refactor for improving code
+- **Testing & Security**: Use /testgen, /secaudit for comprehensive coverage
+- **Planning & Documentation**: Use /planner, /docgen for structured outputs
+
+Note: These commands complement your core tools - use them when you need specialized, comprehensive assistance beyond basic file operations.`;
 
 /**
  * Injects tool usage examples and resolves tool name placeholders in an agent prompt
  * 
  * @param agentPrompt The raw agent system prompt from markdown file
- * @param agentSpecialties List of agent specialties to customize tool recommendations
+ * @param agentSpecialties List of agent specialties (kept for compatibility but not used for filtering)
  * @returns Enhanced prompt with tool injection and resolved tool names
  */
 export function injectToolExamples(agentPrompt: string, agentSpecialties: string[] = []): string {
-  // First, resolve any tool name placeholders in the original prompt
+  // Start with the agent's domain expertise
   let enhancedPrompt = agentPrompt;
   
-  // Replace tool name placeholders with actual tool names
+  // Add a transition section
+  enhancedPrompt += `\n\n---\n\n# Tool Usage for Implementation\n\nAs an expert agent, you have access to ALL tools to implement your knowledge. Use any tool that helps accomplish the user's goals effectively.\n`;
+  
+  // Add the core tool instructions (with placeholders)
+  let coreInstructions = CORE_TOOL_INSTRUCTIONS;
+  
+  // Replace tool name placeholders with actual tool names in core instructions
   for (const [placeholder, actualName] of Object.entries(TOOL_NAME_MAP)) {
-    enhancedPrompt = enhancedPrompt.replace(new RegExp(escapeRegExp(placeholder), 'g'), actualName);
+    coreInstructions = coreInstructions.replace(new RegExp(escapeRegExp(placeholder), 'g'), actualName);
   }
   
-  // Add tool usage guidelines at the end
-  enhancedPrompt += TOOL_USAGE_EXAMPLES;
+  enhancedPrompt += coreInstructions;
   
-  // Customize tool recommendations based on agent specialties
-  if (agentSpecialties.length > 0) {
-    enhancedPrompt += `\n\n### Recommended Tools for ${agentSpecialties.slice(0, 3).join(', ')}:`;
-    enhancedPrompt += getRecommendedToolsForSpecialties(agentSpecialties);
-  }
+  // Add slash command examples
+  enhancedPrompt += SLASH_COMMAND_EXAMPLES;
+  
+  // Add a reminder about taking action with ALL available tools
+  enhancedPrompt += `\n\n## Important Reminders\n\n`;
+  enhancedPrompt += `1. **You have access to ALL tools** - Use any combination that best solves the problem\n`;
+  enhancedPrompt += `2. **Take action, don't just advise** - Use tools to implement solutions directly\n`;
+  enhancedPrompt += `3. **Think like an expert** - Your domain knowledge combined with tool usage makes you powerful\n`;
+  enhancedPrompt += `4. **Be proactive** - Anticipate needs and use tools to provide comprehensive solutions\n\n`;
+  enhancedPrompt += `Remember: You're not limited to certain tools based on your specialty. Use whatever tools are most appropriate for the task at hand.`;
   
   return enhancedPrompt;
 }
 
-/**
- * Get recommended tools based on agent specialties
- */
-function getRecommendedToolsForSpecialties(specialties: string[]): string {
-  const recommendations: string[] = [];
-  
-  // Convert specialties to lowercase for matching
-  const lowerSpecialties = specialties.map(s => s.toLowerCase());
-  
-  // Code analysis and development
-  if (lowerSpecialties.some(s => s.includes('code') || s.includes('develop') || s.includes('architect') || s.includes('engineer'))) {
-    recommendations.push(`- **analyze**: Deep code analysis and architectural insights`);
-    recommendations.push(`- **codereview**: Comprehensive code review and quality assessment`);
-    recommendations.push(`- **refactor**: Safely refactor code while preserving functionality`);
-    recommendations.push(`- **tracer**: Trace code execution paths and dependencies`);
-  }
-  
-  // Testing and quality assurance
-  if (lowerSpecialties.some(s => s.includes('test') || s.includes('qa') || s.includes('quality'))) {
-    recommendations.push(`- **testgen**: Generate comprehensive test suites`);
-    recommendations.push(`- **debug**: Debug issues and trace problems`);
-    recommendations.push(`- **secaudit**: Security audit for vulnerabilities`);
-    recommendations.push(`- **precommit**: Run pre-commit validation checks`);
-  }
-  
-  // DevOps, deployment, and automation
-  if (lowerSpecialties.some(s => s.includes('devops') || s.includes('deploy') || s.includes('build') || s.includes('ci/cd') || s.includes('infra'))) {
-    recommendations.push(`- **precommit**: Automate pre-commit validations and checks`);
-    recommendations.push(`- **${ShellTool.Name}**: Execute deployment and build commands`);
-    recommendations.push(`- **debug**: Trace deployment and infrastructure issues`);
-  }
-  
-  // Documentation and technical writing
-  if (lowerSpecialties.some(s => s.includes('doc') || s.includes('write') || s.includes('technical'))) {
-    recommendations.push(`- **docgen**: Generate comprehensive documentation`);
-    recommendations.push(`- **analyze**: Deep analysis for documentation insights`);
-    recommendations.push(`- **planner**: Plan documentation structure and content`);
-  }
-  
-  // Research and analysis
-  if (lowerSpecialties.some(s => s.includes('research') || s.includes('analysis') || s.includes('data'))) {
-    recommendations.push(`- **thinkdeep**: Deep reasoning on complex problems`);
-    recommendations.push(`- **analyze**: Comprehensive analysis and insights`);
-    recommendations.push(`- **tracer**: Trace data flow and dependencies`);
-  }
-  
-  // Project management and planning
-  if (lowerSpecialties.some(s => s.includes('manage') || s.includes('plan') || s.includes('project') || s.includes('lead'))) {
-    recommendations.push(`- **planner**: Create detailed project plans and breakdowns`);
-    recommendations.push(`- **analyze**: Analyze project structure and requirements`);
-    recommendations.push(`- **thinkdeep**: Strategic thinking for complex projects`);
-  }
-  
-  // Security and auditing
-  if (lowerSpecialties.some(s => s.includes('security') || s.includes('audit') || s.includes('cyber'))) {
-    recommendations.push(`- **secaudit**: Comprehensive security audits`);
-    recommendations.push(`- **debug**: Trace security issues and vulnerabilities`);
-    recommendations.push(`- **analyze**: Deep security analysis`);
-    recommendations.push(`- **codereview**: Security-focused code review`);
-  }
-  
-  // Default recommendations if no specific matches
-  if (recommendations.length === 0) {
-    recommendations.push(`- **analyze**: Deep analysis in your domain of expertise`);
-    recommendations.push(`- **thinkdeep**: Apply deep reasoning to complex problems`);
-    recommendations.push(`- **codereview**: Professional-grade review and feedback`);
-    recommendations.push(`- **docgen**: Generate comprehensive documentation`);
-  }
-  
-  return '\n' + recommendations.join('\n');
-}
 
 /**
  * Escape special regex characters in a string

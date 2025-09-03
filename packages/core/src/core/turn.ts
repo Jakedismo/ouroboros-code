@@ -26,6 +26,8 @@ import {
   toFriendlyError,
 } from '../utils/errors.js';
 import type { GeminiChat } from './geminiChat.js';
+import type { Config } from '../config/config.js';
+import type { ContentGenerator } from './contentGenerator.js';
 
 // Define a structure for tools passed to the server
 export interface ServerTool {
@@ -194,6 +196,8 @@ export class Turn {
   constructor(
     private readonly chat: GeminiChat,
     private readonly prompt_id: string,
+    private readonly config?: Config,
+    private readonly contentGenerator?: ContentGenerator,
   ) {}
   // The run method yields simpler events suitable for server logic
   async *run(
@@ -201,6 +205,16 @@ export class Turn {
     signal: AbortSignal,
   ): AsyncGenerator<ServerGeminiStreamEvent> {
     try {
+      // Check if we're using a non-Gemini provider and handle it appropriately
+      const currentProvider = this.config?.getProvider?.() || 'gemini';
+      
+      if (currentProvider !== 'gemini') {
+        console.log(`[Turn] Using provider-aware streaming for: ${currentProvider}`);
+        // For non-Gemini providers, use ContentGenerator directly to avoid GeminiChat compatibility issues
+        yield* this.runWithContentGenerator(req, signal, currentProvider);
+        return;
+      }
+      
       const responseStream = await this.chat.sendMessageStream(
         {
           message: req,
@@ -347,6 +361,114 @@ export class Turn {
 
     // Yield a request for the tool call, not the pending/confirming status
     return { type: GeminiEventType.ToolCallRequest, value: toolCallRequest };
+  }
+
+  /**
+   * Provider-aware streaming method that uses ContentGenerator directly
+   * to avoid GeminiChat compatibility issues with non-Gemini providers
+   */
+  private async *runWithContentGenerator(
+    req: PartListUnion,
+    signal: AbortSignal,
+    provider: string
+  ): AsyncGenerator<ServerGeminiStreamEvent> {
+    try {
+      // Use the passed content generator
+      if (!this.contentGenerator) {
+        console.error('[Turn] ContentGenerator not available for provider:', provider);
+        yield { type: GeminiEventType.Error, value: { error: { message: 'ContentGenerator not available' } } };
+        return;
+      }
+      
+      const contentGenerator = this.contentGenerator;
+      
+      // Convert request to the format expected by ContentGenerator
+      const wrappedReq: Part[] = typeof req === 'string'
+        ? [{ text: req }]
+        : Array.isArray(req)
+        ? req.map(part => typeof part === 'string' ? { text: part } : part)
+        : [typeof req === 'string' ? { text: req } : req];
+      
+      // Add to chat history
+      const userContent = { role: 'user' as const, parts: wrappedReq };
+      this.chat.addHistory(userContent);
+      
+      // Get tools from config's tool registry
+      const toolRegistry = this.config?.getToolRegistry?.();
+      const toolDeclarations = toolRegistry?.getFunctionDeclarations?.() || [];
+      const tools = toolDeclarations.length > 0 ? [{ functionDeclarations: toolDeclarations }] : [];
+      
+      // Import provider-specific handlers
+      const { handleOpenAIStreaming, handleAnthropicStreaming, handleGenericStreaming } = await import('./turn-provider-support.js');
+      
+      // Callbacks for tool handling
+      const onToolCall = (toolCall: ToolCallRequestInfo) => {
+        this.pendingToolCalls.push(toolCall);
+      };
+      
+      const onAddHistory = (content: any) => {
+        this.chat.addHistory(content);
+      };
+      
+      // Route to provider-specific handler
+      let streamGenerator: AsyncGenerator<ServerGeminiStreamEvent>;
+      
+      switch (provider) {
+        case 'openai':
+          streamGenerator = handleOpenAIStreaming(
+            contentGenerator,
+            this.chat.getHistory(),
+            tools,
+            this.prompt_id,
+            signal,
+            onToolCall,
+            onAddHistory
+          );
+          break;
+          
+        case 'anthropic':
+          streamGenerator = handleAnthropicStreaming(
+            contentGenerator,
+            this.chat.getHistory(),
+            tools,
+            this.prompt_id,
+            signal,
+            onToolCall,
+            onAddHistory
+          );
+          break;
+          
+        default:
+          streamGenerator = handleGenericStreaming(
+            contentGenerator,
+            this.chat.getHistory(),
+            tools,
+            this.prompt_id,
+            signal,
+            onToolCall,
+            onAddHistory,
+            provider
+          );
+          break;
+      }
+      
+      // Yield all events from the provider-specific handler
+      for await (const event of streamGenerator) {
+        yield event;
+        
+        // Update finish reason if we have one
+        if (event.type === GeminiEventType.Content) {
+          // Content is being streamed successfully
+          this.finishReason = 'STOP' as any;
+        }
+      }
+      
+      console.log(`[Turn] Successfully completed streaming for provider: ${provider}`);
+      
+    } catch (error) {
+      console.error(`[Turn] Error in provider-aware streaming for ${provider}:`, error);
+      yield { type: GeminiEventType.Error, value: { error: { message: getErrorMessage(error) } } };
+    }
   }
 
   getDebugResponses(): GenerateContentResponse[] {

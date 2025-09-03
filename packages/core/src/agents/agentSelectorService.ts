@@ -11,6 +11,41 @@ import { AgentManager } from './agentManager.js';
 import { AGENT_PERSONAS, getAgentById, type AgentPersona } from './personas.js';
 
 /**
+ * JSON Schema for OpenAI Structured Outputs - Agent Selection Response
+ */
+const AGENT_SELECTION_SCHEMA = {
+  name: "agent_selection_response",
+  schema: {
+    type: "object",
+    properties: {
+      agentIds: {
+        type: "array",
+        items: {
+          type: "string"
+        },
+        description: "Array of selected agent IDs"
+      },
+      reasoning: {
+        type: "string",
+        description: "Clear explanation of why these agents were selected"
+      },
+      confidence: {
+        type: "number",
+        minimum: 0,
+        maximum: 1,
+        description: "Confidence score between 0 and 1"
+      },
+      taskCategory: {
+        type: "string",
+        description: "Category of the task"
+      }
+    },
+    required: ["agentIds", "reasoning", "confidence"],
+    additionalProperties: false
+  }
+} as const;
+
+/**
  * Service for automatically selecting the most appropriate agents for user prompts
  * using GPT-5-nano as an intelligent dispatcher
  */
@@ -145,13 +180,17 @@ export class AgentSelectorService {
       // Query the configured model for agent selection
       const providerOptions: any = {
         temperature: 0.1, // Low temperature for consistent selection
-        maxTokens: 300,
+        maxTokens: 32000, // Increased from 300 to allow for comprehensive agent responses
       };
       
-      // Add response_format for OpenAI to ensure JSON output
+      // Add response_format for OpenAI to ensure structured JSON output
       if (this.selectorProvider?.name === 'OpenAI') {
-        providerOptions.response_format = { type: 'json_object' };
-        console.log('[Agent Selector] Using JSON mode for OpenAI provider');
+        // Use structured outputs with JSON schema for guaranteed format compliance
+        providerOptions.response_format = {
+          type: 'json_schema',
+          json_schema: AGENT_SELECTION_SCHEMA
+        };
+        console.log('[Agent Selector] Using structured outputs with JSON schema for OpenAI provider');
       }
       
       console.log('[Agent Selector] Provider:', this.selectorProvider?.name || 'Unknown', 'Options:', providerOptions);
@@ -289,21 +328,11 @@ SELECTION CRITERIA:
 4. For ambiguous requests, favor general-purpose agents like systems-architect
 5. Consider the full context and intent, not just keywords
 
-OUTPUT FORMAT:
-You must respond with a valid JSON object containing these fields:
-{
-  "agentIds": ["agent-id-1", "agent-id-2"],
-  "reasoning": "Clear explanation of why these agents were selected",
-  "confidence": 0.8,
-  "taskCategory": "category-name"
-}
-
-CRITICAL: You MUST output valid JSON. The response will be parsed as JSON, so ensure:
-- agentIds is an array of strings (agent IDs from the list above)
-- reasoning is a string explaining your selection
-- confidence is a number between 0 and 1
-- taskCategory is an optional string
-- Do not include any text outside the JSON object
+OUTPUT REQUIREMENTS:
+- Select 1-3 agent IDs from the available agents list above
+- Provide clear reasoning for your selection explaining why these agents are best suited
+- Include a confidence score (0.0 to 1.0) for your selection
+- Optionally categorize the task type
 
 EXAMPLES:
 User: "Optimize my React component rendering performance"

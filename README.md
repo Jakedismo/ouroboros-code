@@ -6,12 +6,12 @@
 
 ![Ouroboros Code Screenshot](./docs/assets/ouroboros-screenshot.png)
 
-Ouroboros Code is an advanced multi-agent AI framework that brings the power of **multiple LLM providers** (Gemini, OpenAI, Anthropic) directly into your terminal. It features **dynamic agent selection**, where GPT-5-nano intelligently chooses the best specialists for every task, transforming your terminal into a truly adaptive problem-solving environment.
+Ouroboros Code is an advanced multi-agent AI framework that brings the power of **multiple LLM providers** (OpenAI, Anthropic, Gemini) directly into your terminal. It features **dynamic agent selection**, where GPT-5-nano intelligently chooses the best specialists for every task, transforming your terminal into a truly adaptive problem-solving environment.
 
 ## 🚀 Why Ouroboros Code?
 
 - **🤖 Dynamic Agent Selection**: GPT-5-nano automatically chooses the best specialists (from 50+ agents) for every prompt
-- **⚡ Multi-Provider Power**: Seamlessly switch between Gemini, OpenAI, and Anthropic with unified tools
+- **⚡ Multi-Provider Power**: Seamlessly switch between OpenAI, Anthropic, and Gemini with unified tools
 - **🎯 Zero Learning Curve**: Works with any prompt - just type naturally and watch agents adapt
 - **🧠 50+ Specialist Agents**: Architecture, AI/ML, Security, Performance, DevOps, Frontend, Backend experts
 - **🔧 Universal Built-in Tools**: 11 tools work identically across all providers (files, web, search, shell)
@@ -56,7 +56,7 @@ See [Releases](./docs/releases.md) for more details.
 New preview releases will be published each week at UTC 2359 on Tuesdays. These releases will not have been fully vetted and may contain regressions or other outstanding issues. Please help us test and install with `preview` tag.
 
 ```bash
-npm install -g @google/gemini-cli@preview
+npm install -g @ouroboros/ouroboros-code@preview
 ```
 
 ### Stable
@@ -64,7 +64,7 @@ npm install -g @google/gemini-cli@preview
 - New stable releases will be published each week at UTC 2000 on Tuesdays, this will be the full promotion of last week's `preview` release + any bug fixes and validations. Use `latest` tag.
 
 ```bash
-npm install -g @google/gemini-cli@latest
+npm install -g @ouroboros/ouroboros-code@latest
 ```
 
 ### Nightly
@@ -72,18 +72,46 @@ npm install -g @google/gemini-cli@latest
 - New releases will be published each week at UTC 0000 each day, This will be all changes from the main branch as represented at time of release. It should be assumed there are pending validations and issues. Use `nightly` tag.
 
 ```bash
-npm install -g @google/gemini-cli@nightly
+npm install -g @ouroboros/ouroboros-code@nightly
 ```
 
 ## 📋 Key Features
 
 ### 🤖 Dynamic Agent Selection System
 
-- **Automatic Specialist Selection**: GPT-5-nano intelligently chooses the best agents for each prompt
-- **50+ Expert Agents**: Covering Architecture, AI/ML, Security, Performance, DevOps, Frontend, Backend, and more
-- **Zero Configuration**: Just enable `/agents on` and every prompt gets the right expertise automatically
-- **Transparent Process**: See which agents were selected and why, with confidence scores
-- **Smart Context**: Temporary agent activation per conversation turn, automatic state restoration
+The `/agents` auto mode transforms Ouroboros Code into an adaptive problem-solving environment where **GPT-5-nano automatically selects the best specialists** for every task. No more guessing which expert to call - the system analyzes your prompt and activates the perfect combination of agents.
+
+#### How Auto Mode Works
+
+1. **Intelligent Analysis**: GPT-5-nano analyzes your prompt to understand the task domain and complexity
+2. **Expert Selection**: Chooses 1-3 most relevant specialists from 50+ available agents
+3. **Automatic Activation**: Temporarily activates selected agents for that conversation turn
+4. **Enhanced Response**: Your prompt gets processed with combined expert knowledge
+5. **State Restoration**: Returns to your original configuration after the response
+
+#### Key Features
+
+- **🎯 Always the Right Expert**: Never again wonder which specialist to use - the system knows
+- **⚡ 2-3 Second Overhead**: Minimal delay for maximum expertise enhancement
+- **🧠 50+ Expert Agents**: Architecture, AI/ML, Security, Performance, DevOps, Frontend, Backend, and more
+- **📊 Transparent Process**: See which agents were selected and why, with confidence scores
+- **🔄 Smart Context**: Temporary activation per turn, automatic state restoration
+- **📈 Learning System**: Tracks selection patterns and improves over time
+
+#### Agent Categories Available
+
+- **Architecture & Design** (5 agents): Systems Architect, API Designer, Solution Architect, Microservices Architect, Cloud Architect
+- **AI/ML Specialists** (5 agents): ML Engineer, Data Scientist, Computer Vision Expert, NLP Specialist, LLM Integration Expert
+- **Security & Compliance** (5 agents): Security Auditor, DevSecOps Engineer, Privacy Engineer, Compliance Specialist, Penetration Tester
+- **Performance & Optimization** (5 agents): Performance Engineer, Scalability Architect, Database Optimizer, Caching Specialist, Load Testing Engineer
+- **Database & Data** (5 agents): Database Architect, Data Engineer, Data Analyst, Big Data Specialist, Data Warehouse Architect
+- **DevOps & Infrastructure** (5 agents): DevOps Engineer, Kubernetes Operator, Cloud Engineer, Infrastructure Architect, Site Reliability Engineer
+- **Frontend Specialists** (5 agents): React Specialist, Frontend Architect, UI/UX Developer, Mobile Developer, Web Performance Specialist
+- **Backend Specialists** (5 agents): Backend Architect, Node.js Specialist, Python Specialist, Java Specialist, Go Specialist
+- **Specialized Domains** (5 agents): Blockchain Developer, IoT Specialist, Game Development Specialist, IoT Edge Specialist, Embedded Systems Engineer
+- **Process & Quality** (5 agents): Code Quality Analyst, Test Automation Engineer, Agile Coach, Project Manager, QA Manager
+
+#### Usage Examples
 
 ```bash
 # Enable automatic agent selection
@@ -91,18 +119,39 @@ npm install -g @google/gemini-cli@nightly
 
 # Every prompt now gets intelligent agent selection:
 "Optimize my React component performance" 
-# → Auto-selects: React Specialist + Web Performance Specialist
+# → GPT-5-nano selects: React Specialist + Web Performance Specialist
+# → Response includes React-specific optimization techniques + performance monitoring strategies
 
 "Design a REST API for user authentication"
-# → Auto-selects: API Designer + Security Auditor + Microservices Architect
+# → GPT-5-nano selects: API Designer + Security Auditor + Microservices Architect  
+# → Response covers API design patterns + security best practices + scalable architecture
 
-"My database queries are slow"
-# → Auto-selects: Database Optimizer
+"My database queries are slow, especially the user analytics dashboard"
+# → GPT-5-nano selects: Database Optimizer + Data Analyst
+# → Response includes query optimization techniques + analytics-specific indexing strategies
 
-# Check what happened
-/agents history
-/agents stats
+"Build a microservices deployment pipeline with security scanning"
+# → GPT-5-nano selects: DevOps Engineer + Security Auditor + Microservices Architect
+# → Response covers CI/CD best practices + security integration + service orchestration
+
+# Monitor and understand the selection process
+/agents history    # See recent automatic selections with reasoning
+/agents stats      # View selection patterns and performance metrics
+/agents test "prompt"  # Test what agents would be selected without executing
+
+# Toggle when needed
+/agents off        # Disable automatic selection
+/agents status     # Check current mode and active agents
 ```
+
+#### Advanced Features
+
+- **Selection Confidence**: Each selection includes a confidence score (0-100%) showing system certainty
+- **Multi-Agent Synergy**: Automatically selects complementary agents that work well together
+- **Context Awareness**: Considers conversation history and project context for better selections
+- **Fallback Systems**: Heuristic selection if AI selection fails, ensuring you always get help
+- **Performance Tracking**: Monitors selection accuracy and adjusts over time
+- **Command-Aware**: Automatically skips agent selection for slash commands and @ directives
 
 ### ⚡ Multi-Provider Architecture
 
@@ -210,25 +259,27 @@ For Google Workspace accounts and other authentication methods, see the [authent
 #### Start in current directory
 
 ```bash
-gemini
+ouroboros-code
 ```
 
 #### Include multiple directories
 
 ```bash
-gemini --include-directories ../lib,../docs
+ouroboros-code --include-directories ../lib,../docs
 ```
 
-#### Use specific model
+#### Use specific provider and model
 
 ```bash
-gemini -m gemini-2.5-flash
+ouroboros-code --provider openai -m gpt-5
+ouroboros-code --provider anthropic -m claude-4
+ouroboros-code --provider gemini -m gemini-2.5-flash
 ```
 
 #### Non-interactive mode for scripts
 
 ```bash
-gemini -p "Explain the architecture of this codebase"
+ouroboros-code -p "Explain the architecture of this codebase"
 ```
 
 ### Quick Examples
@@ -237,16 +288,16 @@ gemini -p "Explain the architecture of this codebase"
 
 ```bash
 cd new-project/
-gemini
+ouroboros-code
 > Write me a Discord bot that answers questions using a FAQ.md file I will provide
 ```
 
 #### Analyze existing code
 
 ```bash
-git clone https://github.com/google-gemini/gemini-cli
-cd gemini-cli
-gemini
+git clone https://github.com/ouroboros-ai/ouroboros-code
+cd ouroboros-code
+ouroboros-code
 > Give me a summary of all of the changes that went in yesterday
 ```
 
