@@ -25,6 +25,13 @@ export const useAutomaticAgentSelection = (
   useEffect(() => {
     const initOrchestrator = async () => {
       try {
+        // Check if GeminiClient is initialized first
+        const geminiClient = config.getGeminiClient();
+        if (!geminiClient) {
+          console.log('[AutoAgentSelection] GeminiClient not ready yet, waiting...');
+          return;
+        }
+        
         // Dynamically import ConversationOrchestrator
         const { ConversationOrchestrator } = await import('@ouroboros/ouroboros-code-core/dist/src/agents/conversationOrchestrator.js');
         
@@ -42,8 +49,19 @@ export const useAutomaticAgentSelection = (
       }
     };
 
+    // Try to initialize immediately
     initOrchestrator();
-  }, [config]);
+    
+    // Also set up a retry mechanism in case the client isn't ready yet
+    const retryInterval = setInterval(() => {
+      if (!isInitialized && config.getGeminiClient()) {
+        initOrchestrator();
+        clearInterval(retryInterval);
+      }
+    }, 1000); // Check every second
+    
+    return () => clearInterval(retryInterval);
+  }, [config, isInitialized]);
 
   /**
    * Process a user prompt with streaming agent selection

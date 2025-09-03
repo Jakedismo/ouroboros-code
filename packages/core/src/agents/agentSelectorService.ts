@@ -44,8 +44,14 @@ export class AgentSelectorService {
    * @param config - The Config instance that contains the GeminiClient with ContentGenerator
    */
   async initialize(config: Config): Promise<void> {
+    // Check if GeminiClient exists first
+    const geminiClient = config.getGeminiClient();
+    if (!geminiClient) {
+      throw new Error('GeminiClient not initialized yet. Please ensure refreshAuth is called before initializing AgentSelectorService');
+    }
+    
     // Use the SAME ContentGenerator that regular chat uses - this ensures unified behavior
-    this.contentGenerator = config.getGeminiClient().getContentGenerator();
+    this.contentGenerator = geminiClient.getContentGenerator();
     
     // Keep the provider reference for backwards compatibility
     this.selectorProvider = (this.contentGenerator as any).provider;
