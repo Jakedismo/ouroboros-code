@@ -605,9 +605,22 @@ export class Config {
   async setSystemPrompt(prompt: string): Promise<void> {
     (this as any).agentSystemPrompt = prompt;
     
-    // Refresh the client to apply the new system prompt
-    if (this.contentGeneratorConfig && this.contentGeneratorConfig.authType) {
-      await this.refreshAuth(this.contentGeneratorConfig.authType);
+    // CRITICAL: DON'T refresh the client - that would lose conversation history!
+    // Instead, update the system instruction in the EXISTING chat if one exists
+    // This preserves all conversation context for long-running multi-agent tasks
+    
+    // If there's an active GeminiClient with a current chat, update its system instruction
+    if (this.geminiClient && typeof this.geminiClient.getChat === 'function') {
+      try {
+        const currentChat = this.geminiClient.getChat();
+        if (currentChat && typeof currentChat.setSystemInstruction === 'function') {
+          currentChat.setSystemInstruction(prompt);
+          console.log('[Config] Updated system instruction in existing chat - conversation history preserved');
+        }
+      } catch (e) {
+        // Chat might not be initialized yet, that's okay
+        console.log('[Config] No active chat to update system instruction');
+      }
     }
   }
 
@@ -617,9 +630,25 @@ export class Config {
   async clearSystemPrompt(): Promise<void> {
     (this as any).agentSystemPrompt = undefined;
     
-    // Refresh the client to restore the default system prompt
-    if (this.contentGeneratorConfig && this.contentGeneratorConfig.authType) {
-      await this.refreshAuth(this.contentGeneratorConfig.authType);
+    // CRITICAL: DON'T refresh the client - preserve conversation history
+    // When agentSystemPrompt is undefined, the system will use the base prompt
+    // The base prompt will be applied on the next message automatically
+    
+    // If there's an active chat, clear its custom system instruction
+    // Note: We can't easily get the base system prompt here without complex logic,
+    // so we'll let it be applied naturally on the next turn
+    if (this.geminiClient && typeof this.geminiClient.getChat === 'function') {
+      try {
+        const currentChat = this.geminiClient.getChat();
+        if (currentChat && typeof currentChat.setSystemInstruction === 'function') {
+          // Clear by setting empty string - the base prompt will be used on next turn
+          currentChat.setSystemInstruction('');
+          console.log('[Config] Cleared agent system instruction - base prompt will be restored on next turn');
+        }
+      } catch (e) {
+        // Chat might not be initialized yet, that's okay
+        console.log('[Config] No active chat to clear system instruction');
+      }
     }
   }
 
