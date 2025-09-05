@@ -392,17 +392,31 @@ export class Turn {
       // Check if this is a tool response (contains functionResponse parts)
       const isFunctionResponse = wrappedReq.some(part => 'functionResponse' in part);
       
+      console.log(`[Turn] Processing request for ${provider}, isFunctionResponse: ${isFunctionResponse}`);
+      if (isFunctionResponse) {
+        console.log('[Turn] Function response parts:', JSON.stringify(wrappedReq, null, 2));
+      }
+      
       // Add to chat history with appropriate role
       const historyContent = {
         role: isFunctionResponse ? ('function' as const) : ('user' as const),
         parts: wrappedReq
       };
       this.chat.addHistory(historyContent);
+      console.log(`[Turn] Added to history with role: ${historyContent.role}`);
       
       // For function responses, we don't need to stream again - the model should continue
       // automatically based on the history
       if (isFunctionResponse && provider === 'openai') {
         console.log('[Turn] Function response added to history for OpenAI, triggering continuation');
+        // Get the current history to see what will be sent
+        const currentHistory = this.chat.getHistory();
+        console.log('[Turn] Current history length:', currentHistory.length);
+        console.log('[Turn] Last 2 history entries:', JSON.stringify(currentHistory.slice(-2).map(h => ({
+          role: h.role,
+          partsLength: h.parts?.length,
+          firstPartKeys: h.parts?.[0] ? Object.keys(h.parts[0]) : []
+        })), null, 2));
         // Don't return here - continue to let OpenAI process the complete history
       }
       

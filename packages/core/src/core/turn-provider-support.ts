@@ -26,6 +26,13 @@ export async function* handleOpenAIStreaming(
   config?: Config
 ): AsyncGenerator<ServerGeminiStreamEvent> {
   try {
+    console.log('[Turn OpenAI Handler] Received history with', history.length, 'entries');
+    console.log('[Turn OpenAI Handler] History summary:', history.map(h => ({
+      role: h.role,
+      partsLength: h.parts?.length,
+      firstPartType: h.parts?.[0] ? Object.keys(h.parts[0])[0] : 'unknown'
+    })));
+    
     // Build proper GenerateContentParameters for OpenAI ContentGenerator
     const genConfig: any = {
       temperature: 0.7,

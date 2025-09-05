@@ -278,6 +278,11 @@ export class OpenAIContentGenerator implements ContentGenerator {
         if (typeof item === 'object' && item !== null) {
           console.log(`[OpenAI ContentGenerator] Item ${index} keys:`, Object.keys(item));
           console.log(`[OpenAI ContentGenerator] Item ${index} role:`, (item as any).role);
+          // Also log if it contains function responses
+          if ((item as any).role === 'function' && (item as any).parts) {
+            console.log(`[OpenAI ContentGenerator] Function response at ${index}, parts:`, 
+              (item as any).parts.map((p: any) => Object.keys(p)));
+          }
         }
         if (typeof item === 'string') {
           console.log(`[OpenAI ContentGenerator] Item ${index} string value (first 100 chars):`, item.substring(0, 100));
