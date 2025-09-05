@@ -111,10 +111,27 @@ export class OpenAIProvider implements Provider {
     const model = options.model || this.defaultModel;
     
     // Convert messages to OpenAI format
-    const openaiMessages: ChatCompletionMessageParam[] = messages.map(m => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content,
-    }));
+    const openaiMessages: ChatCompletionMessageParam[] = messages.map(m => {
+      const baseMessage = { content: m.content };
+      
+      switch (m.role) {
+        case 'user':
+          return { ...baseMessage, role: 'user' as const };
+        case 'assistant':
+          return { ...baseMessage, role: 'assistant' as const };
+        case 'system':
+          return { ...baseMessage, role: 'system' as const };
+        case 'tool':
+          return {
+            ...baseMessage,
+            role: 'tool' as const,
+            tool_call_id: m.tool_call_id || '',
+            ...(m.name && { name: m.name }),
+          };
+        default:
+          return { ...baseMessage, role: 'user' as const };
+      }
+    });
     
     // Convert tools to OpenAI format
     const openaiTools: ChatCompletionTool[] | undefined = tools && tools.length > 0 
@@ -139,10 +156,27 @@ export class OpenAIProvider implements Provider {
     const model = options.model || this.defaultModel;
     
     // Convert messages to OpenAI format
-    const openaiMessages: ChatCompletionMessageParam[] = messages.map(m => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content,
-    }));
+    const openaiMessages: ChatCompletionMessageParam[] = messages.map(m => {
+      const baseMessage = { content: m.content };
+      
+      switch (m.role) {
+        case 'user':
+          return { ...baseMessage, role: 'user' as const };
+        case 'assistant':
+          return { ...baseMessage, role: 'assistant' as const };
+        case 'system':
+          return { ...baseMessage, role: 'system' as const };
+        case 'tool':
+          return {
+            ...baseMessage,
+            role: 'tool' as const,
+            tool_call_id: m.tool_call_id || '',
+            ...(m.name && { name: m.name }),
+          };
+        default:
+          return { ...baseMessage, role: 'user' as const };
+      }
+    });
     
     // Convert tools to OpenAI format
     const openaiTools: ChatCompletionTool[] | undefined = tools && tools.length > 0 
@@ -220,7 +254,34 @@ export class OpenAIProvider implements Provider {
         if (delta?.tool_calls) {
           console.log(`[OpenAI Provider] Processing ${delta.tool_calls.length} tool calls in chunk ${chunkCount}`);
           for (const toolCall of delta.tool_calls) {
-            const id = toolCall.id || '';
+            // Handle tool call ID resolution - OpenAI sometimes sends arguments without ID
+            let id = toolCall.id;
+            
+            // If no ID provided but we have function data, try to match with existing buffer
+            if (!id && (toolCall.function?.name || toolCall.function?.arguments)) {
+              // Look for an existing buffer that matches the function name or is expecting arguments
+              const existingIds = Object.keys(toolCallBuffer);
+              if (existingIds.length === 1) {
+                // If there's only one active tool call, assume this chunk belongs to it
+                id = existingIds[0];
+                console.log(`[OpenAI Provider] No ID in chunk, assigning to existing tool call: ${id}`);
+              } else if (toolCall.function?.name) {
+                // Try to find buffer by function name
+                id = existingIds.find(existingId => 
+                  toolCallBuffer[existingId].name === toolCall.function!.name
+                ) || `tool_${Date.now()}_${Math.random()}`;
+                console.log(`[OpenAI Provider] Matched by function name to: ${id}`);
+              } else {
+                // Create a temporary ID for orphaned arguments
+                id = `orphaned_${Date.now()}_${Math.random()}`;
+                console.log(`[OpenAI Provider] Created orphaned ID for arguments: ${id}`);
+              }
+            } else if (!id) {
+              // Fallback ID if nothing else works
+              id = `fallback_${Date.now()}_${Math.random()}`;
+              console.log(`[OpenAI Provider] Using fallback ID: ${id}`);
+            }
+            
             console.log(`[OpenAI Provider] Tool call ${id}:`, JSON.stringify(toolCall, null, 2));
             
             if (!toolCallBuffer[id]) {
@@ -259,6 +320,80 @@ export class OpenAIProvider implements Provider {
         
         if (chunk.choices[0]?.finish_reason) {
           console.log(`[OpenAI Provider] Stream finished with reason:`, chunk.choices[0].finish_reason);
+          
+          // Handle incomplete tool calls when stream finishes with tool_calls
+          if (chunk.choices[0].finish_reason === 'tool_calls' && Object.keys(toolCallBuffer).length > 0) {
+            console.warn('[OpenAI Provider] Stream finished with tool_calls but buffer has incomplete calls:', toolCallBuffer);
+            
+            // First, try to merge orphaned arguments with named tool calls
+            const namedCalls: { [key: string]: any } = {};
+            const orphanedArgs: { [key: string]: any } = {};
+            
+            for (const [id, buffer] of Object.entries(toolCallBuffer)) {
+              if (buffer.name && !buffer.arguments) {
+                namedCalls[id] = buffer;
+              } else if (!buffer.name && buffer.arguments) {
+                orphanedArgs[id] = buffer;
+              }
+            }
+            
+            // Try to match orphaned arguments with named calls
+            for (const [orphanId, orphanBuffer] of Object.entries(orphanedArgs)) {
+              const namedIds = Object.keys(namedCalls);
+              if (namedIds.length === 1) {
+                // Single named call - assign orphaned args to it
+                const namedId = namedIds[0];
+                console.log(`[OpenAI Provider] Merging orphaned args from ${orphanId} to named call ${namedId}`);
+                namedCalls[namedId].arguments = orphanBuffer.arguments;
+                delete toolCallBuffer[orphanId]; // Remove orphaned entry
+                toolCallBuffer[namedId] = namedCalls[namedId]; // Update buffer
+              }
+            }
+            
+            // Now try to yield all tool calls with better error handling
+            for (const [id, buffer] of Object.entries(toolCallBuffer)) {
+              if (buffer.name) {
+                // Even if arguments are malformed, try to parse what we have
+                const args = buffer.arguments || '{}';
+                console.warn(`[OpenAI Provider] Attempting to yield incomplete tool call ${id} with args:`, args);
+                
+                // Try to fix common JSON issues
+                let fixedArgs = args;
+                if (args === '"}' || args === '}' || args === '"') {
+                  fixedArgs = '{}';
+                } else if (!args.startsWith('{')) {
+                  fixedArgs = '{' + args;
+                }
+                if (!fixedArgs.endsWith('}')) {
+                  fixedArgs = fixedArgs + '}';
+                }
+                
+                // Validate the fixed JSON
+                try {
+                  JSON.parse(fixedArgs);
+                } catch {
+                  console.error(`[OpenAI Provider] Could not fix malformed JSON for tool ${buffer.name}:`, args);
+                  fixedArgs = '{}'; // Fallback to empty object
+                }
+                
+                const toolCalls: ToolCall[] = [{
+                  id: id.startsWith('orphaned_') || id.startsWith('fallback_') ? `repaired_${Date.now()}` : id,
+                  type: 'function' as const,
+                  function: {
+                    name: buffer.name,
+                    arguments: fixedArgs,
+                  },
+                }];
+                
+                console.log(`[OpenAI Provider] Yielding repaired tool call:`, toolCalls);
+                yield { toolCalls };
+              }
+            }
+            
+            // Clear the buffer
+            Object.keys(toolCallBuffer).forEach(key => delete toolCallBuffer[key]);
+          }
+          
           yield { done: true };
         }
       }
@@ -302,6 +437,70 @@ export class OpenAIProvider implements Provider {
     } catch (error) {
       console.error('[OpenAI Provider] Streaming without tools error:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Generate completion with structured output using Chat Completions API (for agent selection)
+   */
+  async generateCompletionStructured(
+    messages: Message[],
+    options: ProviderOptions & { response_format: any }
+  ): Promise<string> {
+    const model = options.model || this.defaultModel;
+    
+    // Convert messages to OpenAI format
+    const openaiMessages: ChatCompletionMessageParam[] = messages.map(m => {
+      const baseMessage = { content: m.content };
+      
+      switch (m.role) {
+        case 'user':
+          return { ...baseMessage, role: 'user' as const };
+        case 'assistant':
+          return { ...baseMessage, role: 'assistant' as const };
+        case 'system':
+          return { ...baseMessage, role: 'system' as const };
+        case 'tool':
+          return {
+            ...baseMessage,
+            role: 'tool' as const,
+            tool_call_id: m.tool_call_id || '',
+            ...(m.name && { name: m.name }),
+          };
+        default:
+          return { ...baseMessage, role: 'user' as const };
+      }
+    });
+    
+    console.log('[OpenAI Provider] Using Chat Completions API for structured output with format:', options.response_format);
+    
+    try {
+      const params: any = {
+        model,
+        messages: openaiMessages,
+        temperature: options.temperature ?? 0.1,
+        response_format: options.response_format,
+      };
+
+      if (options.maxTokens) {
+        if (this.modelsWithMaxCompletionTokens.has(model)) {
+          params.max_completion_tokens = options.maxTokens;
+        } else {
+          params.max_tokens = options.maxTokens;
+        }
+      }
+
+      console.log('[OpenAI Provider] Chat completion params:', JSON.stringify(params, null, 2));
+      
+      const completion = await this.client.chat.completions.create(params);
+      
+      const content = completion.choices[0]?.message?.content || '';
+      console.log('[OpenAI Provider] Structured response received:', content.substring(0, 200));
+      
+      return content;
+    } catch (error) {
+      console.error('[OpenAI Provider] Structured completion error:', error);
+      throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   

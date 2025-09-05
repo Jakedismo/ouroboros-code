@@ -24,7 +24,9 @@ import { OpenAIProvider } from './index.js';
 export class OpenAIContentGenerator implements ContentGenerator {
   private provider: OpenAIProvider;
 
-  constructor(private apiKey: string, private model: string = 'gpt-4o') {
+  constructor(private apiKey: string, private model: string = 'gpt-5') {
+    // Ensure we use the provided model, defaulting to gpt-5 if not specified
+    console.log('[OpenAI ContentGenerator] Initializing with model:', this.model);
     this.provider = new OpenAIProvider({
       apiKey: this.apiKey,
       model: this.model,
@@ -51,6 +53,35 @@ export class OpenAIContentGenerator implements ContentGenerator {
       // Extract all config parameters for debugging
       console.log('[OpenAI Content Generator] Full config:', JSON.stringify(request.config, null, 2));
       
+      // For structured output (agent selection), use Chat Completions API instead of Responses API
+      if ((request.config as any)?.response_format) {
+        console.log('[OpenAI ContentGenerator] Using Chat Completions API for structured output');
+        const response = await this.provider.generateCompletionStructured(messages, {
+          model: modelToUse,
+          temperature: request.config?.temperature,
+          maxTokens: request.config?.maxOutputTokens,
+          response_format: (request.config as any).response_format,
+        });
+        return {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: response }],
+                role: 'model',
+              },
+              finishReason: 'STOP' as any,
+              index: 0,
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 0,
+            candidatesTokenCount: 0,
+            totalTokenCount: 0,
+          },
+        } as GenerateContentResponse;
+      }
+
+      // Regular generation - use standard generateCompletion
       const response = await this.provider.generateCompletion(messages, {
         model: modelToUse,
         temperature: request.config?.temperature,
@@ -96,6 +127,12 @@ export class OpenAIContentGenerator implements ContentGenerator {
       // Convert Gemini request format to our unified message format
       const messages = self.convertToMessages(request.contents);
       
+      // Log message details for debugging
+      console.log('[OpenAI ContentGenerator] Converted messages for streaming:');
+      messages.forEach((msg, idx) => {
+        console.log(`  ${idx}: role=${msg.role}, content_length=${msg.content.length}${msg.tool_call_id ? ', tool_call_id=' + msg.tool_call_id : ''}${msg.name ? ', name=' + msg.name : ''}`);
+      });
+      
       try {
         // Extract tools from config (they come from GeminiChat's generationConfig.tools)
         const tools = request.config?.tools || [];
@@ -104,7 +141,16 @@ export class OpenAIContentGenerator implements ContentGenerator {
         const modelToUse = request.model || self.model;
         console.log('[OpenAI Streaming] Model to use:', modelToUse, 'Config:', JSON.stringify(request.config, null, 2));
         
-        const stream = self.provider.generateResponse(messages, {
+        console.log('[OpenAI ContentGenerator] About to call provider.generateResponse with', messages.length, 'messages...');
+        // Convert messages to the format expected by provider
+        const providerMessages = messages.map(msg => {
+          const baseMsg: any = { role: msg.role, content: msg.content };
+          if (msg.tool_call_id) baseMsg.tool_call_id = msg.tool_call_id;
+          if (msg.name && msg.role === 'tool') baseMsg.name = msg.name;
+          return baseMsg;
+        });
+        
+        const stream = self.provider.generateResponse(providerMessages, {
           model: modelToUse,
           temperature: request.config?.temperature,
           maxTokens: request.config?.maxOutputTokens,
@@ -114,8 +160,12 @@ export class OpenAIContentGenerator implements ContentGenerator {
           ...((request.config as any)?.tool_choice && { tool_choice: (request.config as any).tool_choice }),
           ...((request.config as any)?.parallel_tool_calls !== undefined && { parallel_tool_calls: (request.config as any).parallel_tool_calls }),
         }, tools); // Pass tools as separate parameter
-
+        
+        console.log('[OpenAI ContentGenerator] Provider.generateResponse returned, starting to iterate...');
+        let chunkCount = 0;
         for await (const chunk of stream) {
+          chunkCount++;
+          console.log(`[OpenAI ContentGenerator] Processing chunk ${chunkCount}:`, JSON.stringify(chunk, null, 2));
           if (chunk.content) {
             yield {
               candidates: [
@@ -164,7 +214,9 @@ export class OpenAIContentGenerator implements ContentGenerator {
             } as GenerateContentResponse;
           }
         }
+        console.log(`[OpenAI ContentGenerator] Finished processing ${chunkCount} chunks`);
       } catch (error) {
+        console.error('[OpenAI ContentGenerator] Stream error:', error);
         throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
@@ -212,7 +264,7 @@ export class OpenAIContentGenerator implements ContentGenerator {
     throw new Error('Embeddings not yet supported for OpenAI provider');
   }
 
-  private convertToMessages(contents: ContentListUnion): Array<{role: 'user' | 'assistant' | 'system', content: string}> {
+  private convertToMessages(contents: ContentListUnion): Array<{role: 'user' | 'assistant' | 'system' | 'tool', content: string, tool_call_id?: string, name?: string}> {
     // Add debugging to see what we're receiving
     console.log('[OpenAI ContentGenerator] convertToMessages input type:', typeof contents);
     console.log('[OpenAI ContentGenerator] convertToMessages isArray:', Array.isArray(contents));
@@ -222,6 +274,7 @@ export class OpenAIContentGenerator implements ContentGenerator {
         console.log(`[OpenAI ContentGenerator] Item ${index} type:`, typeof item);
         if (typeof item === 'object' && item !== null) {
           console.log(`[OpenAI ContentGenerator] Item ${index} keys:`, Object.keys(item));
+          console.log(`[OpenAI ContentGenerator] Item ${index} role:`, (item as any).role);
         }
         if (typeof item === 'string') {
           console.log(`[OpenAI ContentGenerator] Item ${index} string value (first 100 chars):`, item.substring(0, 100));
@@ -240,7 +293,7 @@ export class OpenAIContentGenerator implements ContentGenerator {
       throw new Error('Contents must be string or array');
     }
 
-    const messages: Array<{role: 'user' | 'assistant' | 'system', content: string}> = [];
+    const messages: Array<{role: 'user' | 'assistant' | 'system' | 'tool', content: string, tool_call_id?: string, name?: string}> = [];
 
     // Process each item in the array
     for (let i = 0; i < contents.length; i++) {
@@ -255,23 +308,59 @@ export class OpenAIContentGenerator implements ContentGenerator {
         if ('role' in item && 'parts' in item) {
           // This is a Content object
           const content = item as Content;
-          const role = content.role === 'user' ? 'user' : content.role === 'model' ? 'assistant' : 'system';
-          const text = content.parts?.map(part => {
-            if ((part as any).text) {
-              return (part as any).text;
+          
+          // Handle function/tool responses specially for OpenAI
+          if (content.role === 'function') {
+            console.log(`[OpenAI ContentGenerator] Processing function response at index ${i}`);
+            // Extract function response from Gemini format
+            const functionParts = content.parts?.filter(part => (part as any).functionResponse);
+            if (functionParts && functionParts.length > 0) {
+              for (const part of functionParts) {
+                const fnResponse = (part as any).functionResponse;
+                const responseText = typeof fnResponse.response === 'string' 
+                  ? fnResponse.response 
+                  : fnResponse.response?.text || JSON.stringify(fnResponse.response);
+                
+                // OpenAI expects tool responses with role 'tool'
+                messages.push({ 
+                  role: 'tool', 
+                  content: responseText,
+                  name: fnResponse.name
+                });
+                console.log(`[OpenAI ContentGenerator] Added tool response for ${fnResponse.name}`);
+              }
             }
-            // Handle other part types safely
-            if ((part as any).functionCall || (part as any).functionResponse) {
-              // Don't stringify function calls/responses, they should be handled separately
-              return '';
-            }
-            // For other part types, try to extract meaningful content
-            return String(part);
-          }).join('') || '';
+          } else {
+            // Handle regular messages
+            const role = content.role === 'user' ? 'user' : content.role === 'model' ? 'assistant' : 'system';
+            const text = content.parts?.map(part => {
+              if ((part as any).text) {
+                return (part as any).text;
+              }
+              // Handle function calls - we'll need to track these
+              if ((part as any).functionCall) {
+                // Store function call info for later (OpenAI needs this in a different format)
+                return '';
+              }
+              // Skip function responses as they're handled above
+              if ((part as any).functionResponse) {
+                return '';
+              }
+              // For other part types, try to extract meaningful content
+              return String(part);
+            }).join('') || '';
 
-          if (text.trim()) {
-            console.log(`[OpenAI ContentGenerator] Adding Content object as ${role} message at index ${i}`);
-            messages.push({ role, content: text });
+            if (text.trim()) {
+              console.log(`[OpenAI ContentGenerator] Adding Content object as ${role} message at index ${i}`);
+              messages.push({ role: role as any, content: text });
+            }
+            
+            // Also check for function calls in model messages
+            const functionCallParts = content.parts?.filter(part => (part as any).functionCall);
+            if (functionCallParts && functionCallParts.length > 0 && content.role === 'model') {
+              // OpenAI needs to know about function calls made by the assistant
+              console.log(`[OpenAI ContentGenerator] Found ${functionCallParts.length} function calls in model message`);
+            }
           }
         } else if ('text' in item) {
           // This is a Part object - treat as user message

@@ -422,7 +422,8 @@ export class Turn {
             this.prompt_id,
             signal,
             onToolCall,
-            onAddHistory
+            onAddHistory,
+            this.config
           );
           break;
           
@@ -434,7 +435,8 @@ export class Turn {
             this.prompt_id,
             signal,
             onToolCall,
-            onAddHistory
+            onAddHistory,
+            this.config
           );
           break;
           
@@ -447,7 +449,8 @@ export class Turn {
             signal,
             onToolCall,
             onAddHistory,
-            provider
+            provider,
+            this.config
           );
           break;
       }

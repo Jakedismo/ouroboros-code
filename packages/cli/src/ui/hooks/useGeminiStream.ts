@@ -700,46 +700,75 @@ export const useGeminiStream = (
       let previousAgentState: string[] | undefined;
       let showSelectionFeedback: (() => void) | undefined;
       
-      if (!options?.isContinuation && isAutoModeEnabled()) {
+      const autoModeEnabled = isAutoModeEnabled();
+      console.log('[DEBUG] isAutoModeEnabled():', autoModeEnabled, 'isContinuation:', !!options?.isContinuation);
+      
+      if (!options?.isContinuation && autoModeEnabled) {
+        console.log('[DEBUG] Agent selection is enabled, starting selection process...');
         try {
           // Extract text from query parts for agent selection
           const queryText = Array.isArray(query) 
             ? query.map(part => typeof part === 'string' ? part : (part as any).text || '').join(' ')
             : typeof query === 'string' ? query : (query as any).text || '';
           
+          console.log('[DEBUG] Extracted query text for agent selection:', queryText);
+          
           // Stream the agent selection process with progressive feedback
           const selectionStream = processPromptWithAutoSelectionStream(queryText);
+          console.log('[DEBUG] Created selection stream, starting to process events...');
           
           for await (const event of selectionStream) {
+            console.log('[DEBUG] Selection stream event:', event.type);
             if (event.type === 'progress') {
               // Progress messages are already shown by the stream
               continue;
             } else if (event.type === 'complete') {
+              console.log('[DEBUG] Agent selection completed');
               if (event.showSelectionFeedback) {
                 showSelectionFeedback = event.showSelectionFeedback;
                 previousAgentState = event.previousAgentState;
+                console.log('[DEBUG] Showing selection feedback...');
                 // Show final selection feedback immediately
                 showSelectionFeedback();
               }
               break;
             }
           }
+          console.log('[DEBUG] Agent selection stream processing complete');
         } catch (error) {
-          console.error('Streaming agent selection failed:', error);
+          console.error('[DEBUG] Streaming agent selection failed:', error);
           // Continue with normal processing if agent selection fails
         }
+      } else {
+        console.log('[DEBUG] Skipping agent selection - isContinuation:', !!options?.isContinuation, 'isAutoModeEnabled:', isAutoModeEnabled());
       }
 
+      console.log('[DEBUG] About to prepare query for Gemini...');
       const { queryToSend, shouldProceed } = await prepareQueryForGemini(
         query,
         userMessageTimestamp,
         abortSignal,
         prompt_id!,
       );
+      
+      console.log('[DEBUG] Query preparation complete - shouldProceed:', shouldProceed, 'queryToSend exists:', !!queryToSend);
 
       if (!shouldProceed || queryToSend === null) {
+        console.log('[DEBUG] Stopping execution - shouldProceed:', shouldProceed, 'queryToSend:', queryToSend);
+        
+        // Critical fix: If this is a continuation but preparation failed, we need to restore proper state
+        if (options?.isContinuation) {
+          console.log('[DEBUG] Continuation failed during preparation - ensuring isResponding is false');
+          setIsResponding(false);
+          // Restore agent state if needed
+          if (previousAgentState) {
+            restorePreviousAgentState(previousAgentState);
+          }
+        }
         return;
       }
+      
+      console.log('[DEBUG] Proceeding with conversation...');
 
       if (!options?.isContinuation) {
         startNewPrompt();
@@ -750,6 +779,7 @@ export const useGeminiStream = (
       setInitError(null);
 
       try {
+        console.log('[DEBUG] Starting LLM conversation phase...');
         console.log('[useGeminiStream] About to call sendMessageStream');
         console.log('[useGeminiStream] geminiClient exists:', !!geminiClient);
         console.log('[useGeminiStream] sendMessageStream exists:', !!geminiClient?.sendMessageStream);
@@ -991,13 +1021,42 @@ export const useGeminiStream = (
         return;
       }
 
-      submitQuery(
-        responsesToSend,
-        {
-          isContinuation: true,
-        },
-        prompt_ids[0],
-      );
+      // Provider-specific tool continuation handling:
+      // - Gemini: Uses external continuation mechanism (submitQuery)
+      // - OpenAI: Uses internal continuation in Turn class (no external continuation needed)
+      // - Anthropic: Uses internal continuation in Turn class (no external continuation needed)
+      const currentProvider = config.getProvider();
+      
+      if (currentProvider === 'gemini') {
+        console.log(`[DEBUG] Provider ${currentProvider} will use external tool continuation mechanism`);
+      } else {
+        console.log(`[DEBUG] Provider ${currentProvider} uses internal tool continuation - skipping external mechanism`);
+        return; // Skip external continuation for OpenAI and Anthropic
+      }
+
+      // Only Gemini needs external continuation mechanism
+      try {
+        console.log('[DEBUG] Submitting tool results as Gemini continuation with', responsesToSend.length, 'parts');
+        await submitQuery(
+          responsesToSend,
+          {
+            isContinuation: true,
+          },
+          prompt_ids[0],
+        );
+        console.log('[DEBUG] Gemini tool continuation submitted successfully');
+      } catch (error) {
+        console.error('[DEBUG] Failed to submit Gemini tool continuation:', error);
+        // If continuation fails, ensure we reset the responding state
+        setIsResponding(false);
+        addItem(
+          {
+            type: MessageType.ERROR,
+            text: `Tool continuation failed: ${error instanceof Error ? error.message : String(error)}`,
+          },
+          Date.now(),
+        );
+      }
     },
     [
       isResponding,
