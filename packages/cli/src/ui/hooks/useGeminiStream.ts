@@ -1035,39 +1035,18 @@ export const useGeminiStream = (
       try {
         console.log('[DEBUG] Submitting tool results as continuation with', responsesToSend.length, 'parts');
         
-        // For non-Gemini providers, we need to add the tool responses to history first
-        // then send a minimal continuation message
+        // All providers use the same mechanism - send tool responses as continuation
+        // The Turn class will handle them appropriately based on the provider
         const currentProvider = config.getProvider();
-        if (currentProvider !== 'gemini' && geminiClient) {
-          console.log('[DEBUG] Non-Gemini provider detected, adding tool responses to history first');
-          
-          // Add the function responses to the history in the correct format
-          // This ensures the provider sees the tool responses when continuing
-          geminiClient.addHistory({
-            role: 'function',  // Use 'function' role for tool responses
-            parts: responsesToSend,
-          });
-          
-          // For OpenAI/Anthropic, send a minimal continuation request
-          // The provider will see the tool responses in history and continue generating
-          console.log('[DEBUG] Sending minimal continuation request for', currentProvider);
-          await submitQuery(
-            [{ text: '' }],  // Minimal request to trigger continuation
-            {
-              isContinuation: true,
-            },
-            prompt_ids[0],
-          );
-        } else {
-          // For Gemini, use the original mechanism
-          await submitQuery(
-            responsesToSend,
-            {
-              isContinuation: true,
-            },
-            prompt_ids[0],
-          );
-        }
+        console.log('[DEBUG] Sending tool responses as continuation for provider:', currentProvider);
+        
+        await submitQuery(
+          responsesToSend,
+          {
+            isContinuation: true,
+          },
+          prompt_ids[0],
+        );
         console.log('[DEBUG] Tool continuation submitted successfully');
       } catch (error) {
         console.error('[DEBUG] Failed to submit tool continuation:', error);

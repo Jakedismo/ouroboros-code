@@ -389,9 +389,22 @@ export class Turn {
         ? req.map(part => typeof part === 'string' ? { text: part } : part)
         : [typeof req === 'string' ? { text: req } : req];
       
-      // Add to chat history
-      const userContent = { role: 'user' as const, parts: wrappedReq };
-      this.chat.addHistory(userContent);
+      // Check if this is a tool response (contains functionResponse parts)
+      const isFunctionResponse = wrappedReq.some(part => 'functionResponse' in part);
+      
+      // Add to chat history with appropriate role
+      const historyContent = {
+        role: isFunctionResponse ? ('function' as const) : ('user' as const),
+        parts: wrappedReq
+      };
+      this.chat.addHistory(historyContent);
+      
+      // For function responses, we don't need to stream again - the model should continue
+      // automatically based on the history
+      if (isFunctionResponse && provider === 'openai') {
+        console.log('[Turn] Function response added to history for OpenAI, triggering continuation');
+        // Don't return here - continue to let OpenAI process the complete history
+      }
       
       // Get tools from config's tool registry
       const toolRegistry = this.config?.getToolRegistry?.();
