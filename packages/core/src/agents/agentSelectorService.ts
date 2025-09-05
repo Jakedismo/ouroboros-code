@@ -205,7 +205,7 @@ export class AgentSelectorService {
       ];
 
       const contentGenResponse = await this.contentGenerator.generateContent({
-        model: this.selectedModel || 'gpt-4o',
+        model: this.selectedModel || 'gpt-5-nano',
         contents: geminiContent,
         config: {
           temperature: providerOptions.temperature,

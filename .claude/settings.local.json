@@ -1,3 +1,25 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(npm run bundle:*)",
+      "Bash(npm install:*)",
+      "Bash(npm pack)",
+      "Bash(ouroboros-code:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(npx tsc:*)",
+      "Bash(grep:*)",
+      "Read(///**)",
+      "Bash(git checkout:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm run clean:*)",
+      "Bash(git stash:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__tavily-remote-mcp__tavily_search",
+      "mcp__tavily-remote-mcp__tavily_extract"
+    ]
+  },
   "outputStyle": "Metacognitive Instruction Follower"
 }

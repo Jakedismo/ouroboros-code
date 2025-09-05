@@ -189,9 +189,12 @@ export class OpenAIContentGenerator implements ContentGenerator {
           // Handle tool calls from OpenAI
           if (chunk.toolCalls && chunk.toolCalls.length > 0) {
             const functionCalls = chunk.toolCalls.map(tc => ({
+              id: tc.id, // CRITICAL: Include the ID for Turn class to track tool calls
               name: tc.function.name,
               args: tc.function.arguments ? JSON.parse(tc.function.arguments) : {},
             }));
+            
+            console.log(`[OpenAI ContentGenerator] Yielding ${functionCalls.length} function calls with IDs:`, functionCalls.map(fc => ({ id: fc.id, name: fc.name })));
             
             yield {
               candidates: [

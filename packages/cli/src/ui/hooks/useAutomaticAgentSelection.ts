@@ -24,26 +24,35 @@ export const useAutomaticAgentSelection = (
   // Initialize the orchestrator
   useEffect(() => {
     const initOrchestrator = async () => {
+      console.log('[DEBUG-AUTO-AGENT] Starting orchestrator initialization...');
       try {
         // Check if GeminiClient is initialized first
         const geminiClient = config.getGeminiClient();
+        console.log('[DEBUG-AUTO-AGENT] GeminiClient exists:', !!geminiClient);
         if (!geminiClient) {
           console.log('[AutoAgentSelection] GeminiClient not ready yet, waiting...');
           return;
         }
         
+        console.log('[DEBUG-AUTO-AGENT] Attempting to import ConversationOrchestrator...');
         // Dynamically import ConversationOrchestrator
         const { ConversationOrchestrator } = await import('@ouroboros/ouroboros-code-core/dist/src/agents/conversationOrchestrator.js');
+        console.log('[DEBUG-AUTO-AGENT] ConversationOrchestrator imported successfully');
         
         const instance = ConversationOrchestrator.getInstance();
+        console.log('[DEBUG-AUTO-AGENT] ConversationOrchestrator instance retrieved');
         
         // Initialize with the SAME Config that regular chat uses
         // This ensures both systems use the exact same ContentGenerator
+        console.log('[DEBUG-AUTO-AGENT] Initializing orchestrator with config...');
         await instance.initialize(config);
+        console.log('[DEBUG-AUTO-AGENT] Orchestrator initialized successfully');
+        
         setOrchestrator(instance);
         setIsInitialized(true);
         console.log('[AutoAgentSelection] Initialized with same ContentGenerator as regular chat');
       } catch (error) {
+        console.error('[DEBUG-AUTO-AGENT] Failed to initialize ConversationOrchestrator:', error);
         console.error('Failed to initialize ConversationOrchestrator:', error);
         console.warn('ConversationOrchestrator not available, automatic agent selection disabled');
       }

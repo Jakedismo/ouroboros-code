@@ -1022,21 +1022,18 @@ export const useGeminiStream = (
       }
 
       // Provider-specific tool continuation handling:
-      // - Gemini: Uses external continuation mechanism (submitQuery)
-      // - OpenAI: Uses internal continuation in Turn class (no external continuation needed)
-      // - Anthropic: Uses internal continuation in Turn class (no external continuation needed)
+      // All providers need external continuation when tools are executed by the UI layer
+      // The Turn class internal continuation only works if the Turn class itself executes the tools
       const currentProvider = config.getProvider();
+      console.log(`[DEBUG] Provider ${currentProvider} will use external tool continuation mechanism (UI-executed tools)`);
       
-      if (currentProvider === 'gemini') {
-        console.log(`[DEBUG] Provider ${currentProvider} will use external tool continuation mechanism`);
-      } else {
-        console.log(`[DEBUG] Provider ${currentProvider} uses internal tool continuation - skipping external mechanism`);
-        return; // Skip external continuation for OpenAI and Anthropic
-      }
+      // Note: We tried skipping external continuation for OpenAI/Anthropic, but that only works
+      // if the Turn class executes the tools. Since the UI layer is executing tools,
+      // we need the external continuation mechanism for all providers.
 
-      // Only Gemini needs external continuation mechanism
+      // External continuation mechanism for all providers (when tools are executed by UI)
       try {
-        console.log('[DEBUG] Submitting tool results as Gemini continuation with', responsesToSend.length, 'parts');
+        console.log('[DEBUG] Submitting tool results as continuation with', responsesToSend.length, 'parts');
         await submitQuery(
           responsesToSend,
           {
@@ -1044,9 +1041,9 @@ export const useGeminiStream = (
           },
           prompt_ids[0],
         );
-        console.log('[DEBUG] Gemini tool continuation submitted successfully');
+        console.log('[DEBUG] Tool continuation submitted successfully');
       } catch (error) {
-        console.error('[DEBUG] Failed to submit Gemini tool continuation:', error);
+        console.error('[DEBUG] Failed to submit tool continuation:', error);
         // If continuation fails, ensure we reset the responding state
         setIsResponding(false);
         addItem(

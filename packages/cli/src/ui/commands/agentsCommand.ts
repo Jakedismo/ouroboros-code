@@ -11,8 +11,8 @@ import { CommandKind, type SlashCommand } from './types.js';
 let AgentSelectorService: any;
 let AgentManager: any;
 
-// Get AgentSelectorService instance
-async function getAgentSelectorService() {
+// Get AgentSelectorService instance with proper initialization
+async function getAgentSelectorService(config: any) {
   if (!AgentSelectorService) {
     try {
       const module = await import('@ouroboros/ouroboros-code-core/dist/src/agents/agentSelectorService.js');
@@ -22,7 +22,24 @@ async function getAgentSelectorService() {
       return null;
     }
   }
-  return AgentSelectorService ? AgentSelectorService.getInstance() : null;
+  
+  if (AgentSelectorService) {
+    console.log('[DEBUG] Creating AgentSelectorService instance...');
+    const instance = AgentSelectorService.getInstance();
+    
+    // Initialize if not already initialized
+    console.log('[DEBUG] Initializing AgentSelectorService with config:', !!config);
+    try {
+      await instance.initialize(config);
+      console.log('[DEBUG] AgentSelectorService initialized successfully');
+    } catch (error) {
+      console.warn('Failed to initialize AgentSelectorService:', error);
+      return null;
+    }
+    return instance;
+  }
+  
+  return null;
 }
 
 async function getAgentManager() {
@@ -49,7 +66,7 @@ export const agentsCommand: SlashCommand = {
       description: 'Enable automatic agent selection for all prompts',
       kind: CommandKind.BUILT_IN,
       action: async (context, args) => {
-        const selectorService = await getAgentSelectorService();
+        const selectorService = await getAgentSelectorService(context.services.config);
         
         if (!selectorService) {
           context.ui.addItem({
@@ -102,7 +119,7 @@ Please check your OpenAI API key configuration and try again.`,
       description: 'Disable automatic agent selection',
       kind: CommandKind.BUILT_IN,
       action: async (context, _args) => {
-        const selectorService = await getAgentSelectorService();
+        const selectorService = await getAgentSelectorService(context.services.config);
         
         if (!selectorService) {
           context.ui.addItem({
@@ -135,7 +152,7 @@ The system will now operate in manual mode:
       description: 'Show automatic agent selection status and statistics',
       kind: CommandKind.BUILT_IN,
       action: async (context, _args) => {
-        const selectorService = await getAgentSelectorService();
+        const selectorService = await getAgentSelectorService(context.services.config);
         const agentManager = await getAgentManager();
         
         if (!selectorService) {
@@ -192,7 +209,7 @@ ${stats.mostSelectedAgents.slice(0, 5).map((s: any) => `  • ${s.agentId}: ${s.
       description: 'Show recent automatic agent selections',
       kind: CommandKind.BUILT_IN,
       action: async (context, args) => {
-        const selectorService = await getAgentSelectorService();
+        const selectorService = await getAgentSelectorService(context.services.config);
         
         if (!selectorService) {
           context.ui.addItem({
@@ -265,7 +282,7 @@ Please provide a prompt to test agent selection.
           return;
         }
 
-        const selectorService = await getAgentSelectorService();
+        const selectorService = await getAgentSelectorService(context.services.config);
         
         if (!selectorService) {
           context.ui.addItem({
@@ -334,7 +351,7 @@ Please check your OpenAI configuration and try again.`,
       description: 'Show detailed agent selection analytics',
       kind: CommandKind.BUILT_IN,
       action: async (context, _args) => {
-        const selectorService = await getAgentSelectorService();
+        const selectorService = await getAgentSelectorService(context.services.config);
         
         if (!selectorService) {
           context.ui.addItem({

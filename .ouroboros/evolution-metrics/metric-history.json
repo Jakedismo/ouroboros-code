@@ -1,6 +1,6 @@
 [
   {
-    "timestamp": 1756759877152,
+    "timestamp": 1756931778652,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -19,7 +19,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756759937152,
+    "timestamp": 1756931838643,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -38,7 +38,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756759997154,
+    "timestamp": 1756931898643,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -57,7 +57,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760057156,
+    "timestamp": 1756931958644,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -76,7 +76,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760117158,
+    "timestamp": 1756932018644,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -95,7 +95,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760177160,
+    "timestamp": 1756932347668,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -114,7 +114,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760237161,
+    "timestamp": 1756932407668,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -133,7 +133,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760297163,
+    "timestamp": 1756932467669,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -152,7 +152,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760357167,
+    "timestamp": 1756932527670,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -171,7 +171,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760417169,
+    "timestamp": 1756932587669,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -190,7 +190,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760477198,
+    "timestamp": 1756932647670,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -209,7 +209,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760537212,
+    "timestamp": 1756932707671,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -228,7 +228,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760597218,
+    "timestamp": 1756932767671,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -247,7 +247,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760657223,
+    "timestamp": 1756932827673,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -266,7 +266,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760717231,
+    "timestamp": 1756932887673,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -285,7 +285,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760777262,
+    "timestamp": 1756932947674,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -304,7 +304,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760837276,
+    "timestamp": 1756933007675,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -323,7 +323,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760897294,
+    "timestamp": 1756933067676,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -342,7 +342,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756760957300,
+    "timestamp": 1756933127699,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -361,7 +361,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756761017302,
+    "timestamp": 1756933187703,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -380,7 +380,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756761077315,
+    "timestamp": 1756933247706,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -399,7 +399,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756761137323,
+    "timestamp": 1756933307707,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -418,7 +418,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756761197342,
+    "timestamp": 1756933367709,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
@@ -437,482 +437,7 @@
     "activeEvolutions": 0
   },
   {
-    "timestamp": 1756761257344,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756761317372,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756761377374,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756761437392,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756761497406,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756761557437,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756761617459,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756761677489,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756761737509,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756761797548,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756761857571,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762351912,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762411913,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762471915,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762531920,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762591920,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762651924,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762711927,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762771932,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762831940,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762891943,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756762951947,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756763011957,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756763071937,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756763131927,
-    "metrics": {
-      "totalEvolutions": 0,
-      "successRate": 0,
-      "averageFitnessGain": 0,
-      "rollbackRate": 0,
-      "chaosExperiments": 0,
-      "chaosSuccessRate": 0,
-      "distributionMetrics": {
-        "totalShards": 0,
-        "activeNodes": 5,
-        "reconstructionSuccessRate": 0.95,
-        "averageFragmentCount": 3.5,
-        "consensusParticipation": 0
-      }
-    },
-    "activeEvolutions": 0
-  },
-  {
-    "timestamp": 1756763191927,
+    "timestamp": 1756933427710,
     "metrics": {
       "totalEvolutions": 0,
       "successRate": 0,
