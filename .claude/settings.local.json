@@ -18,7 +18,10 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "mcp__tavily-remote-mcp__tavily_search",
-      "mcp__tavily-remote-mcp__tavily_extract"
+      "mcp__tavily-remote-mcp__tavily_extract",
+      "WebSearch",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:github.com)"
     ]
   },
   "outputStyle": "Metacognitive Instruction Follower"

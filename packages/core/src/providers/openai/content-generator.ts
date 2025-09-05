@@ -322,15 +322,18 @@ export class OpenAIContentGenerator implements ContentGenerator {
                 const fnResponse = (part as any).functionResponse;
                 const responseText = typeof fnResponse.response === 'string' 
                   ? fnResponse.response 
-                  : fnResponse.response?.text || JSON.stringify(fnResponse.response);
+                  : fnResponse.response?.text || fnResponse.response?.output || JSON.stringify(fnResponse.response);
                 
-                // OpenAI expects tool responses with role 'tool'
+                // OpenAI expects tool responses with role 'tool' and tool_call_id
+                // The id field in functionResponse corresponds to the original tool call ID
+                const toolCallId = fnResponse.id || fnResponse.callId || `${fnResponse.name}-response`;
                 messages.push({ 
                   role: 'tool', 
                   content: responseText,
+                  tool_call_id: toolCallId,
                   name: fnResponse.name
                 });
-                console.log(`[OpenAI ContentGenerator] Added tool response for ${fnResponse.name}`);
+                console.log(`[OpenAI ContentGenerator] Added tool response for ${fnResponse.name} with tool_call_id ${toolCallId}`);
               }
             }
           } else {
