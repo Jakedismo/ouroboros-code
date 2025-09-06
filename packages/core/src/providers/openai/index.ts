@@ -108,6 +108,15 @@ export class OpenAIProvider implements Provider {
     options: ProviderOptions = {},
     tools?: any[]
   ): AsyncIterable<StreamingResponse> {
+    console.log('\n[OpenAI] ============ generateResponse called ============');
+    console.log('[OpenAI] Number of messages:', messages.length);
+    messages.forEach((msg, idx) => {
+      console.log(`[OpenAI] Message ${idx}: role=${msg.role}`);
+      if (msg.tool_call_id) console.log(`  - tool_call_id: ${msg.tool_call_id}`);
+      if ((msg as any).tool_calls) console.log(`  - has tool_calls: yes`);
+    });
+    console.log('[OpenAI] ==========================================\n');
+    
     const model = options.model || this.defaultModel;
     
     // Convert messages to OpenAI format
@@ -118,7 +127,12 @@ export class OpenAIProvider implements Provider {
         case 'user':
           return { ...baseMessage, role: 'user' as const };
         case 'assistant':
-          return { ...baseMessage, role: 'assistant' as const };
+          // Include tool_calls if present in assistant messages
+          const assistantMsg: any = { ...baseMessage, role: 'assistant' as const };
+          if ((m as any).tool_calls) {
+            assistantMsg.tool_calls = (m as any).tool_calls;
+          }
+          return assistantMsg;
         case 'system':
           return { ...baseMessage, role: 'system' as const };
         case 'tool':
@@ -163,7 +177,12 @@ export class OpenAIProvider implements Provider {
         case 'user':
           return { ...baseMessage, role: 'user' as const };
         case 'assistant':
-          return { ...baseMessage, role: 'assistant' as const };
+          // Include tool_calls if present in assistant messages
+          const assistantMsg: any = { ...baseMessage, role: 'assistant' as const };
+          if ((m as any).tool_calls) {
+            assistantMsg.tool_calls = (m as any).tool_calls;
+          }
+          return assistantMsg;
         case 'system':
           return { ...baseMessage, role: 'system' as const };
         case 'tool':
@@ -202,6 +221,25 @@ export class OpenAIProvider implements Provider {
     model: string,
     options: ProviderOptions
   ): AsyncIterable<StreamingResponse> {
+    console.log('[OpenAI Provider] generateResponseWithTools - messages being sent:');
+    messages.forEach((msg, idx) => {
+      console.log(`  [${idx}] role=${msg.role}`);
+      if (msg.role === 'assistant' && (msg as any).tool_calls) {
+        console.log(`       has tool_calls: ${(msg as any).tool_calls.length} calls`);
+      }
+      if (msg.role === 'tool') {
+        console.log(`       tool_call_id: ${(msg as any).tool_call_id}`);
+        // Check if previous message is assistant with tool_calls
+        if (idx > 0) {
+          const prevMsg = messages[idx - 1];
+          if (prevMsg.role !== 'assistant' || !(prevMsg as any).tool_calls) {
+            console.error(`  ERROR: Tool message at [${idx}] doesn't have preceding assistant with tool_calls!`);
+            console.error(`  Previous message role: ${prevMsg.role}, has tool_calls: ${!!(prevMsg as any).tool_calls}`);
+          }
+        }
+      }
+    });
+    
     const requestParams = this.buildRequestParams(model, options, true);
     requestParams.messages = messages;
     requestParams.tools = tools;
@@ -457,7 +495,12 @@ export class OpenAIProvider implements Provider {
         case 'user':
           return { ...baseMessage, role: 'user' as const };
         case 'assistant':
-          return { ...baseMessage, role: 'assistant' as const };
+          // Include tool_calls if present in assistant messages
+          const assistantMsg: any = { ...baseMessage, role: 'assistant' as const };
+          if ((m as any).tool_calls) {
+            assistantMsg.tool_calls = (m as any).tool_calls;
+          }
+          return assistantMsg;
         case 'system':
           return { ...baseMessage, role: 'system' as const };
         case 'tool':

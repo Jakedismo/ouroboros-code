@@ -508,6 +508,14 @@ export class GeminiClient {
     turns: number = MAX_TURNS,
     originalModel?: string,
   ): AsyncGenerator<ServerGeminiStreamEvent, Turn> {
+    console.log('[Client.sendMessageStream] Called with request type:', typeof request);
+    if (Array.isArray(request)) {
+      console.log(`[Client.sendMessageStream] Request array with ${request.length} parts`);
+      if (request.length > 0 && request[0]) {
+        console.log('[Client.sendMessageStream] First part keys:', Object.keys(request[0]));
+      }
+    }
+    
     if (this.lastPromptId !== prompt_id) {
       this.loopDetector.reset(prompt_id);
       this.lastPromptId = prompt_id;
@@ -529,7 +537,25 @@ export class GeminiClient {
     // Track the original model from the first call to detect model switching
     const initialModel = originalModel || this.config.getModel();
 
-    const compressed = await this.tryCompressChat(prompt_id);
+    // Skip compression for tool response continuations
+    // Tool responses are typically small and compression can cause issues with non-Gemini providers
+    const isToolResponseContinuation = Array.isArray(request) && 
+      request.length > 0 && 
+      request.some(part => typeof part === 'object' && 'functionResponse' in part);
+    
+    let compressed: ChatCompressionInfo;
+    if (isToolResponseContinuation) {
+      console.log('[Client.sendMessageStream] Skipping compression for tool response continuation');
+      compressed = {
+        originalTokenCount: 0,
+        newTokenCount: 0,
+        compressionStatus: CompressionStatus.NOOP,
+      };
+    } else {
+      console.log('[Client.sendMessageStream] About to try compression...');
+      compressed = await this.tryCompressChat(prompt_id);
+      console.log('[Client.sendMessageStream] Compression complete, status:', compressed.compressionStatus);
+    }
 
     if (compressed.compressionStatus === CompressionStatus.COMPRESSED) {
       yield { type: GeminiEventType.ChatCompressed, value: compressed };
@@ -540,13 +566,20 @@ export class GeminiClient {
     // part from the user immediately follows a functionCall part from the model
     // in the conversation history . The IDE context is not discarded; it will
     // be included in the next regular message sent to the model.
+    console.log('[Client.sendMessageStream] Getting history...');
     const history = this.getHistory();
+    console.log('[Client.sendMessageStream] History length:', history.length);
     const lastMessage =
       history.length > 0 ? history[history.length - 1] : undefined;
+    if (lastMessage) {
+      console.log('[Client.sendMessageStream] Last message role:', lastMessage.role);
+      console.log('[Client.sendMessageStream] Last message parts:', lastMessage.parts?.map(p => Object.keys(p)));
+    }
     const hasPendingToolCall =
       !!lastMessage &&
       lastMessage.role === 'model' &&
       (lastMessage.parts?.some((p) => 'functionCall' in p) || false);
+    console.log('[Client.sendMessageStream] Has pending tool call:', hasPendingToolCall);
 
     if (this.config.getIdeMode() && !hasPendingToolCall) {
       const { contextParts, newIdeContext } = this.getIdeContextParts(
@@ -563,6 +596,14 @@ export class GeminiClient {
     }
 
     const turn = new Turn(this.getChat(), prompt_id, this.config, this.contentGenerator);
+    
+    // Debug: Log when Turn is created for continuation
+    const currentProvider = this.config.getProvider();
+    console.log(`[Client] Created Turn for provider: ${currentProvider}, request type:`, typeof request);
+    if (Array.isArray(request) && request.length > 0) {
+      console.log(`[Client] Request is array with ${request.length} parts, first part keys:`, 
+        request[0] ? Object.keys(request[0]) : 'empty');
+    }
 
     const loopDetected = await this.loopDetector.turnStarted(signal);
     if (loopDetected) {
@@ -570,6 +611,7 @@ export class GeminiClient {
       return turn;
     }
 
+    console.log(`[Client] Calling turn.run() for provider: ${currentProvider}`);
     const resultStream = turn.run(request, signal);
     for await (const event of resultStream) {
       if (this.loopDetector.addAndCheck(event)) {

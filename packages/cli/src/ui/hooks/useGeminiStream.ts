@@ -595,10 +595,14 @@ export const useGeminiStream = (
       stream: AsyncIterable<GeminiEvent>,
       userMessageTimestamp: number,
       signal: AbortSignal,
+      client: GeminiClient,
     ): Promise<StreamProcessingStatus> => {
+      console.log('[processGeminiStreamEvents] Starting to process stream...');
       let geminiMessageBuffer = '';
       const toolCallRequests: ToolCallRequestInfo[] = [];
+      console.log('[processGeminiStreamEvents] About to iterate over stream...');
       for await (const event of stream) {
+        console.log('[processGeminiStreamEvents] Received event type:', event.type);
         switch (event.type) {
           case ServerGeminiEventType.Thought:
             setThought(event.value);
@@ -650,7 +654,45 @@ export const useGeminiStream = (
           }
         }
       }
+      
+      console.log('[useGeminiStream] After processing stream - toolCallRequests:', toolCallRequests.length, 'buffer length:', geminiMessageBuffer.length);
+      
+      // CRITICAL FIX: Add assistant's response to history with tool calls
+      // This ensures OpenAI has the proper message sequence
+      if (toolCallRequests.length > 0 || geminiMessageBuffer.trim()) {
+        const assistantParts: any[] = [];
+        
+        // Add text content if any
+        if (geminiMessageBuffer.trim()) {
+          assistantParts.push({ text: geminiMessageBuffer });
+        }
+        
+        // Add function calls if any
+        if (toolCallRequests.length > 0) {
+          console.log('[useGeminiStream] Adding assistant message with', toolCallRequests.length, 'tool calls to history');
+          toolCallRequests.forEach(toolCall => {
+            assistantParts.push({
+              functionCall: {
+                id: toolCall.callId,
+                name: toolCall.name,
+                args: toolCall.args
+              }
+            });
+          });
+        }
+        
+        // Add assistant's complete response to history
+        client.addHistory({
+          role: 'model',
+          parts: assistantParts
+        });
+        console.log('[useGeminiStream] Added assistant response to history with', assistantParts.length, 'parts');
+      } else {
+        console.log('[useGeminiStream] No assistant message to add to history');
+      }
+      
       if (toolCallRequests.length > 0) {
+        console.log('[useGeminiStream] Scheduling tool calls...');
         scheduleToolCalls(toolCallRequests, signal);
       }
       return StreamProcessingStatus.Completed;
@@ -836,20 +878,25 @@ export const useGeminiStream = (
           );
         }, 3000); // Show progress every 3 seconds during thinking
         
+        console.log('[useGeminiStream] Creating stream...');
         const stream = geminiClient.sendMessageStream(
           queryToSend,
           abortSignal,
           prompt_id!,
         );
+        console.log('[useGeminiStream] Stream created, type:', typeof stream);
         
         // Clear the thinking progress once streaming starts
         clearInterval(thinkingProgressInterval);
         
+        console.log('[useGeminiStream] About to process stream events...');
         const processingStatus = await processGeminiStreamEvents(
           stream,
           userMessageTimestamp,
           abortSignal,
+          geminiClient,
         );
+        console.log('[useGeminiStream] Stream processing completed with status:', processingStatus);
 
         if (processingStatus === StreamProcessingStatus.UserCancelled) {
           return;

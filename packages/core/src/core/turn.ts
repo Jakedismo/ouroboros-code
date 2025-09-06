@@ -208,6 +208,14 @@ export class Turn {
       // Check if we're using a non-Gemini provider and handle it appropriately
       const currentProvider = this.config?.getProvider?.() || 'gemini';
       
+      console.log(`[Turn.run] Called with provider: ${currentProvider}, request type:`, typeof req);
+      if (Array.isArray(req)) {
+        console.log(`[Turn.run] Request array length: ${req.length}`);
+        if (req.length > 0 && req[0]) {
+          console.log(`[Turn.run] First part keys:`, Object.keys(req[0]));
+        }
+      }
+      
       if (currentProvider !== 'gemini') {
         console.log(`[Turn] Using provider-aware streaming for: ${currentProvider}`);
         // For non-Gemini providers, use ContentGenerator directly to avoid GeminiChat compatibility issues

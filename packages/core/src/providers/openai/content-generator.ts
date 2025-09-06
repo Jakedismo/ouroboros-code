@@ -130,7 +130,25 @@ export class OpenAIContentGenerator implements ContentGenerator {
       // Log message details for debugging
       console.log('[OpenAI ContentGenerator] Converted messages for streaming:');
       messages.forEach((msg, idx) => {
-        console.log(`  ${idx}: role=${msg.role}, content_length=${msg.content.length}${msg.tool_call_id ? ', tool_call_id=' + msg.tool_call_id : ''}${msg.name ? ', name=' + msg.name : ''}`);
+        const extras: string[] = [];
+        if (msg.tool_call_id) extras.push(`tool_call_id=${msg.tool_call_id}`);
+        if (msg.name) extras.push(`name=${msg.name}`);
+        if ((msg as any).tool_calls) {
+          extras.push(`tool_calls=${(msg as any).tool_calls.length}`);
+          // Log the actual tool calls for debugging
+          console.log(`    Tool calls at message ${idx}:`, JSON.stringify((msg as any).tool_calls, null, 2));
+        }
+        const contentLength = msg.content ? msg.content.length : 0;
+        console.log(`  ${idx}: role=${msg.role}, content_length=${contentLength}${extras.length ? ', ' + extras.join(', ') : ''}`);
+        
+        // If this is a tool message, check if previous message has tool_calls
+        if (msg.role === 'tool' && idx > 0) {
+          const prevMsg = messages[idx - 1];
+          console.log(`    Previous message (${idx - 1}): role=${prevMsg.role}, has tool_calls=${!!(prevMsg as any).tool_calls}`);
+          if (prevMsg.role !== 'assistant' || !(prevMsg as any).tool_calls) {
+            console.error(`    ERROR: Tool message at index ${idx} doesn't have preceding assistant message with tool_calls!`);
+          }
+        }
       });
       
       try {
@@ -147,6 +165,8 @@ export class OpenAIContentGenerator implements ContentGenerator {
           const baseMsg: any = { role: msg.role, content: msg.content };
           if (msg.tool_call_id) baseMsg.tool_call_id = msg.tool_call_id;
           if (msg.name && msg.role === 'tool') baseMsg.name = msg.name;
+          // CRITICAL: Include tool_calls for assistant messages that made tool calls
+          if ((msg as any).tool_calls) baseMsg.tool_calls = (msg as any).tool_calls;
           return baseMsg;
         });
         
@@ -267,7 +287,7 @@ export class OpenAIContentGenerator implements ContentGenerator {
     throw new Error('Embeddings not yet supported for OpenAI provider');
   }
 
-  private convertToMessages(contents: ContentListUnion): Array<{role: 'user' | 'assistant' | 'system' | 'tool', content: string, tool_call_id?: string, name?: string}> {
+  private convertToMessages(contents: ContentListUnion): Array<{role: 'user' | 'assistant' | 'system' | 'tool', content: string, tool_call_id?: string, name?: string, tool_calls?: any[]}> {
     // Add debugging to see what we're receiving
     console.log('[OpenAI ContentGenerator] convertToMessages input type:', typeof contents);
     console.log('[OpenAI ContentGenerator] convertToMessages isArray:', Array.isArray(contents));
@@ -282,6 +302,16 @@ export class OpenAIContentGenerator implements ContentGenerator {
           if ((item as any).role === 'function' && (item as any).parts) {
             console.log(`[OpenAI ContentGenerator] Function response at ${index}, parts:`, 
               (item as any).parts.map((p: any) => Object.keys(p)));
+          }
+          // Log model messages with function calls
+          if ((item as any).role === 'model' && (item as any).parts) {
+            const functionCallParts = (item as any).parts.filter((p: any) => p.functionCall);
+            if (functionCallParts.length > 0) {
+              console.log(`[OpenAI ContentGenerator] Model message at ${index} has ${functionCallParts.length} function calls`);
+              functionCallParts.forEach((fc: any) => {
+                console.log(`  Function call:`, JSON.stringify(fc.functionCall, null, 2));
+              });
+            }
           }
         }
         if (typeof item === 'string') {
@@ -301,7 +331,10 @@ export class OpenAIContentGenerator implements ContentGenerator {
       throw new Error('Contents must be string or array');
     }
 
-    const messages: Array<{role: 'user' | 'assistant' | 'system' | 'tool', content: string, tool_call_id?: string, name?: string}> = [];
+    const messages: Array<{role: 'user' | 'assistant' | 'system' | 'tool', content: string, tool_call_id?: string, name?: string, tool_calls?: any[]}> = [];
+    
+    // Track tool calls to match with responses
+    const pendingToolCalls = new Map<string, any>();
 
     // Process each item in the array
     for (let i = 0; i < contents.length; i++) {
@@ -323,54 +356,109 @@ export class OpenAIContentGenerator implements ContentGenerator {
             // Extract function response from Gemini format
             const functionParts = content.parts?.filter(part => (part as any).functionResponse);
             if (functionParts && functionParts.length > 0) {
+              // Check if we need to add the assistant message with tool_calls first
+              // This happens when tools are executed but the assistant message wasn't added
+              const toolResponses: any[] = [];
+              
               for (const part of functionParts) {
                 const fnResponse = (part as any).functionResponse;
                 const responseText = typeof fnResponse.response === 'string' 
                   ? fnResponse.response 
                   : fnResponse.response?.text || fnResponse.response?.output || JSON.stringify(fnResponse.response);
                 
-                // OpenAI expects tool responses with role 'tool' and tool_call_id
-                // The id field in functionResponse corresponds to the original tool call ID
-                const toolCallId = fnResponse.id || fnResponse.callId || `${fnResponse.name}-response`;
+                // Generate tool call ID if not present
+                const toolCallId = fnResponse.id || fnResponse.callId || fnResponse.tool_call_id || `call_${fnResponse.name}_${Date.now()}`;
+                
+                toolResponses.push({
+                  toolCallId,
+                  name: fnResponse.name,
+                  content: responseText
+                });
+              }
+              
+              // Check if the last message is an assistant message with tool_calls
+              const lastMessage = messages[messages.length - 1];
+              const hasAssistantWithToolCalls = lastMessage && 
+                lastMessage.role === 'assistant' && 
+                (lastMessage as any).tool_calls && 
+                (lastMessage as any).tool_calls.length > 0;
+              
+              if (!hasAssistantWithToolCalls) {
+                // We need to synthesize an assistant message with tool_calls
+                // This happens when tools are executed directly without the assistant message
+                console.log(`[OpenAI ContentGenerator] Synthesizing assistant message with tool_calls for ${toolResponses.length} tool responses`);
+                
+                const syntheticToolCalls = toolResponses.map(tr => ({
+                  id: tr.toolCallId,
+                  type: 'function',
+                  function: {
+                    name: tr.name,
+                    arguments: '{}' // We don't have the original arguments, so use empty
+                  }
+                }));
+                
+                messages.push({
+                  role: 'assistant',
+                  content: null, // OpenAI allows null content when there are tool_calls
+                  tool_calls: syntheticToolCalls
+                } as any);
+                
+                console.log(`[OpenAI ContentGenerator] Added synthetic assistant message with ${syntheticToolCalls.length} tool calls`);
+              }
+              
+              // Now add the tool responses
+              for (const tr of toolResponses) {
                 messages.push({ 
                   role: 'tool', 
-                  content: responseText,
-                  tool_call_id: toolCallId,
-                  name: fnResponse.name
+                  content: tr.content,
+                  tool_call_id: tr.toolCallId,
+                  name: tr.name
                 });
-                console.log(`[OpenAI ContentGenerator] Added tool response for ${fnResponse.name} with tool_call_id ${toolCallId}`);
+                console.log(`[OpenAI ContentGenerator] Added tool response for ${tr.name} with tool_call_id ${tr.toolCallId}`);
               }
             }
           } else {
             // Handle regular messages
             const role = content.role === 'user' ? 'user' : content.role === 'model' ? 'assistant' : 'system';
-            const text = content.parts?.map(part => {
+            
+            // Extract text parts
+            const textParts: string[] = [];
+            const toolCalls: any[] = [];
+            
+            content.parts?.forEach(part => {
               if ((part as any).text) {
-                return (part as any).text;
-              }
-              // Handle function calls - we'll need to track these
-              if ((part as any).functionCall) {
-                // Store function call info for later (OpenAI needs this in a different format)
-                return '';
+                textParts.push((part as any).text);
+              } else if ((part as any).functionCall) {
+                // Store function call for OpenAI format
+                const fnCall = (part as any).functionCall;
+                const callId = fnCall.id || `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+                toolCalls.push({
+                  id: callId,
+                  type: 'function',
+                  function: {
+                    name: fnCall.name,
+                    arguments: typeof fnCall.args === 'string' ? fnCall.args : JSON.stringify(fnCall.args || {})
+                  }
+                });
+                // Track this tool call
+                pendingToolCalls.set(callId, fnCall);
               }
               // Skip function responses as they're handled above
-              if ((part as any).functionResponse) {
-                return '';
-              }
-              // For other part types, try to extract meaningful content
-              return String(part);
-            }).join('') || '';
-
-            if (text.trim()) {
+            });
+            
+            const text = textParts.join('');
+            
+            // For assistant messages with tool calls, include both content and tool_calls
+            if (role === 'assistant' && toolCalls.length > 0) {
+              console.log(`[OpenAI ContentGenerator] Adding assistant message with ${toolCalls.length} tool calls at index ${i}`);
+              messages.push({ 
+                role: 'assistant', 
+                content: text || null,  // OpenAI allows null content when there are tool_calls
+                tool_calls: toolCalls 
+              } as any);
+            } else if (text.trim()) {
               console.log(`[OpenAI ContentGenerator] Adding Content object as ${role} message at index ${i}`);
               messages.push({ role: role as any, content: text });
-            }
-            
-            // Also check for function calls in model messages
-            const functionCallParts = content.parts?.filter(part => (part as any).functionCall);
-            if (functionCallParts && functionCallParts.length > 0 && content.role === 'model') {
-              // OpenAI needs to know about function calls made by the assistant
-              console.log(`[OpenAI ContentGenerator] Found ${functionCallParts.length} function calls in model message`);
             }
           }
         } else if ('text' in item) {
@@ -390,7 +478,11 @@ export class OpenAIContentGenerator implements ContentGenerator {
 
     console.log('[OpenAI ContentGenerator] Final messages count:', messages.length);
     messages.forEach((msg, index) => {
-      console.log(`[OpenAI ContentGenerator] Message ${index}: role=${msg.role}, content length=${msg.content.length}`);
+      const details = [`role=${msg.role}`];
+      if (msg.content) details.push(`content length=${msg.content.length}`);
+      if ((msg as any).tool_calls) details.push(`tool_calls=${(msg as any).tool_calls.length}`);
+      if ((msg as any).tool_call_id) details.push(`tool_call_id=${(msg as any).tool_call_id}`);
+      console.log(`[OpenAI ContentGenerator] Message ${index}: ${details.join(', ')}`);
     });
 
     return messages;

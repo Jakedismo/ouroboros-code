@@ -26,12 +26,28 @@ export async function* handleOpenAIStreaming(
   config?: Config
 ): AsyncGenerator<ServerGeminiStreamEvent> {
   try {
+    console.log('[Turn OpenAI Handler] ===========================================');
     console.log('[Turn OpenAI Handler] Received history with', history.length, 'entries');
-    console.log('[Turn OpenAI Handler] History summary:', history.map(h => ({
-      role: h.role,
-      partsLength: h.parts?.length,
-      firstPartType: h.parts?.[0] ? Object.keys(h.parts[0])[0] : 'unknown'
-    })));
+    console.log('[Turn OpenAI Handler] Full history details:');
+    history.forEach((h, idx) => {
+      console.log(`  [${idx}] role=${h.role}`);
+      if (h.parts) {
+        h.parts.forEach((part: any, pidx: number) => {
+          const keys = Object.keys(part);
+          console.log(`    Part ${pidx}: ${keys.join(', ')}`);
+          if (part.text) {
+            console.log(`      text: "${(part.text as string).substring(0, 100)}..."`);
+          }
+          if (part.functionCall) {
+            console.log(`      functionCall:`, JSON.stringify(part.functionCall, null, 2));
+          }
+          if (part.functionResponse) {
+            console.log(`      functionResponse:`, JSON.stringify(part.functionResponse, null, 2));
+          }
+        });
+      }
+    });
+    console.log('[Turn OpenAI Handler] ===========================================');
     
     // Build proper GenerateContentParameters for OpenAI ContentGenerator
     const genConfig: any = {
@@ -152,13 +168,16 @@ export async function* handleOpenAIStreaming(
             } as any);
           }
           
-          // Add function call result to history
+          // Add function call result to history with the tool_call_id
           const functionResultContent = {
             role: 'function' as const,
             parts: [{
               functionResponse: {
                 name: toolCallRequest.name,
-                response: toolResponse.responseParts?.[0] || { text: 'Function executed' }
+                response: toolResponse.responseParts?.[0] || { text: 'Function executed' },
+                // Include the call ID so OpenAI can match response to the original call
+                id: toolCallRequest.callId,
+                callId: toolCallRequest.callId
               }
             } as any]
           };
@@ -172,13 +191,16 @@ export async function* handleOpenAIStreaming(
           const executionTime = Date.now() - startTime;
           console.error(`[Turn] Error executing tool ${toolCallRequest.name} after ${executionTime}ms:`, toolError);
           
-          // Add error result to history
+          // Add error result to history with the tool_call_id
           const errorContent = {
             role: 'function' as const,
             parts: [{
               functionResponse: {
                 name: toolCallRequest.name,
-                response: { text: `Error: ${getErrorMessage(toolError)}` }
+                response: { text: `Error: ${getErrorMessage(toolError)}` },
+                // Include the call ID so OpenAI can match response to the original call
+                id: toolCallRequest.callId,
+                callId: toolCallRequest.callId
               }
             } as any]
           };

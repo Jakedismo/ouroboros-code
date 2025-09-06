@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Multi-Provider Integration Fixes 🔧
 - **Provider routing system** - Fixed hardcoded Gemini routing that caused "Model stream completed without any chunks" errors
 - **OpenAI provider integration** - Corrected parameter structure in turn-provider-support.ts for proper API calls
+- **OpenAI tool response ordering** - Fixed "messages with role 'tool' must be a response to a preceding message with 'tool_calls'" error
 - **Tool inheritance for agents** - All agents now automatically inherit complete tool usage instructions
 - **Provider-specific streaming handlers** - Added dedicated handlers for OpenAI, Anthropic, and generic providers
 - **Tool configuration pipeline** - Fixed tool retrieval from config.getToolRegistry().getFunctionDeclarations()
@@ -22,10 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Technical Implementation Details
 - **packages/core/src/core/turn.ts** - Added provider detection and routing logic
 - **packages/core/src/core/turn-provider-support.ts** - New provider-specific streaming handlers
+- **packages/core/src/providers/openai/content-generator.ts** - Fixed tool response message ordering with synthetic assistant messages
 - **packages/core/src/agents/toolInjector.ts** - Enhanced automatic tool instruction injection
 - **packages/core/src/core/client.ts** - Updated Turn instantiations with config and contentGenerator
 - **Provider Support**: OpenAI (GPT-5, GPT-4o), Anthropic (Claude), Gemini - all now fully functional
 - **Tool Integration**: 63+ tools properly passed to all providers with correct schemas
+- **OpenAI API Compliance**: Ensures tool responses always follow assistant messages with tool_calls
 
 ## [1.2.0] - 2025-01-09
 
