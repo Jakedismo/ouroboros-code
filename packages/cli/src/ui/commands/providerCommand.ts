@@ -169,7 +169,7 @@ Current provider remains unchanged.`,
 function getAuthInstructions(provider: ProviderType): string {
   switch (provider) {
     case 'openai':
-      return '• Set OPENAI_API_KEY environment variable\n• Or use --openai-api-key flag\n• Or use --openai-use-oauth for OAuth';
+      return '• Set OPENAI_API_KEY environment variable\n• Or use --openai-api-key or --openai-key flag\n• Or use --openai-use-oauth for OAuth';
     case 'anthropic':
       return '• Set ANTHROPIC_API_KEY environment variable\n• Or use --anthropic-api-key flag\n• Or use --claude-use-oauth for OAuth';
     case 'gemini':

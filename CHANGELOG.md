@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Agent tool accessibility** - Resolved issue where agents couldn't access tools due to missing instructions
 - **Cross-provider compatibility** - Established unified interface for seamless provider switching
 
+#### Agents SDK Schema Compliance
+- **Tool schema conversion** - Convert Ouroboros tool JSON schemas to Zod before registering with the OpenAI Agents SDK, preventing 400 errors during `/agents on`.
+- **Optional parameter handling** - Automatically mark optional tool fields as nullable so OpenAI's structured output parser accepts our tools.
+- **CLI OpenAI flag alias** - Added `--openai-key` as an alias for `--openai-api-key` to simplify provider startup flows.
+
 #### Technical Implementation Details
 - **packages/core/src/core/turn.ts** - Added provider detection and routing logic
 - **packages/core/src/core/turn-provider-support.ts** - New provider-specific streaming handlers

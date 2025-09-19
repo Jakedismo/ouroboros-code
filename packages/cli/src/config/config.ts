@@ -314,6 +314,7 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
         .option('openai-api-key', {
           type: 'string',
           description: 'OpenAI API key (or set OPENAI_API_KEY env var)',
+          alias: ['openai-key'],
         })
         .option('openai-model', {
           type: 'string',
