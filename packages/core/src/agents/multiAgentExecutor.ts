@@ -63,7 +63,7 @@ const AGENT_RESPONSE_SCHEMA = {
 const MAX_PARALLEL_WAVES = 3;
 const MAX_AGENTS_PER_RUN = 6;
 
-const DEFAULT_MODEL_FALLBACK = 'gpt-4o';
+const DEFAULT_MODEL_FALLBACK = 'gpt-5-codex';
 
 export class MultiAgentExecutor {
   private readonly defaultModel: string;

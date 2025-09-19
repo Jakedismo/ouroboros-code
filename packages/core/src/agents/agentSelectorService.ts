@@ -5,10 +5,10 @@
  */
 
 import type { ContentGenerator } from '../core/contentGenerator.js';
-import type { Provider } from '../providers/types.js';
 import type { Config } from '../config/config.js';
 import { AgentManager } from './agentManager.js';
 import { AGENT_PERSONAS, getAgentById, type AgentPersona } from './personas.js';
+import { MultiAgentExecutor, type MultiAgentExecutionResult } from './multiAgentExecutor.js';
 
 /**
  * JSON Schema for OpenAI Structured Outputs - Agent Selection Response
@@ -51,7 +51,6 @@ const AGENT_SELECTION_SCHEMA = {
  */
 export class AgentSelectorService {
   private static instance: AgentSelectorService | null = null;
-  private selectorProvider: Provider | null = null;
   private contentGenerator: ContentGenerator | null = null;
   private agentManager: AgentManager | null = null;
   private selectedModel: string | null = null;
@@ -60,9 +59,12 @@ export class AgentSelectorService {
     prompt: string;
     selectedAgents: string[];
     reasoning: string;
+    aggregateReasoning?: string;
     timestamp: number;
   }> = [];
   private readonly fallbackAgents = ['systems-architect', 'code-quality-analyst'];
+  private multiAgentExecutor: MultiAgentExecutor | null = null;
+  private lastExecutionSummary: MultiAgentExecutionResult | null = null;
 
   private constructor() {}
 
@@ -87,14 +89,17 @@ export class AgentSelectorService {
     
     // Use the SAME ContentGenerator that regular chat uses - this ensures unified behavior
     this.contentGenerator = geminiClient.getContentGenerator();
-    
-    // Keep the provider reference for backwards compatibility
-    this.selectorProvider = (this.contentGenerator as any).provider;
 
     // Store the current model from config
     this.selectedModel = config.getModel();
 
     this.agentManager = AgentManager.getInstance();
+    if (this.contentGenerator) {
+      const defaultModel = this.selectedModel || config.getModel() || 'gpt-5-nano';
+      this.multiAgentExecutor = new MultiAgentExecutor(this.contentGenerator, {
+        defaultModel,
+      });
+    }
   }
 
   /**
@@ -178,25 +183,15 @@ export class AgentSelectorService {
       const selectionPrompt = this.buildSelectionPrompt(userPrompt);
       
       // Query the configured model for agent selection
-      const providerOptions: any = {
-        temperature: 0.1, // Low temperature for consistent selection
-        maxTokens: 32000, // Increased from 300 to allow for comprehensive agent responses
-      };
-      
-      // Add response_format for OpenAI to ensure structured JSON output
-      if (this.selectorProvider?.name === 'OpenAI') {
-        // Use structured outputs with JSON schema for guaranteed format compliance
-        providerOptions.response_format = {
-          type: 'json_schema',
-          json_schema: AGENT_SELECTION_SCHEMA
-        };
-        console.log('[Agent Selector] Using structured outputs with JSON schema for OpenAI provider');
-      }
-      
-      console.log('[Agent Selector] Provider:', this.selectorProvider?.name || 'Unknown', 'Options:', providerOptions);
-      
-      // Use ContentGenerator instead of direct provider call
-      // Convert messages to Gemini format that ContentGenerator expects
+      const generationConfig = {
+        temperature: 0.1,
+        maxOutputTokens: 32000,
+        responseJsonSchema: AGENT_SELECTION_SCHEMA.schema,
+        responseMimeType: 'application/json',
+      } as const;
+
+      const generationModel = this.selectedModel || 'gpt-5-nano';
+
       const geminiContent = [
         {
           role: 'user',
@@ -205,13 +200,9 @@ export class AgentSelectorService {
       ];
 
       const contentGenResponse = await this.contentGenerator.generateContent({
-        model: this.selectedModel || 'gpt-5-nano',
+        model: generationModel,
         contents: geminiContent,
-        config: {
-          temperature: providerOptions.temperature,
-          maxOutputTokens: providerOptions.maxTokens,
-          ...(providerOptions.response_format && { response_format: providerOptions.response_format })
-        }
+        config: generationConfig as any,
       }, 'agent-selection');
 
       const response = contentGenResponse.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -250,6 +241,25 @@ export class AgentSelectorService {
         processingTime: Date.now() - startTime,
       };
     }
+  }
+
+  async executeWithSelectedAgents(
+    userPrompt: string,
+    agents: AgentPersona[],
+  ): Promise<MultiAgentExecutionResult | null> {
+    if (!this.multiAgentExecutor || agents.length === 0) {
+      return null;
+    }
+
+    const execution = await this.multiAgentExecutor.execute(userPrompt, agents);
+    this.lastExecutionSummary = execution;
+
+    const latestEntry = this.selectionHistory[this.selectionHistory.length - 1];
+    if (latestEntry) {
+      latestEntry.aggregateReasoning = execution.aggregateReasoning;
+    }
+
+    return execution;
   }
 
   /**
@@ -517,6 +527,7 @@ Select the most appropriate agents for this user request:`;
     averageAgentsPerSelection: number;
     mostSelectedAgents: Array<{ agentId: string; count: number }>;
     averageConfidence: number;
+    lastExecutionSummary: MultiAgentExecutionResult | null;
   } {
     if (this.selectionHistory.length === 0) {
       return {
@@ -524,6 +535,7 @@ Select the most appropriate agents for this user request:`;
         averageAgentsPerSelection: 0,
         mostSelectedAgents: [],
         averageConfidence: 0,
+        lastExecutionSummary: null,
       };
     }
 
@@ -547,6 +559,7 @@ Select the most appropriate agents for this user request:`;
       averageAgentsPerSelection: totalAgents / this.selectionHistory.length,
       mostSelectedAgents,
       averageConfidence: 0.7, // Would need to track confidence in history
+      lastExecutionSummary: this.lastExecutionSummary,
     };
   }
 }

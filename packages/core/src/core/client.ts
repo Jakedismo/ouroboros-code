@@ -51,12 +51,31 @@ import {
 } from '../telemetry/types.js';
 import type { IdeContext, File } from '../ide/ideContext.js';
 
+function normalizeModelName(model: string | undefined): string {
+  if (!model) return '';
+  return model.startsWith('models/') ? model.slice('models/'.length) : model;
+}
+
 function isThinkingSupported(model: string, provider: string) {
   // Enable thinking for supported models across all providers
   if (provider === 'gemini' && model.startsWith('gemini-2.5')) return true;
   if (provider === 'openai' && (model.startsWith('gpt-5') || model.startsWith('o3') || model.startsWith('o4'))) return true;
   if (provider === 'anthropic' && (model.startsWith('claude-') || model.includes('opus') || model.includes('sonnet'))) return true;
   return false;
+}
+
+function shouldUseMaxThinking(provider: string, model: string): boolean {
+  const normalized = normalizeModelName(model);
+  switch (provider) {
+    case 'openai':
+      return normalized === 'gpt-5-codex' || normalized === 'gpt-5';
+    case 'gemini':
+      return normalized === 'gemini-2.5-pro';
+    case 'anthropic':
+      return normalized === 'claude-sonnet-4-20250514[1m]' || normalized === 'claude-opus-4-1-20250805';
+    default:
+      return false;
+  }
 }
 
 function getThinkingConfig(provider: string, optimizeForStreaming: boolean = false): any {
@@ -298,13 +317,14 @@ export class GeminiClient {
       const systemInstruction = getCoreSystemPrompt(userMemory, this.config);
       const currentProvider = this.config.getProvider();
       const currentModel = this.config.getModel();
+      const normalizedModel = normalizeModelName(currentModel);
       
-      // Check if agents are active to optimize thinking for streaming responsiveness
-      // For now, we'll optimize thinking for better streaming by default when supported
-      const optimizeForStreaming = true; // TODO: Implement proper agent detection
+      // Use maximum thinking budgets for premium user-selectable models.
+      const useMaxThinking = shouldUseMaxThinking(currentProvider, normalizedModel);
+      const optimizeForStreaming = !useMaxThinking;
       
       const generateContentConfigWithThinking = isThinkingSupported(
-        currentModel,
+        normalizedModel,
         currentProvider,
       )
         ? {

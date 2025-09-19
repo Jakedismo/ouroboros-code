@@ -11,63 +11,33 @@ import { appEvents, AppEvent } from '../../utils/events.js';
 // Model configurations organized by provider
 const MODEL_CONFIGS = {
   openai: {
-    'gpt-5': {
-      description: 'Most capable OpenAI model with advanced reasoning',
+    'gpt-5-codex': {
+      description: 'Coding-optimized GPT-5 variant with extended reasoning depth',
       capabilities: ['reasoning', 'coding', 'analysis'],
-      contextWindow: '1M tokens',
+      contextWindow: '2M tokens',
     },
-    'gpt-4o': {
-      description: 'Fast, multimodal model with vision capabilities',
-      capabilities: ['multimodal', 'vision', 'fast'],
-      contextWindow: '128K tokens',
-    },
-    'gpt-4': {
-      description: 'Reliable model for complex tasks',
-      capabilities: ['reasoning', 'coding'],
-      contextWindow: '128K tokens',
-    },
-    'gpt-3.5-turbo': {
-      description: 'Fast, economical model for simple tasks',
-      capabilities: ['fast', 'economical'],
-      contextWindow: '16K tokens',
+    'gpt-5': {
+      description: 'General-purpose GPT-5 with comprehensive reasoning',
+      capabilities: ['reasoning', 'analysis', 'creative'],
+      contextWindow: '2M tokens',
     },
   },
   anthropic: {
+    'claude-sonnet-4-20250514[1m]': {
+      description: 'Claude Sonnet 4 (May 2025, 1m) with expanded thinking budget',
+      capabilities: ['reasoning', 'analysis', 'writing'],
+      contextWindow: '1M tokens',
+    },
     'claude-opus-4-1-20250805': {
-      description: 'Most capable Anthropic model with superior reasoning',
-      capabilities: ['reasoning', 'analysis', 'coding', 'writing'],
-      contextWindow: '200K tokens',
-    },
-    'claude-3-5-sonnet-20241022': {
-      description: 'Balanced model with good performance and speed',
-      capabilities: ['reasoning', 'coding', 'balanced'],
-      contextWindow: '200K tokens',
-    },
-    'claude-3-5-haiku-20241022': {
-      description: 'Fast, efficient model for quick tasks',
-      capabilities: ['fast', 'economical'],
-      contextWindow: '200K tokens',
+      description: 'Claude Opus 4.1 (Aug 2025) for maximum depth and oversight',
+      capabilities: ['reasoning', 'analysis', 'coding'],
+      contextWindow: '2M tokens',
     },
   },
   gemini: {
     'gemini-2.5-pro': {
       description: 'Advanced Gemini model with multimodal capabilities',
       capabilities: ['multimodal', 'reasoning', 'coding'],
-      contextWindow: '1M tokens',
-    },
-    'gemini-2.0-flash-exp': {
-      description: 'Experimental high-speed model',
-      capabilities: ['fast', 'experimental'],
-      contextWindow: '1M tokens',
-    },
-    'gemini-1.5-pro': {
-      description: 'Reliable model with good performance',
-      capabilities: ['multimodal', 'reliable'],
-      contextWindow: '2M tokens',
-    },
-    'gemini-1.5-flash': {
-      description: 'Fast model for quick responses',
-      capabilities: ['fast', 'economical'],
       contextWindow: '1M tokens',
     },
   },
@@ -166,8 +136,8 @@ function getCurrentModel(context: any, provider: string): string | null {
   
   // Fallback to provider defaults
   const providerDefaults = {
-    openai: 'gpt-5',
-    anthropic: 'claude-opus-4-1-20250805',
+    openai: 'gpt-5-codex',
+    anthropic: 'claude-sonnet-4-20250514[1m]',
     gemini: 'gemini-2.5-pro',
   } as const;
   

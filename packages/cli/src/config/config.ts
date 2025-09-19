@@ -319,7 +319,7 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
         .option('openai-model', {
           type: 'string',
           description: 'OpenAI model to use',
-          default: 'gpt-5',
+          default: 'gpt-5-codex',
         })
         .option('openai-use-oauth', {
           type: 'boolean',
@@ -333,7 +333,7 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
         .option('anthropic-model', {
           type: 'string',
           description: 'Anthropic model to use',
-          default: 'claude-opus-4-1-20250805',
+          default: 'claude-sonnet-4-20250514[1m]',
         })
         .option('claude-use-oauth', {
           type: 'boolean',
@@ -530,6 +530,32 @@ export async function loadHierarchicalGeminiMemory(
 /**
  * Extract provider options from CLI arguments
  */
+const SUPPORTED_PROVIDER_MODELS: Record<string, string[]> = {
+  openai: ['gpt-5-codex', 'gpt-5'],
+  anthropic: ['claude-sonnet-4-20250514[1m]', 'claude-opus-4-1-20250805'],
+  gemini: ['gemini-2.5-pro'],
+};
+
+function normalizeModel(provider: 'openai' | 'anthropic' | 'gemini', requestedModel?: string): string | undefined {
+  const allowed = SUPPORTED_PROVIDER_MODELS[provider];
+  if (!allowed || allowed.length === 0) {
+    return requestedModel;
+  }
+
+  if (!requestedModel) {
+    return allowed[0];
+  }
+
+  if (allowed.includes(requestedModel)) {
+    return requestedModel;
+  }
+
+  console.warn(
+    `[Config] Model "${requestedModel}" is not supported for provider "${provider}". Falling back to ${allowed[0]}.`,
+  );
+  return allowed[0];
+}
+
 function extractProviderOptions(
   argv: CliArgs,
   providerType: 'openai' | 'anthropic' | 'gemini'
@@ -538,19 +564,19 @@ function extractProviderOptions(
     case 'openai':
       return {
         apiKey: argv.openaiApiKey || process.env['OPENAI_API_KEY'],
-        model: argv.openaiModel || 'gpt-5',
+        model: normalizeModel('openai', argv.openaiModel || process.env['OPENAI_MODEL'] || 'gpt-5-codex'),
         useOauth: argv.openaiUseOauth || false,
       };
     case 'anthropic':
       return {
         apiKey: argv.anthropicApiKey || process.env['ANTHROPIC_API_KEY'],
-        model: argv.anthropicModel || 'claude-opus-4-1-20250805',
+        model: normalizeModel('anthropic', argv.anthropicModel || process.env['ANTHROPIC_MODEL'] || 'claude-sonnet-4-20250514[1m]'),
         useOauth: argv.claudeUseOauth || false,
       };
     case 'gemini':
       return {
         apiKey: argv.geminiApiKey || process.env['GEMINI_API_KEY'],
-        model: argv.geminiModel || 'gemini-2.5-pro',
+        model: normalizeModel('gemini', argv.geminiModel || process.env['GEMINI_MODEL'] || 'gemini-2.5-pro'),
         useOauth: false, // Gemini doesn't have OAuth option in CLI
       };
     default:

@@ -12,30 +12,24 @@ import { appEvents, AppEvent } from '../../utils/events.js';
 const PROVIDER_CONFIGS = {
   openai: {
     name: 'OpenAI',
-    defaultModel: 'gpt-5',
-    availableModels: ['gpt-5', 'gpt-4o', 'gpt-4', 'gpt-3.5-turbo'],
-    description: 'OpenAI GPT models with advanced reasoning capabilities',
+    defaultModel: 'gpt-5-codex',
+    availableModels: ['gpt-5-codex', 'gpt-5'],
+    description: 'OpenAI GPT-5 family with deep reasoning and coding mastery',
   },
   anthropic: {
     name: 'Anthropic',
-    defaultModel: 'claude-opus-4-1-20250805',
+    defaultModel: 'claude-sonnet-4-20250514[1m]',
     availableModels: [
+      'claude-sonnet-4-20250514[1m]',
       'claude-opus-4-1-20250805',
-      'claude-3-5-sonnet-20241022',
-      'claude-3-5-haiku-20241022',
     ],
-    description: 'Anthropic Claude models with strong analytical capabilities',
+    description: 'Anthropic Claude Sonnet & Opus with expanded reasoning windows',
   },
   gemini: {
     name: 'Google Gemini',
     defaultModel: 'gemini-2.5-pro',
-    availableModels: [
-      'gemini-2.5-pro',
-      'gemini-2.0-flash-exp',
-      'gemini-1.5-pro',
-      'gemini-1.5-flash',
-    ],
-    description: 'Google Gemini models with multimodal capabilities',
+    availableModels: ['gemini-2.5-pro'],
+    description: 'Google Gemini 2.5 Pro with full thinking budget enabled',
   },
 } as const;
 
@@ -69,8 +63,8 @@ export const providerCommand: SlashCommand = {
 ${providerList}
 
 **Usage:**
-• \`/provider openai\` - Switch to OpenAI GPT-5
-• \`/provider anthropic\` - Switch to Anthropic Claude Opus 4.1
+• \`/provider openai\` - Switch to OpenAI GPT-5 Codex
+• \`/provider anthropic\` - Switch to Anthropic Claude Sonnet 4 (1m)
 • \`/provider gemini\` - Switch to Google Gemini 2.5 Pro
 
 **Note:** Provider switches take effect for new conversations.

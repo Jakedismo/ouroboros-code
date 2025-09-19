@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Simple test to verify agent selection works from the dev environment
-import { AgentSelectorService } from './packages/core/dist/src/agents/agentSelectorService.js';
+import { AgentSelectorService } from './packages/core/dist/index.js';
 
 async function testAgentSelection() {
   try {
@@ -10,7 +10,7 @@ async function testAgentSelection() {
     const selectorService = AgentSelectorService.getInstance();
     
     // Initialize with OpenAI  
-    await selectorService.initialize('openai', process.env.OPENAI_API_KEY, 'gpt-4o');
+    await selectorService.initialize('openai', process.env.OPENAI_API_KEY, 'gpt-5-codex');
     
     console.log('✅ Service initialized');
     
