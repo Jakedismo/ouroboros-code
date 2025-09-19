@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Optional parameter handling** - Automatically mark optional tool fields as nullable so OpenAI's structured output parser accepts our tools.
 - **CLI OpenAI flag alias** - Added `--openai-key` as an alias for `--openai-api-key` to simplify provider startup flows.
 
+#### CLI User Experience
+- **Multi-agent orchestration HUD** - The CLI now surfaces live progress for automatic agent selection and displays detailed team summaries (waves, outcomes, handoffs, timing) once orchestration completes.
+
 #### Technical Implementation Details
 - **packages/core/src/core/turn.ts** - Added provider detection and routing logic
 - **packages/core/src/core/turn-provider-support.ts** - New provider-specific streaming handlers

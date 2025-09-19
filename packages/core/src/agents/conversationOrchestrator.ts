@@ -7,7 +7,8 @@
 import { AgentSelectorService } from './agentSelectorService.js';
 import { AgentManager } from './agentManager.js';
 import type { Config } from '../config/config.js';
-import type { AgentPersona } from './personas.js';
+import { getAgentById, type AgentPersona } from './personas.js';
+import type { MultiAgentExecutionResult } from './multiAgentExecutor.js';
 
 /**
  * Orchestrates automatic agent selection and conversation flow integration
@@ -49,8 +50,10 @@ export class ConversationOrchestrator {
       reasoning: string;
       confidence: number;
       processingTime: number;
+      execution?: MultiAgentExecutionResult;
     };
     previousAgentState?: string[];
+    finalResponse?: string;
   }> {
     // Check if we should apply automatic agent selection
     if (!this.agentSelectorService.isAutoModeEnabled()) {
@@ -71,11 +74,30 @@ export class ConversationOrchestrator {
       // Use non-streaming method for reliable JSON parsing
       // The streaming version was causing JSON parsing failures
       const selectionResult = await this.agentSelectorService.analyzeAndSelectAgents(userPrompt);
-      
+
       if (selectionResult && selectionResult.selectedAgents.length > 0) {
-        // Temporarily activate selected agents
+        const execution = await this.agentSelectorService.executeWithSelectedAgents(
+          userPrompt,
+          selectionResult.selectedAgents,
+        );
+
+        if (execution) {
+          yield {
+            type: 'complete',
+            shouldProceed: false,
+            selectionFeedback: {
+              ...selectionResult,
+              execution,
+            },
+            previousAgentState,
+            finalResponse: execution.finalResponse,
+          };
+          return;
+        }
+
+        // Fallback to legacy activation path if execution failed
         await this.agentSelectorService.temporarilyActivateAgents(
-          selectionResult.selectedAgents
+          selectionResult.selectedAgents,
         );
 
         yield {
@@ -104,7 +126,9 @@ export class ConversationOrchestrator {
       reasoning: string;
       confidence: number;
       processingTime: number;
+      execution?: MultiAgentExecutionResult;
     };
+    finalResponse?: string;
     previousAgentState?: string[];
   }> {
     // Check if we should apply automatic agent selection
@@ -126,12 +150,28 @@ export class ConversationOrchestrator {
         return { shouldProceed: true };
       }
 
-      // Store current agent state for restoration
+      const execution = await this.agentSelectorService.executeWithSelectedAgents(
+        userPrompt,
+        selectionResult.selectedAgents,
+      );
+
+      if (execution) {
+        return {
+          shouldProceed: false,
+          selectionFeedback: {
+            ...selectionResult,
+            execution,
+          },
+          previousAgentState: undefined,
+          finalResponse: execution.finalResponse,
+        };
+      }
+
+      // Legacy fallback
       const previousAgentState = this.agentManager.getActiveAgents().map(a => a.id);
 
-      // Temporarily activate selected agents
       await this.agentSelectorService.temporarilyActivateAgents(
-        selectionResult.selectedAgents
+        selectionResult.selectedAgents,
       );
 
       return {
@@ -163,26 +203,76 @@ export class ConversationOrchestrator {
     reasoning: string;
     confidence: number;
     processingTime: number;
+    execution?: MultiAgentExecutionResult;
   }): {
     type: 'INFO';
     text: string;
   } {
-    const agentsList = selectionInfo.selectedAgents
-      .map(agent => `${agent.emoji} **${agent.name}**`)
+    const teamNames = selectionInfo.selectedAgents
+      .map(agent => `${agent.emoji} ${agent.name}`)
       .join(', ');
 
-    const confidenceEmoji = selectionInfo.confidence > 0.8 ? '🎯' : 
-                          selectionInfo.confidence > 0.6 ? '🎲' : '🤔';
+    const confidenceEmoji = selectionInfo.confidence > 0.8 ? '🎯' :
+      selectionInfo.confidence > 0.6 ? '🎲' : '🤔';
+
+    const execution = selectionInfo.execution;
+    const durationText = execution
+      ? `${(execution.durationMs / 1000).toFixed(1)}s`
+      : `${selectionInfo.processingTime}ms`;
+
+    const lines: string[] = [];
+    lines.push(`${confidenceEmoji} **Multi-Agent Orchestration Activated**`);
+    lines.push('');
+    lines.push(`• **Team Size:** ${execution?.totalAgents ?? selectionInfo.selectedAgents.length} specialist${(execution?.totalAgents ?? selectionInfo.selectedAgents.length) === 1 ? '' : 's'}`);
+    lines.push(`• **Team:** ${teamNames}`);
+    lines.push(`• **Selection Confidence:** ${(selectionInfo.confidence * 100).toFixed(0)}%`);
+    lines.push(`• **Orchestration Time:** ${durationText}`);
+    lines.push(`• **Dispatcher Reasoning:** ${selectionInfo.reasoning}`);
+
+    if (execution?.timeline.length) {
+      const waveEmojis = ['①', '②', '③', '④', '⑤', '⑥'];
+      lines.push('\n**Execution Waves**');
+      for (const entry of execution.timeline) {
+        const label = waveEmojis[entry.wave - 1] ?? `Wave ${entry.wave}`;
+        const participants = entry.agents
+          .map(agent => `${agent.emoji} ${agent.name}`)
+          .join(', ');
+        lines.push(`${label} ${participants}`);
+      }
+    }
+
+    if (execution?.agentResults.length) {
+      lines.push('\n**Specialist Outcomes**');
+      for (const result of execution.agentResults) {
+        const agentLine = `- ${result.agent.emoji} **${result.agent.name}** (${Math.round(result.confidence * 100)}% confidence)`;
+        lines.push(agentLine);
+        const summary = result.solution || result.analysis;
+        if (summary) {
+          lines.push(`  ${summary}`);
+        }
+        if (result.handoffAgentIds.length > 0) {
+          const handoffNames = result.handoffAgentIds
+            .map((id) => getAgentById(id))
+            .filter((persona): persona is AgentPersona => Boolean(persona))
+            .map((persona) => `${persona.emoji} ${persona.name}`)
+            .join(', ');
+          if (handoffNames) {
+            lines.push(`  ↪ Recommended handoff: ${handoffNames}`);
+          }
+        }
+      }
+    }
+
+    if (execution?.aggregateReasoning) {
+      lines.push('\n**Coordinated Reasoning**');
+      lines.push(execution.aggregateReasoning);
+    }
+
+    lines.push('\n*Multi-agent response synthesized by the Ouroboros orchestrator.*');
 
     return {
       type: 'INFO',
-      text: `${confidenceEmoji} **Auto-Selected Specialists:** ${agentsList}
-
-**AI Reasoning:** ${selectionInfo.reasoning}
-
-**Selection Quality:** ${(selectionInfo.confidence * 100).toFixed(0)}% confidence • ${selectionInfo.processingTime}ms
-
-*These specialists are temporarily active for this conversation turn.*`
+      text: lines.join('\n'),
     };
   }
 

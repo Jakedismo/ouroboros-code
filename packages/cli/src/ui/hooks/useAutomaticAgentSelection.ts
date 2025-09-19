@@ -36,7 +36,7 @@ export const useAutomaticAgentSelection = (
         
         console.log('[DEBUG-AUTO-AGENT] Attempting to import ConversationOrchestrator...');
         // Dynamically import ConversationOrchestrator
-        const { ConversationOrchestrator } = await import('@ouroboros/ouroboros-code-core/dist/src/agents/conversationOrchestrator.js');
+        const { ConversationOrchestrator } = await import('@ouroboros/ouroboros-code-core');
         console.log('[DEBUG-AUTO-AGENT] ConversationOrchestrator imported successfully');
         
         const instance = ConversationOrchestrator.getInstance();
@@ -82,6 +82,7 @@ export const useAutomaticAgentSelection = (
       shouldProceed?: boolean;
       previousAgentState?: string[];
       showSelectionFeedback?: () => void;
+      finalResponse?: string;
     }> {
       if (!orchestrator || !isInitialized) {
         yield { type: 'complete', shouldProceed: true };
@@ -115,11 +116,22 @@ export const useAutomaticAgentSelection = (
               );
             };
 
+            if (event.finalResponse) {
+              addItem(
+                {
+                  type: MessageType.GEMINI,
+                  text: event.finalResponse,
+                },
+                Date.now(),
+              );
+            }
+
             yield {
               type: 'complete',
               shouldProceed: event.shouldProceed || true,
               previousAgentState: event.previousAgentState,
               showSelectionFeedback,
+              finalResponse: event.finalResponse,
             };
             return;
           } else if (event.type === 'complete') {
@@ -146,6 +158,7 @@ export const useAutomaticAgentSelection = (
       shouldProceed: boolean;
       previousAgentState?: string[];
       showSelectionFeedback?: () => void;
+      finalResponse?: string;
     }> => {
       if (!orchestrator || !isInitialized) {
         return { shouldProceed: true };
@@ -154,6 +167,16 @@ export const useAutomaticAgentSelection = (
       try {
         const result = await orchestrator.processPromptWithAutoSelection(userPrompt, []);
         
+        if (result.finalResponse) {
+          addItem(
+            {
+              type: MessageType.GEMINI,
+              text: result.finalResponse,
+            },
+            Date.now(),
+          );
+        }
+
         if (result.selectionFeedback) {
           // Create a callback to show the selection feedback
           const showSelectionFeedback = () => {
@@ -171,10 +194,11 @@ export const useAutomaticAgentSelection = (
             shouldProceed: result.shouldProceed,
             previousAgentState: result.previousAgentState,
             showSelectionFeedback,
+            finalResponse: result.finalResponse,
           };
         }
 
-        return { shouldProceed: result.shouldProceed };
+        return { shouldProceed: result.shouldProceed, finalResponse: result.finalResponse };
       } catch (error) {
         console.error('Automatic agent selection failed:', error);
         return { shouldProceed: true };
