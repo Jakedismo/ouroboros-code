@@ -23,42 +23,35 @@ import {
 import { Storage } from '../config/storage.js';
 import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import type { Content } from '@google/genai';
 
-import crypto from 'node:crypto';
-import os from 'node:os';
-
-const GEMINI_DIR_NAME = '.gemini';
-const TMP_DIR_NAME = 'tmp';
 const LOG_FILE_NAME = 'logs.json';
 const CHECKPOINT_FILE_NAME = 'checkpoint.json';
 
-const projectDir = process.cwd();
-const hash = crypto.createHash('sha256').update(projectDir).digest('hex');
-const TEST_GEMINI_DIR = path.join(
-  os.homedir(),
-  GEMINI_DIR_NAME,
-  TMP_DIR_NAME,
-  hash,
-);
-
-const TEST_LOG_FILE_PATH = path.join(TEST_GEMINI_DIR, LOG_FILE_NAME);
-const TEST_CHECKPOINT_FILE_PATH = path.join(
-  TEST_GEMINI_DIR,
-  CHECKPOINT_FILE_NAME,
-);
+let tempRootDir: string;
+let tempConfigDir: string;
+let projectRootDir: string;
+let projectTempDir: string;
+let testLogFilePath: string;
+let testCheckpointFilePath: string;
+let storage: Storage;
+let globalDirSpy: ReturnType<typeof vi.spyOn> | undefined;
 
 async function cleanupLogAndCheckpointFiles() {
+  if (!tempRootDir) {
+    return;
+  }
   try {
-    await fs.rm(TEST_GEMINI_DIR, { recursive: true, force: true });
+    await fs.rm(tempRootDir, { recursive: true, force: true });
   } catch (_error) {
-    // Ignore errors, as the directory may not exist, which is fine.
+    // Ignore cleanup failures; directories may already be removed.
   }
 }
 
 async function readLogFile(): Promise<LogEntry[]> {
   try {
-    const content = await fs.readFile(TEST_LOG_FILE_PATH, 'utf-8');
+    const content = await fs.readFile(testLogFilePath, 'utf-8');
     return JSON.parse(content) as LogEntry[];
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -80,11 +73,28 @@ describe('Logger', () => {
     vi.resetAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2025-01-01T12:00:00.000Z'));
-    // Clean up before the test
     await cleanupLogAndCheckpointFiles();
-    // Ensure the directory exists for the test
-    await fs.mkdir(TEST_GEMINI_DIR, { recursive: true });
-    logger = new Logger(testSessionId, new Storage(process.cwd()));
+
+    tempRootDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'ouroboros-logger-test-'),
+    );
+    tempConfigDir = path.join(tempRootDir, 'config');
+    projectRootDir = path.join(tempRootDir, 'workspace');
+    await fs.mkdir(projectRootDir, { recursive: true });
+
+    globalDirSpy = vi
+      .spyOn(Storage, 'getGlobalGeminiDir')
+      .mockReturnValue(tempConfigDir);
+
+    storage = new Storage(projectRootDir);
+    storage.ensureProjectTempDirExists();
+    projectTempDir = storage.getProjectTempDir();
+    await fs.mkdir(projectTempDir, { recursive: true });
+
+    testLogFilePath = path.join(projectTempDir, LOG_FILE_NAME);
+    testCheckpointFilePath = path.join(projectTempDir, CHECKPOINT_FILE_NAME);
+
+    logger = new Logger(testSessionId, storage);
     await logger.initialize();
   });
 
@@ -92,27 +102,27 @@ describe('Logger', () => {
     if (logger) {
       logger.close();
     }
-    // Clean up after the test
     await cleanupLogAndCheckpointFiles();
+    globalDirSpy?.mockRestore();
+    globalDirSpy = undefined;
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   afterAll(async () => {
-    // Final cleanup
     await cleanupLogAndCheckpointFiles();
   });
 
   describe('initialize', () => {
     it('should create .gemini directory and an empty log file if none exist', async () => {
       const dirExists = await fs
-        .access(TEST_GEMINI_DIR)
+        .access(projectTempDir)
         .then(() => true)
         .catch(() => false);
       expect(dirExists).toBe(true);
 
       const fileExists = await fs
-        .access(TEST_LOG_FILE_PATH)
+        .access(testLogFilePath)
         .then(() => true)
         .catch(() => false);
       expect(fileExists).toBe(true);
@@ -148,12 +158,12 @@ describe('Logger', () => {
         },
       ];
       await fs.writeFile(
-        TEST_LOG_FILE_PATH,
+        testLogFilePath,
         JSON.stringify(existingLogs, null, 2),
       );
       const newLogger = new Logger(
         currentSessionId,
-        new Storage(process.cwd()),
+        new Storage(projectRootDir),
       );
       await newLogger.initialize();
       expect(newLogger['messageId']).toBe(2);
@@ -172,10 +182,10 @@ describe('Logger', () => {
         },
       ];
       await fs.writeFile(
-        TEST_LOG_FILE_PATH,
+        testLogFilePath,
         JSON.stringify(existingLogs, null, 2),
       );
-      const newLogger = new Logger('a-new-session', new Storage(process.cwd()));
+      const newLogger = new Logger('a-new-session', new Storage(projectRootDir));
       await newLogger.initialize();
       expect(newLogger['messageId']).toBe(0);
       newLogger.close();
@@ -195,12 +205,12 @@ describe('Logger', () => {
     });
 
     it('should handle invalid JSON in log file by backing it up and starting fresh', async () => {
-      await fs.writeFile(TEST_LOG_FILE_PATH, 'invalid json');
+      await fs.writeFile(testLogFilePath, 'invalid json');
       const consoleDebugSpy = vi
         .spyOn(console, 'debug')
         .mockImplementation(() => {});
 
-      const newLogger = new Logger(testSessionId, new Storage(process.cwd()));
+      const newLogger = new Logger(testSessionId, new Storage(projectRootDir));
       await newLogger.initialize();
 
       expect(consoleDebugSpy).toHaveBeenCalledWith(
@@ -209,7 +219,7 @@ describe('Logger', () => {
       );
       const logContent = await readLogFile();
       expect(logContent).toEqual([]);
-      const dirContents = await fs.readdir(TEST_GEMINI_DIR);
+      const dirContents = await fs.readdir(projectTempDir);
       expect(
         dirContents.some(
           (f) =>
@@ -221,22 +231,22 @@ describe('Logger', () => {
 
     it('should handle non-array JSON in log file by backing it up and starting fresh', async () => {
       await fs.writeFile(
-        TEST_LOG_FILE_PATH,
+        testLogFilePath,
         JSON.stringify({ not: 'an array' }),
       );
       const consoleDebugSpy = vi
         .spyOn(console, 'debug')
         .mockImplementation(() => {});
 
-      const newLogger = new Logger(testSessionId, new Storage(process.cwd()));
+      const newLogger = new Logger(testSessionId, new Storage(projectRootDir));
       await newLogger.initialize();
 
       expect(consoleDebugSpy).toHaveBeenCalledWith(
-        `Log file at ${TEST_LOG_FILE_PATH} is not a valid JSON array. Starting with empty logs.`,
+        `Log file at ${testLogFilePath} is not a valid JSON array. Starting with empty logs.`,
       );
       const logContent = await readLogFile();
       expect(logContent).toEqual([]);
-      const dirContents = await fs.readdir(TEST_GEMINI_DIR);
+      const dirContents = await fs.readdir(projectTempDir);
       expect(
         dirContents.some(
           (f) =>
@@ -280,7 +290,7 @@ describe('Logger', () => {
     it('should handle logger not initialized', async () => {
       const uninitializedLogger = new Logger(
         testSessionId,
-        new Storage(process.cwd()),
+        new Storage(projectRootDir),
       );
       uninitializedLogger.close(); // Ensure it's treated as uninitialized
       const consoleDebugSpy = vi
@@ -298,13 +308,13 @@ describe('Logger', () => {
       const concurrentSessionId = 'concurrent-session';
       const logger1 = new Logger(
         concurrentSessionId,
-        new Storage(process.cwd()),
+        new Storage(projectRootDir),
       );
       await logger1.initialize();
 
       const logger2 = new Logger(
         concurrentSessionId,
-        new Storage(process.cwd()),
+        new Storage(projectRootDir),
       );
       await logger2.initialize();
       expect(logger2['sessionId']).toEqual(logger1['sessionId']);
@@ -358,14 +368,14 @@ describe('Logger', () => {
 
   describe('getPreviousUserMessages', () => {
     it('should retrieve all user messages from logs, sorted newest first', async () => {
-      const loggerSort = new Logger('session-1', new Storage(process.cwd()));
+      const loggerSort = new Logger('session-1', new Storage(projectRootDir));
       await loggerSort.initialize();
       await loggerSort.logMessage(MessageSenderType.USER, 'S1M0_ts100000');
       vi.advanceTimersByTime(1000);
       await loggerSort.logMessage(MessageSenderType.USER, 'S1M1_ts101000');
       vi.advanceTimersByTime(1000);
       // Switch to a different session to log
-      const loggerSort2 = new Logger('session-2', new Storage(process.cwd()));
+      const loggerSort2 = new Logger('session-2', new Storage(projectRootDir));
       await loggerSort2.initialize();
       await loggerSort2.logMessage(MessageSenderType.USER, 'S2M0_ts102000');
       vi.advanceTimersByTime(1000);
@@ -380,7 +390,7 @@ describe('Logger', () => {
 
       const finalLogger = new Logger(
         'final-session',
-        new Storage(process.cwd()),
+        new Storage(projectRootDir),
       );
       await finalLogger.initialize();
 
@@ -403,7 +413,7 @@ describe('Logger', () => {
     it('should return empty array if logger not initialized', async () => {
       const uninitializedLogger = new Logger(
         testSessionId,
-        new Storage(process.cwd()),
+        new Storage(projectRootDir),
       );
       uninitializedLogger.close();
       const messages = await uninitializedLogger.getPreviousUserMessages();
@@ -439,7 +449,7 @@ describe('Logger', () => {
     ])('should save a checkpoint', async ({ tag, encodedTag }) => {
       await logger.saveCheckpoint(conversation, tag);
       const taggedFilePath = path.join(
-        TEST_GEMINI_DIR,
+        projectTempDir,
         `checkpoint-${encodedTag}.json`,
       );
       const fileContent = await fs.readFile(taggedFilePath, 'utf-8');
@@ -449,7 +459,7 @@ describe('Logger', () => {
     it('should not throw if logger is not initialized', async () => {
       const uninitializedLogger = new Logger(
         testSessionId,
-        new Storage(process.cwd()),
+        new Storage(projectRootDir),
       );
       uninitializedLogger.close();
       const consoleErrorSpy = vi
@@ -473,7 +483,7 @@ describe('Logger', () => {
 
     beforeEach(async () => {
       await fs.writeFile(
-        TEST_CHECKPOINT_FILE_PATH,
+        testCheckpointFilePath,
         JSON.stringify(conversation, null, 2),
       );
     });
@@ -502,7 +512,7 @@ describe('Logger', () => {
         { role: 'user', parts: [{ text: 'hello' }] },
       ];
       const taggedFilePath = path.join(
-        TEST_GEMINI_DIR,
+        projectTempDir,
         `checkpoint-${encodedTag}.json`,
       );
       await fs.writeFile(
@@ -522,7 +532,7 @@ describe('Logger', () => {
     });
 
     it('should return an empty array if the checkpoint file does not exist', async () => {
-      await fs.unlink(TEST_CHECKPOINT_FILE_PATH); // Ensure it's gone
+      await fs.unlink(testCheckpointFilePath); // Ensure it's gone
       const loaded = await logger.loadCheckpoint('missing');
       expect(loaded).toEqual([]);
     });
@@ -531,7 +541,7 @@ describe('Logger', () => {
       const tag = 'invalid-json-tag';
       const encodedTag = 'invalid-json-tag';
       const taggedFilePath = path.join(
-        TEST_GEMINI_DIR,
+        projectTempDir,
         `checkpoint-${encodedTag}.json`,
       );
       await fs.writeFile(taggedFilePath, 'invalid json');
@@ -549,7 +559,7 @@ describe('Logger', () => {
     it('should return an empty array if logger is not initialized', async () => {
       const uninitializedLogger = new Logger(
         testSessionId,
-        new Storage(process.cwd()),
+        new Storage(projectRootDir),
       );
       uninitializedLogger.close();
       const consoleErrorSpy = vi
@@ -573,7 +583,7 @@ describe('Logger', () => {
 
     beforeEach(async () => {
       taggedFilePath = path.join(
-        TEST_GEMINI_DIR,
+        projectTempDir,
         `checkpoint-${encodedTag}.json`,
       );
       // Create a file to be deleted
@@ -591,7 +601,7 @@ describe('Logger', () => {
     it('should delete both new and old checkpoint files if they exist', async () => {
       const oldTag = 'delete-me(old)';
       const oldStylePath = path.join(
-        TEST_GEMINI_DIR,
+        projectTempDir,
         `checkpoint-${oldTag}.json`,
       );
       const newStylePath = logger['_checkpointPath'](oldTag);
@@ -640,7 +650,7 @@ describe('Logger', () => {
     it('should return false if logger is not initialized', async () => {
       const uninitializedLogger = new Logger(
         testSessionId,
-        new Storage(process.cwd()),
+        new Storage(projectRootDir),
       );
       uninitializedLogger.close();
       const consoleErrorSpy = vi
@@ -662,7 +672,7 @@ describe('Logger', () => {
 
     beforeEach(() => {
       taggedFilePath = path.join(
-        TEST_GEMINI_DIR,
+        projectTempDir,
         `checkpoint-${encodedTag}.json`,
       );
     });
@@ -681,7 +691,7 @@ describe('Logger', () => {
     it('should throw an error if logger is not initialized', async () => {
       const uninitializedLogger = new Logger(
         testSessionId,
-        new Storage(process.cwd()),
+        new Storage(projectRootDir),
       );
       uninitializedLogger.close();
 
@@ -722,7 +732,7 @@ describe('Logger', () => {
       ];
       const tag = 'special(char)';
       const taggedFilePath = path.join(
-        TEST_GEMINI_DIR,
+        projectTempDir,
         `checkpoint-${tag}.json`,
       );
       await fs.writeFile(

@@ -139,6 +139,8 @@ describe('oauth2', () => {
       return mockHttpServer as unknown as http.Server;
     });
 
+    vi.stubEnv('OAUTH_CALLBACK_PORT', '3999');
+
     const clientPromise = getOauthClient(
       AuthType.LOGIN_WITH_GOOGLE,
       mockConfig,
