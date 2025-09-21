@@ -53,13 +53,16 @@ export class AgentSelectorService {
   private static instance: AgentSelectorService | null = null;
   private contentGenerator: ContentGenerator | null = null;
   private agentManager: AgentManager | null = null;
+  private config: Config | null = null;
   private selectedModel: string | null = null;
   private isAutoModeActive = false;
   private selectionHistory: Array<{
     prompt: string;
     selectedAgents: string[];
     reasoning: string;
+    confidence: number;
     aggregateReasoning?: string;
+    toolSummary?: Record<string, number>;
     timestamp: number;
   }> = [];
   private readonly fallbackAgents = ['systems-architect', 'code-quality-analyst'];
@@ -86,7 +89,8 @@ export class AgentSelectorService {
     if (!geminiClient) {
       throw new Error('GeminiClient not initialized yet. Please ensure refreshAuth is called before initializing AgentSelectorService');
     }
-    
+    this.config = config;
+
     // Use the SAME ContentGenerator that regular chat uses - this ensures unified behavior
     this.contentGenerator = geminiClient.getContentGenerator();
 
@@ -96,7 +100,7 @@ export class AgentSelectorService {
     this.agentManager = AgentManager.getInstance();
     if (this.contentGenerator) {
       const defaultModel = this.selectedModel || config.getModel() || 'gpt-5-nano';
-      this.multiAgentExecutor = new MultiAgentExecutor(this.contentGenerator, {
+      this.multiAgentExecutor = new MultiAgentExecutor(this.contentGenerator, config, {
         defaultModel,
       });
     }
@@ -178,69 +182,158 @@ export class AgentSelectorService {
       };
     }
 
-    try {
-      // Create the agent selection prompt
-      const selectionPrompt = this.buildSelectionPrompt(userPrompt);
-      
-      // Query the configured model for agent selection
-      const generationConfig = {
-        temperature: 0.1,
-        maxOutputTokens: 32000,
-        responseJsonSchema: AGENT_SELECTION_SCHEMA.schema,
-        responseMimeType: 'application/json',
-      } as const;
+    const modelCandidates = this.buildSelectionModelCandidates();
+    const attemptedModels: string[] = [];
+    const selectionErrors: Array<{ model: string; error: unknown }> = [];
 
-      const generationModel = this.selectedModel || 'gpt-5-nano';
+    for (const model of modelCandidates) {
+      if (!model) {
+        continue;
+      }
+      attemptedModels.push(model);
+      try {
+        const selection = await this.runSelectionAttempt(userPrompt, model);
+        const selectedAgents = selection.agentIds
+          .map((id) => getAgentById(id))
+          .filter(Boolean) as AgentPersona[];
 
-      const geminiContent = [
-        {
-          role: 'user',
-          parts: [{ text: `${selectionPrompt}\n\nUser prompt: ${userPrompt}` }]
-        }
-      ];
+        const finalSelection = this.validateAndEnhanceSelection(selectedAgents, userPrompt);
 
-      const contentGenResponse = await this.contentGenerator.generateContent({
-        model: generationModel,
-        contents: geminiContent,
-        config: generationConfig as any,
-      }, 'agent-selection');
+        this.recordSelection(
+          userPrompt,
+          finalSelection.map((agent) => agent.id),
+          selection.reasoning,
+          selection.confidence,
+        );
 
-      const response = contentGenResponse.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-      console.log('[Agent Selector] Raw response:', response.substring(0, 200));
-
-      // Parse the response
-      const selection = this.parseSelectionResponse(response);
-      const selectedAgents = selection.agentIds
-        .map(id => getAgentById(id))
-        .filter(Boolean) as AgentPersona[];
-
-      // Validate selection and apply fallbacks
-      const finalSelection = this.validateAndEnhanceSelection(selectedAgents, userPrompt);
-
-      // Record selection history
-      this.recordSelection(userPrompt, finalSelection.map(a => a.id), selection.reasoning);
-
-      return {
-        selectedAgents: finalSelection,
-        reasoning: selection.reasoning,
-        confidence: selection.confidence,
-        processingTime: Date.now() - startTime,
-      };
-
-    } catch (error) {
-      console.error('Agent selection failed:', error);
-      
-      // Fallback to heuristic-based selection
-      const fallbackAgents = this.fallbackSelection(userPrompt);
-      
-      return {
-        selectedAgents: fallbackAgents,
-        reasoning: `AI selection failed, using fallback heuristics: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        confidence: 0.3,
-        processingTime: Date.now() - startTime,
-      };
+        return {
+          selectedAgents: finalSelection,
+          reasoning: selection.reasoning,
+          confidence: selection.confidence,
+          processingTime: Date.now() - startTime,
+        };
+      } catch (error) {
+        selectionErrors.push({ model, error });
+        console.warn(
+          `[AgentSelector] Structured selection attempt with model "${model}" failed:`,
+          error,
+        );
+      }
     }
+
+    const fallbackAgents = this.validateAndEnhanceSelection(
+      this.fallbackSelection(userPrompt),
+      userPrompt,
+    );
+
+    const attemptedSummary = attemptedModels.length ? attemptedModels.join(', ') : 'none';
+    const lastError = selectionErrors[selectionErrors.length - 1]?.error;
+    const errorDetails =
+      lastError instanceof Error ? lastError.message : lastError ? String(lastError) : 'unknown error';
+
+    const reasoning = selectionErrors.length
+      ? `Structured dispatcher could not scout specialists after trying ${attemptedSummary}. Falling back to heuristics (${errorDetails}).`
+      : 'Structured dispatcher unavailable; using heuristic agent selection.';
+
+    this.recordSelection(
+      userPrompt,
+      fallbackAgents.map((agent) => agent.id),
+      reasoning,
+      0.3,
+    );
+
+    return {
+      selectedAgents: fallbackAgents,
+      reasoning,
+      confidence: 0.3,
+      processingTime: Date.now() - startTime,
+    };
+  }
+
+  private buildSelectionModelCandidates(): string[] {
+    const candidates: string[] = [];
+    const provider = this.config?.getProvider();
+
+    if (provider === 'openai') {
+      candidates.push('gpt-5-nano');
+    }
+
+    if (this.selectedModel) {
+      candidates.push(this.selectedModel);
+    }
+
+    if (this.config) {
+      const configuredModel = this.config.getModel();
+      if (configuredModel) {
+        candidates.push(configuredModel);
+      }
+    }
+
+    if (provider === 'openai') {
+      candidates.push('gpt-5', 'gpt-5-codex');
+    }
+
+    return Array.from(
+      new Set(
+        candidates.filter((model) => typeof model === 'string' && model.trim().length > 0),
+      ),
+    );
+  }
+
+  private async runSelectionAttempt(
+    userPrompt: string,
+    model: string,
+  ): Promise<{
+    agentIds: string[];
+    reasoning: string;
+    confidence: number;
+    taskCategory?: string;
+  }> {
+    if (!this.contentGenerator) {
+      throw new Error('Agent selector service is not initialized');
+    }
+
+    const selectionPrompt = this.buildSelectionPrompt(userPrompt);
+    const generationConfig = {
+      temperature: 0.1,
+      maxOutputTokens: 32000,
+      responseJsonSchema: AGENT_SELECTION_SCHEMA.schema,
+      responseMimeType: 'application/json',
+    } as const;
+
+    const contents = [
+      {
+        role: 'user',
+        parts: [{ text: `${selectionPrompt}\n\nUser prompt: ${userPrompt}` }],
+      },
+    ];
+
+    const response = await this.contentGenerator.generateContent(
+      {
+        model,
+        contents,
+        config: generationConfig as any,
+      },
+      'agent-selection',
+    );
+
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    console.log(
+      `[Agent Selector] Raw response for model ${model}:`,
+      text.substring(0, 200),
+    );
+
+    if (!text.trim()) {
+      throw new Error('Empty response from selection model');
+    }
+
+    const parsed = this.parseSelectionResponse(text);
+
+    if (!parsed.agentIds || parsed.agentIds.length === 0) {
+      throw new Error(`Model ${model} returned no agent IDs`);
+    }
+
+    return parsed;
   }
 
   async executeWithSelectedAgents(
@@ -257,6 +350,10 @@ export class AgentSelectorService {
     const latestEntry = this.selectionHistory[this.selectionHistory.length - 1];
     if (latestEntry) {
       latestEntry.aggregateReasoning = execution.aggregateReasoning;
+      latestEntry.toolSummary = execution.agentResults.reduce<Record<string, number>>((acc, result) => {
+        acc[result.agent.id] = result.toolEvents?.length ?? 0;
+        return acc;
+      }, {});
     }
 
     return execution;
@@ -463,7 +560,18 @@ Select the most appropriate agents for this user request:`;
    */
   private fallbackSelection(userPrompt: string): AgentPersona[] {
     const promptLower = userPrompt.toLowerCase();
-    const fallbackAgents: AgentPersona[] = [];
+    const results: AgentPersona[] = [];
+    const ensureAgent = (agentId: string | undefined) => {
+      if (!agentId) return;
+      const agent = getAgentById(agentId);
+      if (!agent) return;
+      if (!results.some((entry) => entry.id === agent.id)) {
+        results.push(agent);
+      }
+    };
+
+    // Always include a generalist coordinator first
+    ensureAgent('systems-architect');
 
     // Simple keyword-based fallback matching
     const keywordMatches = [
@@ -475,41 +583,47 @@ Select the most appropriate agents for this user request:`;
       { keywords: ['kubernetes', 'k8s', 'container'], agent: 'kubernetes-operator' },
       { keywords: ['python'], agent: 'python-specialist' },
       { keywords: ['node', 'nodejs', 'javascript'], agent: 'node-js-specialist' },
+      { keywords: ['documentation', 'doc', 'docs'], agent: 'technical-writer' },
+      { keywords: ['design', 'architecture', 'architect'], agent: 'systems-architect' },
       { keywords: ['machine learning', 'ml', 'ai'], agent: 'ml-engineer' },
     ];
 
-    // Find matching agents
     for (const match of keywordMatches) {
-      if (match.keywords.some(keyword => promptLower.includes(keyword))) {
-        const agent = getAgentById(match.agent);
-        if (agent && fallbackAgents.length < 2) {
-          fallbackAgents.push(agent);
-        }
+      if (match.keywords.some((keyword) => promptLower.includes(keyword))) {
+        ensureAgent(match.agent);
       }
     }
 
-    // If still no matches, use default fallback agents
-    if (fallbackAgents.length === 0) {
+    if (results.length < 2) {
+      ensureAgent('code-quality-analyst');
+    }
+
+    if (results.length < 2) {
       for (const fallbackId of this.fallbackAgents) {
-        const agent = getAgentById(fallbackId);
-        if (agent) {
-          fallbackAgents.push(agent);
-          break; // Only one fallback agent
+        ensureAgent(fallbackId);
+        if (results.length >= 2) {
+          break;
         }
       }
     }
 
-    return fallbackAgents;
+    return results.slice(0, 3);
   }
 
   /**
    * Record selection for history and analysis
    */
-  private recordSelection(prompt: string, selectedAgentIds: string[], reasoning: string): void {
+  private recordSelection(
+    prompt: string,
+    selectedAgentIds: string[],
+    reasoning: string,
+    confidence: number,
+  ): void {
     this.selectionHistory.push({
       prompt: prompt.length > 100 ? prompt.substring(0, 100) + '...' : prompt,
       selectedAgents: selectedAgentIds,
       reasoning,
+      confidence,
       timestamp: Date.now(),
     });
 
@@ -527,6 +641,8 @@ Select the most appropriate agents for this user request:`;
     averageAgentsPerSelection: number;
     mostSelectedAgents: Array<{ agentId: string; count: number }>;
     averageConfidence: number;
+    averageToolCallsPerSelection: number;
+    toolUsageByAgent: Array<{ agentId: string; toolCalls: number }>;
     lastExecutionSummary: MultiAgentExecutionResult | null;
   } {
     if (this.selectionHistory.length === 0) {
@@ -535,17 +651,29 @@ Select the most appropriate agents for this user request:`;
         averageAgentsPerSelection: 0,
         mostSelectedAgents: [],
         averageConfidence: 0,
+        averageToolCallsPerSelection: 0,
+        toolUsageByAgent: [],
         lastExecutionSummary: null,
       };
     }
 
     const agentCounts: Record<string, number> = {};
     let totalAgents = 0;
+    let totalConfidence = 0;
+    let totalToolCalls = 0;
+    const toolCounts: Record<string, number> = {};
 
     for (const selection of this.selectionHistory) {
       totalAgents += selection.selectedAgents.length;
+      totalConfidence += selection.confidence ?? 0;
       for (const agentId of selection.selectedAgents) {
         agentCounts[agentId] = (agentCounts[agentId] || 0) + 1;
+      }
+      if (selection.toolSummary) {
+        for (const [agentId, count] of Object.entries(selection.toolSummary)) {
+          totalToolCalls += count;
+          toolCounts[agentId] = (toolCounts[agentId] || 0) + count;
+        }
       }
     }
 
@@ -558,7 +686,12 @@ Select the most appropriate agents for this user request:`;
       totalSelections: this.selectionHistory.length,
       averageAgentsPerSelection: totalAgents / this.selectionHistory.length,
       mostSelectedAgents,
-      averageConfidence: 0.7, // Would need to track confidence in history
+      averageConfidence: totalConfidence / this.selectionHistory.length,
+      averageToolCallsPerSelection:
+        this.selectionHistory.length === 0 ? 0 : totalToolCalls / this.selectionHistory.length,
+      toolUsageByAgent: Object.entries(toolCounts)
+        .map(([agentId, toolCalls]) => ({ agentId, toolCalls }))
+        .sort((a, b) => b.toolCalls - a.toolCalls),
       lastExecutionSummary: this.lastExecutionSummary,
     };
   }
