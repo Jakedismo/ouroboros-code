@@ -1,8 +1,11 @@
 import type { PartListUnion } from '@google/genai';
 import { tool as createAgentsTool, type Tool as AgentsTool } from '@openai/agents';
 import { z, type ZodTypeAny } from 'zod';
-import type { Config, ToolCallRequestInfo } from '../index.js';
-import { executeToolCall } from '../core/nonInteractiveToolExecutor.js';
+import type {
+  Config,
+  ToolCallRequestInfo,
+  ToolCallResponseInfo,
+} from '../index.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { AnyDeclarativeTool, ToolResultDisplay } from '../tools/tools.js';
 
@@ -10,6 +13,13 @@ export interface ToolAdapterContext {
   registry: ToolRegistry;
   config: Config;
   getPromptId(): string;
+  agentId?: string;
+  agentName?: string;
+  agentEmoji?: string;
+  onToolExecuted?: (payload: {
+    request: ToolCallRequestInfo;
+    response: ToolCallResponseInfo;
+  }) => void;
 }
 
 export function adaptToolsToAgents(context: ToolAdapterContext): AgentsTool[] {
@@ -28,23 +38,32 @@ function createAdaptedTool(tool: AnyDeclarativeTool, context: ToolAdapterContext
     description: tool.description,
     parameters: parametersSchema as any,
     async execute(_, input) {
-      const normalizedArgs = normalizeArguments(input);
+      const normalizedArgs = normalizeArguments(tool, input);
       const callRequest: ToolCallRequestInfo = {
         callId: `agents-sdk-${tool.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         name: tool.name,
         args: normalizedArgs,
         isClientInitiated: false,
         prompt_id: context.getPromptId(),
+        agentId: context.agentId,
+        agentName: context.agentName,
+        agentEmoji: context.agentEmoji,
       };
 
       const abortController = new AbortController();
 
       try {
-        const response = await executeToolCall(
-          context.config,
+        const response = await context.config.executeToolCall(
           callRequest,
           abortController.signal,
+          {
+            agentId: context.agentId,
+            agentName: context.agentName,
+            agentEmoji: context.agentEmoji,
+          },
         );
+
+        context.onToolExecuted?.({ request: callRequest, response });
 
         const responseText = partListToString(response.responseParts as unknown as PartListUnion);
         if (responseText) {
@@ -317,7 +336,15 @@ function buildObjectSchema(schema: JsonSchema): ZodTypeAny {
   return objectSchema as ZodTypeAny;
 }
 
-function normalizeArguments(args: unknown): Record<string, unknown> {
+function normalizeArguments(
+  tool: AnyDeclarativeTool,
+  args: unknown,
+): Record<string, unknown> {
+  const base = coerceToRecord(args);
+  return postProcessArguments(tool, base);
+}
+
+function coerceToRecord(args: unknown): Record<string, unknown> {
   if (args === null || args === undefined) {
     return {};
   }
@@ -335,8 +362,9 @@ function normalizeArguments(args: unknown): Record<string, unknown> {
   }
 
   if (typeof args === 'object') {
-    if ('arguments' in (args as Record<string, unknown>)) {
-      const raw = (args as Record<string, unknown>)['arguments'];
+    const record = args as Record<string, unknown>;
+    if ('arguments' in record) {
+      const raw = record['arguments'];
       if (typeof raw === 'string') {
         try {
           const parsed = JSON.parse(raw);
@@ -344,14 +372,177 @@ function normalizeArguments(args: unknown): Record<string, unknown> {
             return parsed as Record<string, unknown>;
           }
         } catch {
-          return { value: raw } as Record<string, unknown>;
+          return { value: raw };
         }
       }
     }
-    return args as Record<string, unknown>;
+    return record;
   }
 
   return { value: args };
+}
+
+function postProcessArguments(
+  tool: AnyDeclarativeTool,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...args };
+
+  switch (tool.name) {
+    case 'search_file_content':
+      normalizeSearchTextArgs(result);
+      break;
+    case 'glob':
+      normalizeGlobArgs(result);
+      break;
+    default:
+      break;
+  }
+
+  return result;
+}
+
+function normalizeSearchTextArgs(args: Record<string, unknown>): void {
+  const pattern = extractStringValue(args['pattern']);
+  if (pattern) {
+    args['pattern'] = pattern;
+  }
+
+  if (!args['pattern']) {
+    const fallbackKeys = ['query', 'regex', 'term', 'text', 'search', 'value'];
+    for (const key of fallbackKeys) {
+      const candidate = extractStringValue(args[key]);
+      const trimmed = candidate && typeof candidate === 'string' ? candidate.trim() : candidate;
+      if (typeof trimmed === 'string' && trimmed.length > 0) {
+        args['pattern'] = trimmed;
+        break;
+      }
+    }
+  }
+
+  // Clean up common alias properties to avoid confusing schema validation
+  if (args['pattern']) {
+    for (const key of ['query', 'regex', 'term', 'text', 'search', 'value']) {
+      if (key in args) {
+        delete args[key];
+      }
+    }
+  }
+
+  const path = extractStringValue(args['path']);
+  if (typeof path === 'string' && path.trim().length > 0) {
+    args['path'] = path.trim();
+  }
+
+  const include = extractStringValue(args['include']);
+  if (typeof include === 'string' && include.trim().length > 0) {
+    args['include'] = include.trim();
+  }
+}
+
+function normalizeGlobArgs(args: Record<string, unknown>): void {
+  const pattern = extractStringValue(args['pattern']);
+  if (pattern) {
+    args['pattern'] = pattern;
+  }
+
+  if (!args['pattern']) {
+    const fallbackKeys = ['glob', 'query', 'patternText', 'value'];
+    for (const key of fallbackKeys) {
+      const candidate = extractStringValue(args[key]);
+      const trimmed = candidate && typeof candidate === 'string' ? candidate.trim() : candidate;
+      if (typeof trimmed === 'string' && trimmed.length > 0) {
+        args['pattern'] = trimmed;
+        break;
+      }
+    }
+  }
+
+  if (!args['pattern'] && Array.isArray(args['patterns'])) {
+    const first = (args['patterns'] as unknown[]).find((item) => typeof item === 'string');
+    if (typeof first === 'string' && first.trim().length > 0) {
+      args['pattern'] = first.trim();
+    }
+  }
+
+  if (args['pattern']) {
+    for (const key of ['glob', 'query', 'patternText', 'value', 'patterns']) {
+      if (key in args) {
+        delete args[key];
+      }
+    }
+  }
+
+  const path = extractStringValue(args['path']);
+  if (typeof path === 'string' && path.trim().length > 0) {
+    args['path'] = path.trim();
+  }
+
+  if ('case_sensitive' in args) {
+    const coerced = coerceBoolean(args['case_sensitive']);
+    if (coerced !== undefined) {
+      args['case_sensitive'] = coerced;
+    }
+  }
+
+  if ('respect_git_ignore' in args) {
+    const coerced = coerceBoolean(args['respect_git_ignore']);
+    if (coerced !== undefined) {
+      args['respect_git_ignore'] = coerced;
+    }
+  }
+}
+
+function extractStringValue(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (value && typeof value === 'object') {
+    if (Array.isArray(value)) {
+      const joined = value
+        .map((item) => (typeof item === 'string' ? item : undefined))
+        .filter((item): item is string => typeof item === 'string')
+        .join(' ')
+        .trim();
+      return joined || undefined;
+    }
+
+    const record = value as Record<string, unknown>;
+    const textLikeKeys = ['text', 'value', 'pattern', 'query'];
+    for (const key of textLikeKeys) {
+      const nested = record[key];
+      if (typeof nested === 'string') {
+        return nested;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function coerceBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', 'yes', '1'].includes(normalized)) {
+      return true;
+    }
+    if (['false', 'no', '0'].includes(normalized)) {
+      return false;
+    }
+  }
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+  return undefined;
 }
 
 function partListToString(content: PartListUnion): string {
