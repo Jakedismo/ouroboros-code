@@ -233,9 +233,6 @@ export const useGeminiStream = (
       }
       const agentSummaries = selection.selectedAgents;
       const agentIds = agentSummaries.map((agent) => agent.id);
-      setMultiAgentPanelActive(true);
-      multiAgentStatusActiveRef.current = true;
-      setMultiAgentAgentIds(agentIds);
       setMultiAgentPersonaLookup((prev) => {
         const next = { ...prev };
         for (const agent of agentSummaries) {
@@ -243,6 +240,25 @@ export const useGeminiStream = (
         }
         return next;
       });
+
+      if (status === 'complete') {
+        setActiveSpecialistNames(
+          agentSummaries.length
+            ? agentSummaries.map((agent) => `${agent.emoji} ${agent.name}`).join(', ')
+            : null,
+        );
+        multiAgentStatusActiveRef.current = false;
+        setMultiAgentPanelActive(false);
+        setMultiAgentAgentIds([]);
+        setMultiAgentFocusedId(null);
+        setMultiAgentExpandedIds([]);
+        setPendingHistoryItem(null);
+        return;
+      }
+
+      setMultiAgentPanelActive(true);
+      multiAgentStatusActiveRef.current = true;
+      setMultiAgentAgentIds(agentIds);
       const nextFocus =
         agentIds.length === 0
           ? null
@@ -263,16 +279,10 @@ export const useGeminiStream = (
         );
       }
       setPendingHistoryItem(
-        createMultiAgentHistoryItem(
-          selection,
-          status,
-          status === 'complete'
-            ? undefined
-            : {
-                focusedAgentId: nextFocus ?? undefined,
-                expandedAgentIds: nextExpanded,
-              },
-        ),
+        createMultiAgentHistoryItem(selection, status, {
+          focusedAgentId: nextFocus ?? undefined,
+          expandedAgentIds: nextExpanded,
+        }),
       );
     },
     [
