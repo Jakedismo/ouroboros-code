@@ -15,6 +15,8 @@ import type {
   ServerGeminiStreamEvent as GeminiEvent,
   ThoughtSummary,
   ToolCallRequestInfo,
+  ToolCallResponseInfo,
+  ToolExecutionMetadata,
   GeminiErrorEventValue,
 } from '@ouroboros/ouroboros-code-core';
 import {
@@ -38,12 +40,18 @@ import type {
   HistoryItemWithoutId,
   HistoryItemToolGroup,
   SlashCommandProcessorResult,
+  AgentPersonaSummary,
 } from '../types.js';
 import { StreamingState, MessageType, ToolCallStatus } from '../types.js';
 import { isAtCommand, isSlashCommand } from '../utils/commandUtils.js';
 import { useShellCommandProcessor } from './shellCommandProcessor.js';
 import { handleAtCommand } from './atCommandProcessor.js';
-import { useAutomaticAgentSelection } from './useAutomaticAgentSelection.js';
+import {
+  useAutomaticAgentSelection,
+  createMultiAgentHistoryItem,
+  type SelectionStreamEvent,
+  type SelectionFeedbackPayload,
+} from './useAutomaticAgentSelection.js';
 import { findLastSafeSplitPoint } from '../utils/markdownUtilities.js';
 import { useStateAndRef } from './useStateAndRef.js';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
@@ -140,6 +148,195 @@ export const useGeminiStream = (
       toolCalls.length ? mapTrackedToolCallsToDisplay(toolCalls) : undefined,
     [toolCalls],
   );
+
+  useEffect(() => {
+    return () => {
+      if (multiAgentClearTimeoutRef.current) {
+        clearTimeout(multiAgentClearTimeoutRef.current);
+        multiAgentClearTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const MULTI_AGENT_PANEL_IDLE_CLEAR_MS = 15000;
+  const multiAgentStatusActiveRef = useRef(false);
+  const [multiAgentPanelActive, setMultiAgentPanelActive] = useState(false);
+  const [multiAgentAgentIds, setMultiAgentAgentIds] = useState<string[]>([]);
+  const [multiAgentFocusedId, setMultiAgentFocusedId] = useState<string | null>(null);
+  const [multiAgentExpandedIds, setMultiAgentExpandedIds] = useState<string[]>([]);
+  const [multiAgentPersonaLookup, setMultiAgentPersonaLookup] = useState<Record<string, AgentPersonaSummary>>({});
+  const [activeSpecialistNames, setActiveSpecialistNames] = useState<string | null>(null);
+  const multiAgentClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toolExecutionResolversRef = useRef(
+    new Map<
+      string,
+      {
+        resolve: (response: ToolCallResponseInfo) => void;
+        metadata?: ToolExecutionMetadata;
+      }
+    >(),
+  );
+
+  const clearMultiAgentStatus = useCallback(() => {
+    if (multiAgentClearTimeoutRef.current) {
+      clearTimeout(multiAgentClearTimeoutRef.current);
+      multiAgentClearTimeoutRef.current = null;
+    }
+    if (multiAgentStatusActiveRef.current || multiAgentPanelActive) {
+      setPendingHistoryItem(null);
+      multiAgentStatusActiveRef.current = false;
+      setMultiAgentPanelActive(false);
+      setMultiAgentAgentIds([]);
+      setMultiAgentFocusedId(null);
+      setMultiAgentExpandedIds([]);
+      setMultiAgentPersonaLookup({});
+      setActiveSpecialistNames(null);
+    }
+  }, [setPendingHistoryItem, multiAgentPanelActive]);
+
+  const scheduleMultiAgentStatusClear = useCallback(
+    (delayMs: number) => {
+      if (multiAgentClearTimeoutRef.current) {
+        clearTimeout(multiAgentClearTimeoutRef.current);
+      }
+      multiAgentClearTimeoutRef.current = setTimeout(() => {
+        clearMultiAgentStatus();
+        multiAgentClearTimeoutRef.current = null;
+      }, delayMs);
+    },
+    [clearMultiAgentStatus],
+  );
+
+  const updateInteractiveState = useCallback(
+    (focusedId: string | null, expandedIds: string[]) => {
+      setPendingHistoryItem((current) => {
+        if (!current || current.type !== 'multi_agent_status') {
+          return current;
+        }
+        return {
+          ...current,
+          interactive: {
+            focusedAgentId: focusedId ?? undefined,
+            expandedAgentIds: expandedIds,
+          },
+        };
+      });
+    },
+    [setPendingHistoryItem],
+  );
+
+  const activatePanelForSelection = useCallback(
+    (selection: SelectionFeedbackPayload, status: 'planning' | 'running' | 'complete') => {
+      if (multiAgentClearTimeoutRef.current) {
+        clearTimeout(multiAgentClearTimeoutRef.current);
+        multiAgentClearTimeoutRef.current = null;
+      }
+      const agentSummaries = selection.selectedAgents;
+      const agentIds = agentSummaries.map((agent) => agent.id);
+      setMultiAgentPanelActive(true);
+      multiAgentStatusActiveRef.current = true;
+      setMultiAgentAgentIds(agentIds);
+      setMultiAgentPersonaLookup((prev) => {
+        const next = { ...prev };
+        for (const agent of agentSummaries) {
+          next[agent.id] = agent;
+        }
+        return next;
+      });
+      const nextFocus =
+        agentIds.length === 0
+          ? null
+          : agentIds.includes(multiAgentFocusedId ?? '')
+          ? multiAgentFocusedId
+          : agentIds[0];
+      const nextExpanded = multiAgentExpandedIds.filter((id) => agentIds.includes(id));
+      setMultiAgentFocusedId(nextFocus);
+      setMultiAgentExpandedIds(nextExpanded);
+      if (nextFocus) {
+        const persona = agentSummaries.find((agent) => agent.id === nextFocus);
+        if (persona) {
+          setActiveSpecialistNames(`${persona.emoji} ${persona.name}`);
+        }
+      } else if (agentSummaries.length > 0) {
+        setActiveSpecialistNames(
+          agentSummaries.map((agent) => `${agent.emoji} ${agent.name}`).join(', '),
+        );
+      }
+      setPendingHistoryItem(
+        createMultiAgentHistoryItem(
+          selection,
+          status,
+          status === 'complete'
+            ? undefined
+            : {
+                focusedAgentId: nextFocus ?? undefined,
+                expandedAgentIds: nextExpanded,
+              },
+        ),
+      );
+    },
+    [
+      createMultiAgentHistoryItem,
+      multiAgentExpandedIds,
+      multiAgentFocusedId,
+      setPendingHistoryItem,
+    ],
+  );
+
+  const cycleAgentFocus = useCallback(
+    (direction: number) => {
+      if (!multiAgentPanelActive || multiAgentAgentIds.length === 0) return;
+      const currentIndex = multiAgentFocusedId
+        ? multiAgentAgentIds.indexOf(multiAgentFocusedId)
+        : -1;
+      const nextIndex =
+        currentIndex === -1
+          ? (direction > 0 ? 0 : multiAgentAgentIds.length - 1)
+          : (currentIndex + direction + multiAgentAgentIds.length) % multiAgentAgentIds.length;
+      const nextId = multiAgentAgentIds[nextIndex];
+      setMultiAgentFocusedId(nextId);
+      updateInteractiveState(nextId, multiAgentExpandedIds);
+      const persona = multiAgentPersonaLookup[nextId];
+      if (persona) {
+        setActiveSpecialistNames(`${persona.emoji} ${persona.name}`);
+      }
+    },
+    [
+      multiAgentPanelActive,
+      multiAgentAgentIds,
+      multiAgentFocusedId,
+      multiAgentExpandedIds,
+      multiAgentPersonaLookup,
+    ],
+  );
+
+  const toggleFocusedAgent = useCallback(() => {
+    if (!multiAgentPanelActive || !multiAgentFocusedId) return;
+    setMultiAgentExpandedIds((prev) => {
+      const next = prev.includes(multiAgentFocusedId)
+        ? prev.filter((id) => id !== multiAgentFocusedId)
+        : [...prev, multiAgentFocusedId];
+      updateInteractiveState(multiAgentFocusedId, next);
+      return next;
+    });
+  }, [multiAgentPanelActive, multiAgentFocusedId, updateInteractiveState]);
+
+  const collapseAgentPanels = useCallback(() => {
+    if (!multiAgentPanelActive) return;
+    if (multiAgentExpandedIds.length === 0) {
+      clearMultiAgentStatus();
+      return;
+    }
+    setMultiAgentExpandedIds([]);
+    updateInteractiveState(multiAgentFocusedId, []);
+  }, [
+    multiAgentPanelActive,
+    multiAgentExpandedIds,
+    multiAgentFocusedId,
+    updateInteractiveState,
+    clearMultiAgentStatus,
+  ]);
+
 
   const loopDetectedRef = useRef(false);
 
@@ -247,6 +444,64 @@ export const useGeminiStream = (
     { isActive: streamingState === StreamingState.Responding },
   );
 
+  useKeypress(
+    (key) => {
+      if (!multiAgentPanelActive) return;
+      if (key.meta && key.ctrl && key.name === 'left') {
+        cycleAgentFocus(-1);
+      } else if (key.meta && key.ctrl && key.name === 'right') {
+        cycleAgentFocus(1);
+      } else if (key.name === 'return') {
+        toggleFocusedAgent();
+      } else if (key.name === 'escape') {
+        collapseAgentPanels();
+      }
+    },
+    { isActive: multiAgentPanelActive },
+  );
+
+  const executeToolCallBridge = useCallback(
+    async (
+      request: ToolCallRequestInfo,
+      abortSignal: AbortSignal,
+      metadata?: ToolExecutionMetadata,
+    ): Promise<ToolCallResponseInfo> => {
+      return new Promise<ToolCallResponseInfo>((resolve, reject) => {
+        const abortHandler = () => {
+          if (toolExecutionResolversRef.current.delete(request.callId)) {
+            reject(new Error('Tool execution aborted'));
+          }
+        };
+        abortSignal.addEventListener('abort', abortHandler, { once: true });
+
+        toolExecutionResolversRef.current.set(request.callId, {
+          resolve: (response) => {
+            abortSignal.removeEventListener('abort', abortHandler);
+            resolve(response);
+          },
+          metadata,
+        });
+
+        try {
+          scheduleToolCalls(request, abortSignal);
+        } catch (error) {
+          abortSignal.removeEventListener('abort', abortHandler);
+          toolExecutionResolversRef.current.delete(request.callId);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      });
+    },
+    [scheduleToolCalls],
+  );
+
+  useEffect(() => {
+    config.setToolExecutionBridge(executeToolCallBridge);
+    return () => {
+      config.setToolExecutionBridge(undefined);
+      toolExecutionResolversRef.current.clear();
+    };
+  }, [config, executeToolCallBridge]);
+
   const prepareQueryForGemini = useCallback(
     async (
       query: PartListUnion,
@@ -296,7 +551,7 @@ export const useGeminiStream = (
                 isClientInitiated: true,
                 prompt_id,
               };
-              scheduleToolCalls([toolCallRequest], abortSignal);
+              await scheduleToolCalls([toolCallRequest], abortSignal);
               return { queryToSend: null, shouldProceed: false };
             }
             case 'submit_prompt': {
@@ -693,7 +948,7 @@ export const useGeminiStream = (
       
       if (toolCallRequests.length > 0) {
         console.log('[useGeminiStream] Scheduling tool calls...');
-        scheduleToolCalls(toolCallRequests, signal);
+        await scheduleToolCalls(toolCallRequests, signal);
       }
       return StreamProcessingStatus.Completed;
     },
@@ -741,7 +996,8 @@ export const useGeminiStream = (
       // Handle automatic agent selection for new queries (not continuations) with streaming
       let previousAgentState: string[] | undefined;
       let showSelectionFeedback: (() => void) | undefined;
-      
+      let autoSelectionShouldProceed = true;
+
       const autoModeEnabled = isAutoModeEnabled();
       console.log('[DEBUG] isAutoModeEnabled():', autoModeEnabled, 'isContinuation:', !!options?.isContinuation);
       
@@ -754,18 +1010,38 @@ export const useGeminiStream = (
             : typeof query === 'string' ? query : (query as any).text || '';
           
           console.log('[DEBUG] Extracted query text for agent selection:', queryText);
-          
+          activatePanelForSelection(
+            {
+              selectedAgents: [],
+              reasoning: 'Analyzing prompt and scouting specialists...',
+              confidence: 0,
+              processingTime: 0,
+            },
+            'planning',
+          );
+
           // Stream the agent selection process with progressive feedback
           const selectionStream = processPromptWithAutoSelectionStream(queryText);
           console.log('[DEBUG] Created selection stream, starting to process events...');
           
-          for await (const event of selectionStream) {
+          for await (const event of selectionStream as AsyncGenerator<SelectionStreamEvent>) {
             console.log('[DEBUG] Selection stream event:', event.type);
             if (event.type === 'progress') {
+              if (event.selectionPreview) {
+                activatePanelForSelection(event.selectionPreview, 'running');
+                continue;
+              }
               // Progress messages are already shown by the stream
               continue;
             } else if (event.type === 'complete') {
               console.log('[DEBUG] Agent selection completed');
+              if (event.selectionFeedback) {
+                activatePanelForSelection(event.selectionFeedback, 'complete');
+                const names = event.selectionFeedback.selectedAgents
+                  .map((agent) => `${agent.emoji} ${agent.name}`)
+                  .join(', ');
+                setActiveSpecialistNames(names);
+              }
               if (event.showSelectionFeedback) {
                 showSelectionFeedback = event.showSelectionFeedback;
                 previousAgentState = event.previousAgentState;
@@ -773,16 +1049,30 @@ export const useGeminiStream = (
                 // Show final selection feedback immediately
                 showSelectionFeedback();
               }
+              if (!event.selectionFeedback) {
+                clearMultiAgentStatus();
+              }
+              autoSelectionShouldProceed = event.shouldProceed ?? true;
               break;
             }
           }
           console.log('[DEBUG] Agent selection stream processing complete');
-        } catch (error) {
-          console.error('[DEBUG] Streaming agent selection failed:', error);
-          // Continue with normal processing if agent selection fails
+      } catch (error) {
+        console.error('[DEBUG] Streaming agent selection failed:', error);
+        // Continue with normal processing if agent selection fails
+        clearMultiAgentStatus();
+      }
+    } else {
+      console.log('[DEBUG] Skipping agent selection - isContinuation:', !!options?.isContinuation, 'isAutoModeEnabled:', isAutoModeEnabled());
+    }
+
+      if (!autoSelectionShouldProceed) {
+        setIsResponding(false);
+        if (previousAgentState) {
+          restorePreviousAgentState(previousAgentState);
         }
-      } else {
-        console.log('[DEBUG] Skipping agent selection - isContinuation:', !!options?.isContinuation, 'isAutoModeEnabled:', isAutoModeEnabled());
+        scheduleMultiAgentStatusClear(MULTI_AGENT_PANEL_IDLE_CLEAR_MS);
+        return;
       }
 
       console.log('[DEBUG] About to prepare query for Gemini...');
@@ -807,6 +1097,7 @@ export const useGeminiStream = (
             restorePreviousAgentState(previousAgentState);
           }
         }
+        scheduleMultiAgentStatusClear(0);
         return;
       }
       
@@ -845,11 +1136,15 @@ export const useGeminiStream = (
           openai: 'OpenAI',
           anthropic: 'Anthropic'
         };
-        
+        const specialistSuffix = activeSpecialistNames
+          ? ` orchestrating ${activeSpecialistNames}...`
+          : ' is thinking deeply about your request...';
         addItem(
           {
             type: MessageType.INFO,
-            text: `${providerEmojis[currentProvider] || '🤔'} **${providerNames[currentProvider] || config.getModel()} is thinking deeply about your request...**`,
+            text: `${providerEmojis[currentProvider] || '🤔'} **${
+              providerNames[currentProvider] || config.getModel()
+            }${specialistSuffix}**`,
           },
           userMessageTimestamp,
         );
@@ -913,6 +1208,7 @@ export const useGeminiStream = (
 
         // Agent selection feedback was already shown immediately after selection
       } catch (error: unknown) {
+        clearMultiAgentStatus();
         if (error instanceof UnauthorizedError) {
           onAuthError();
         } else if (!isNodeError(error) || error.name !== 'AbortError') {
@@ -931,6 +1227,7 @@ export const useGeminiStream = (
           );
         }
       } finally {
+        scheduleMultiAgentStatusClear(MULTI_AGENT_PANEL_IDLE_CLEAR_MS);
         setIsResponding(false);
         
         // Restore previous agent state after conversation turn completes
@@ -961,6 +1258,8 @@ export const useGeminiStream = (
       processPromptWithAutoSelection,
       restorePreviousAgentState,
       isAutoModeEnabled,
+      clearMultiAgentStatus,
+      scheduleMultiAgentStatusClear,
     ],
   );
 
@@ -968,6 +1267,18 @@ export const useGeminiStream = (
     async (completedToolCallsFromScheduler: TrackedToolCall[]) => {
       if (isResponding) {
         return;
+      }
+
+      for (const completed of completedToolCallsFromScheduler) {
+        if ('response' in completed) {
+          const resolver = toolExecutionResolversRef.current.get(
+            completed.request.callId,
+          );
+          if (resolver) {
+            toolExecutionResolversRef.current.delete(completed.request.callId);
+            resolver.resolve(completed.response as ToolCallResponseInfo);
+          }
+        }
       }
 
       const completedAndReadyToSubmitTools =
@@ -989,8 +1300,16 @@ export const useGeminiStream = (
               );
             }
             return false;
-          },
-        );
+    },
+    [
+      addItem,
+      config,
+      multiAgentPanelActive,
+      setPendingHistoryItem,
+      startNewPrompt,
+      streamingState,
+    ],
+  );
 
       // Finalize any client-initiated tools as soon as they are done.
       const clientTools = completedAndReadyToSubmitTools.filter(
