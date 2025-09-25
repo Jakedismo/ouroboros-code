@@ -14,7 +14,8 @@ import {
   FatalInputError,
   FatalTurnLimitedError,
 } from '@ouroboros/ouroboros-code-core';
-import type { Content, Part } from '@google/genai';
+import type { AgentMessage, AgentContent, AgentContentFragment } from './ui/types/agentContent.js';
+import { ensureAgentContentArray } from './ui/types/agentContent.js';
 import * as fs from 'node:fs/promises';
 
 import { ConsolePatcher } from './ui/utils/ConsolePatcher.js';
@@ -23,7 +24,7 @@ import { ContinuousInputManager, InputCommandType, type InputCommand } from './s
 
 async function handleInputCommand(
   command: InputCommand,
-  currentMessages: Content[],
+  currentMessages: AgentMessage[],
   config: Config,
 ): Promise<'exit' | 'continue' | 'processed'> {
   switch (command.type) {
@@ -149,8 +150,8 @@ export async function runNonInteractive(
       );
     }
 
-    let currentMessages: Content[] = [
-      { role: 'user', parts: processedQuery as Part[] },
+    let currentMessages: AgentMessage[] = [
+      { role: 'user', parts: ensureAgentContentArray(processedQuery) },
     ];
 
     let turnCount = 0;
@@ -201,7 +202,7 @@ export async function runNonInteractive(
       }
 
       if (toolCallRequests.length > 0) {
-        const toolResponseParts: Part[] = [];
+        const toolResponseParts: AgentContentFragment[] = [];
         for (const requestInfo of toolCallRequests) {
           const toolResponse = await executeToolCall(
             config,

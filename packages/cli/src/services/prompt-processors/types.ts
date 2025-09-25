@@ -5,12 +5,12 @@
  */
 
 import type { CommandContext } from '../../ui/commands/types.js';
-import type { PartUnion } from '@google/genai';
+import type { AgentContentFragment } from '../../ui/types/agentContent.js';
 
 /**
  * Defines the input/output type for prompt processors.
  */
-export type PromptPipelineContent = PartUnion[];
+export type PromptPipelineContent = AgentContentFragment[];
 
 /**
  * Defines the interface for a prompt processor, a module that can transform

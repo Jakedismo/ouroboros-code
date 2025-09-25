@@ -12,7 +12,6 @@ import type { Config } from '@ouroboros/ouroboros-code-core';
 import { ApprovalMode } from '@ouroboros/ouroboros-code-core';
 import os from 'node:os';
 import { quote } from 'shell-quote';
-import { createPartFromText } from '@google/genai';
 import type { PromptPipelineContent } from './types.js';
 
 // Helper function to determine the expected escaped string based on the current OS,
@@ -35,7 +34,7 @@ function getExpectedEscapedArgForPlatform(arg: string): string {
 
 // Helper to create PromptPipelineContent
 function createPromptPipelineContent(text: string): PromptPipelineContent {
-  return [createPartFromText(text)];
+  return [{ text }];
 }
 
 const mockCheckCommandPermissions = vi.hoisted(() => vi.fn());

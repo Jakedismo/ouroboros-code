@@ -15,9 +15,9 @@ import {
   shutdownTelemetry,
   GeminiEventType,
 } from '@ouroboros/ouroboros-code-core';
-import type { Part } from '@google/genai';
+import type { AgentContentFragment } from './ui/types/agentContent.js';
 import { runNonInteractive } from './nonInteractiveCli.js';
-import { vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock core modules
 vi.mock('./ui/hooks/atCommandProcessor.js');
@@ -70,6 +70,8 @@ describe('runNonInteractive', () => {
       getFullContext: vi.fn().mockReturnValue(false),
       getContentGeneratorConfig: vi.fn().mockReturnValue({}),
       getDebugMode: vi.fn().mockReturnValue(false),
+      isContinuousInputEnabled: vi.fn().mockReturnValue(false),
+      isAutonomousMode: vi.fn().mockReturnValue(false),
     } as unknown as Config;
 
     const { handleAtCommand } = await import(
@@ -126,7 +128,7 @@ describe('runNonInteractive', () => {
         prompt_id: 'prompt-id-2',
       },
     };
-    const toolResponse: Part[] = [{ text: 'Tool response' }];
+    const toolResponse: AgentContentFragment[] = [{ text: 'Tool response' }];
     mockCoreExecuteToolCall.mockResolvedValue({ responseParts: toolResponse });
 
     const firstCallEvents: ServerGeminiStreamEvent[] = [toolCallEvent];
@@ -288,7 +290,7 @@ describe('runNonInteractive', () => {
 
     // 2. Define the raw input and the expected processed output
     const rawInput = 'Summarize @file.txt';
-    const processedParts: Part[] = [
+    const processedParts: AgentContentFragment[] = [
       { text: 'Summarize @file.txt' },
       { text: '\n--- Content from referenced files ---\n' },
       { text: 'This is the content of the file.' },

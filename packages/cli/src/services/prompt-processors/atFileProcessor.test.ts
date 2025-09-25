@@ -10,7 +10,7 @@ import { type CommandContext } from '../../ui/commands/types.js';
 import { AtFileProcessor } from './atFileProcessor.js';
 import { MessageType } from '../../ui/types.js';
 import type { Config } from '@ouroboros/ouroboros-code-core';
-import type { PartUnion } from '@google/genai';
+import type { AgentContentFragment } from '../../ui/types/agentContent.js';
 
 // Mock the core dependency
 const mockReadPathFromWorkspace = vi.hoisted(() => vi.fn());
@@ -41,7 +41,7 @@ describe('AtFileProcessor', () => {
 
     // Default mock success behavior: return content wrapped in a text part.
     mockReadPathFromWorkspace.mockImplementation(
-      async (path: string): Promise<PartUnion[]> => [
+      async (path: string): Promise<AgentContentFragment[]> => [
         { text: `content of ${path}` },
       ],
     );
@@ -49,7 +49,7 @@ describe('AtFileProcessor', () => {
 
   it('should not change the prompt if no @{ trigger is present', async () => {
     const processor = new AtFileProcessor();
-    const prompt: PartUnion[] = [{ text: 'This is a simple prompt.' }];
+    const prompt: AgentContentFragment[] = [{ text: 'This is a simple prompt.' }];
     const result = await processor.process(prompt, context);
     expect(result).toEqual(prompt);
     expect(mockReadPathFromWorkspace).not.toHaveBeenCalled();
@@ -57,7 +57,7 @@ describe('AtFileProcessor', () => {
 
   it('should not change the prompt if config service is missing', async () => {
     const processor = new AtFileProcessor();
-    const prompt: PartUnion[] = [{ text: 'Analyze @{file.txt}' }];
+    const prompt: AgentContentFragment[] = [{ text: 'Analyze @{file.txt}' }];
     const contextWithoutConfig = createMockCommandContext({
       services: {
         config: null,
@@ -71,7 +71,7 @@ describe('AtFileProcessor', () => {
   describe('Parsing Logic', () => {
     it('should replace a single valid @{path/to/file.txt} placeholder', async () => {
       const processor = new AtFileProcessor();
-      const prompt: PartUnion[] = [
+      const prompt: AgentContentFragment[] = [
         { text: 'Analyze this file: @{path/to/file.txt}' },
       ];
       const result = await processor.process(prompt, context);
@@ -87,7 +87,7 @@ describe('AtFileProcessor', () => {
 
     it('should replace multiple different @{...} placeholders', async () => {
       const processor = new AtFileProcessor();
-      const prompt: PartUnion[] = [
+      const prompt: AgentContentFragment[] = [
         { text: 'Compare @{file1.js} with @{file2.js}' },
       ];
       const result = await processor.process(prompt, context);
@@ -110,7 +110,7 @@ describe('AtFileProcessor', () => {
 
     it('should handle placeholders at the beginning, middle, and end', async () => {
       const processor = new AtFileProcessor();
-      const prompt: PartUnion[] = [
+      const prompt: AgentContentFragment[] = [
         { text: '@{start.txt} in the @{middle.txt} and @{end.txt}' },
       ];
       const result = await processor.process(prompt, context);
@@ -125,7 +125,7 @@ describe('AtFileProcessor', () => {
 
     it('should correctly parse paths that contain balanced braces', async () => {
       const processor = new AtFileProcessor();
-      const prompt: PartUnion[] = [
+      const prompt: AgentContentFragment[] = [
         { text: 'Analyze @{path/with/{braces}/file.txt}' },
       ];
       const result = await processor.process(prompt, context);
@@ -141,7 +141,7 @@ describe('AtFileProcessor', () => {
 
     it('should throw an error if the prompt contains an unclosed trigger', async () => {
       const processor = new AtFileProcessor();
-      const prompt: PartUnion[] = [{ text: 'Hello @{world' }];
+      const prompt: AgentContentFragment[] = [{ text: 'Hello @{world' }];
       // The new parser throws an error for unclosed injections.
       await expect(processor.process(prompt, context)).rejects.toThrow(
         /Unclosed injection/,
@@ -152,7 +152,7 @@ describe('AtFileProcessor', () => {
   describe('Integration and Error Handling', () => {
     it('should leave the placeholder unmodified if readPathFromWorkspace throws', async () => {
       const processor = new AtFileProcessor();
-      const prompt: PartUnion[] = [
+      const prompt: AgentContentFragment[] = [
         { text: 'Analyze @{not-found.txt} and @{good-file.txt}' },
       ];
       mockReadPathFromWorkspace.mockImplementation(async (path: string) => {
@@ -175,7 +175,7 @@ describe('AtFileProcessor', () => {
   describe('UI Feedback', () => {
     it('should call ui.addItem with an ERROR on failure', async () => {
       const processor = new AtFileProcessor();
-      const prompt: PartUnion[] = [{ text: 'Analyze @{bad-file.txt}' }];
+      const prompt: AgentContentFragment[] = [{ text: 'Analyze @{bad-file.txt}' }];
       mockReadPathFromWorkspace.mockRejectedValue(new Error('Access denied'));
 
       await processor.process(prompt, context);
@@ -192,7 +192,7 @@ describe('AtFileProcessor', () => {
 
     it('should call ui.addItem with a WARNING if the file was ignored', async () => {
       const processor = new AtFileProcessor();
-      const prompt: PartUnion[] = [{ text: 'Analyze @{ignored.txt}' }];
+      const prompt: AgentContentFragment[] = [{ text: 'Analyze @{ignored.txt}' }];
       // Simulate an ignored file by returning an empty array.
       mockReadPathFromWorkspace.mockResolvedValue([]);
 
@@ -213,7 +213,7 @@ describe('AtFileProcessor', () => {
 
     it('should NOT call ui.addItem on success', async () => {
       const processor = new AtFileProcessor();
-      const prompt: PartUnion[] = [{ text: 'Analyze @{good-file.txt}' }];
+      const prompt: AgentContentFragment[] = [{ text: 'Analyze @{good-file.txt}' }];
       await processor.process(prompt, context);
       expect(context.ui.addItem).not.toHaveBeenCalled();
     });

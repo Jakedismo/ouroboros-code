@@ -109,13 +109,9 @@ export class AgentSelectorService {
     if (this.contentGenerator) {
       const defaultModel =
         this.selectedModel || config.getModel() || 'gpt-5-nano';
-      this.multiAgentExecutor = new MultiAgentExecutor(
-        this.contentGenerator,
-        config,
-        {
-          defaultModel,
-        },
-      );
+      this.multiAgentExecutor = new MultiAgentExecutor(config, {
+        defaultModel,
+      });
     }
   }
 
