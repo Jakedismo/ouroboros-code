@@ -1,5 +1,9 @@
+import path from 'node:path';
 import type { PartListUnion } from '@google/genai';
-import { tool as createAgentsTool, type Tool as AgentsTool } from '@openai/agents';
+import {
+  tool as createAgentsTool,
+  type Tool as AgentsTool,
+} from '@openai/agents';
 import { z, type ZodTypeAny } from 'zod';
 import type {
   Config,
@@ -22,12 +26,41 @@ export interface ToolAdapterContext {
   }) => void;
 }
 
-export function adaptToolsToAgents(context: ToolAdapterContext): AgentsTool[] {
-  const tools = context.registry.getAllTools();
-  return tools.map(tool => createAdaptedTool(tool, context));
+interface ArgumentNormalizationContext {
+  workspaceRoots: readonly string[];
+  targetDir: string;
 }
 
-function createAdaptedTool(tool: AnyDeclarativeTool, context: ToolAdapterContext): AgentsTool {
+export function adaptToolsToAgents(context: ToolAdapterContext): AgentsTool[] {
+  const tools = context.registry.getAllTools();
+  const normalizationContext = buildNormalizationContext(context);
+  return tools.map((tool) =>
+    createAdaptedTool(tool, context, normalizationContext),
+  );
+}
+
+function buildNormalizationContext(
+  context: ToolAdapterContext,
+): ArgumentNormalizationContext {
+  try {
+    const workspace = context.config.getWorkspaceContext();
+    return {
+      workspaceRoots: workspace.getDirectories(),
+      targetDir: context.config.getTargetDir(),
+    };
+  } catch (_error) {
+    return {
+      workspaceRoots: [],
+      targetDir: context.config.getTargetDir(),
+    };
+  }
+}
+
+function createAdaptedTool(
+  tool: AnyDeclarativeTool,
+  context: ToolAdapterContext,
+  normalizationContext: ArgumentNormalizationContext,
+): AgentsTool {
   const schema = extractSchema(tool);
   const parametersSchema = schema
     ? convertJsonSchemaToZod(schema)
@@ -38,7 +71,11 @@ function createAdaptedTool(tool: AnyDeclarativeTool, context: ToolAdapterContext
     description: tool.description,
     parameters: parametersSchema as any,
     async execute(_, input) {
-      const normalizedArgs = normalizeArguments(tool, input);
+      const normalizedArgs = normalizeArguments(
+        tool,
+        input,
+        normalizationContext,
+      );
       const callRequest: ToolCallRequestInfo = {
         callId: `agents-sdk-${tool.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         name: tool.name,
@@ -65,7 +102,9 @@ function createAdaptedTool(tool: AnyDeclarativeTool, context: ToolAdapterContext
 
         context.onToolExecuted?.({ request: callRequest, response });
 
-        const responseText = partListToString(response.responseParts as unknown as PartListUnion);
+        const responseText = partListToString(
+          response.responseParts as unknown as PartListUnion,
+        );
         if (responseText) {
           return responseText;
         }
@@ -75,16 +114,21 @@ function createAdaptedTool(tool: AnyDeclarativeTool, context: ToolAdapterContext
         return displayText || `${tool.displayName} executed successfully.`;
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : `Tool ${tool.displayName} failed`;
+          error instanceof Error
+            ? error.message
+            : `Tool ${tool.displayName} failed`;
         return `An error occurred while running the tool. Please try again. Error: ${message}`;
       }
     },
   });
 }
 
-function extractSchema(tool: AnyDeclarativeTool): Record<string, unknown> | undefined {
+function extractSchema(
+  tool: AnyDeclarativeTool,
+): Record<string, unknown> | undefined {
   const schema = tool.schema as Record<string, unknown>;
-  const jsonSchema = (schema['parametersJsonSchema'] ?? schema['parameters']) as Record<string, unknown> | undefined;
+  const jsonSchema = (schema['parametersJsonSchema'] ??
+    schema['parameters']) as Record<string, unknown> | undefined;
   if (!jsonSchema) {
     return undefined;
   }
@@ -97,7 +141,10 @@ function convertJsonSchemaToZod(schema: JsonSchema): ZodTypeAny {
   try {
     return internalConvertJsonSchemaToZod(schema);
   } catch (error) {
-    console.warn('Failed to convert tool schema to Zod. Falling back to permissive object schema.', error);
+    console.warn(
+      'Failed to convert tool schema to Zod. Falling back to permissive object schema.',
+      error,
+    );
     return z.object({}).passthrough();
   }
 }
@@ -114,7 +161,9 @@ function internalConvertJsonSchemaToZod(schema: JsonSchema): ZodTypeAny {
       return z.enum(enumValues as [string, ...string[]]);
     }
     if (enumValues.length > 0) {
-      const literals = enumValues.map((value) => z.literal(value as never)) as ZodTypeAny[];
+      const literals = enumValues.map((value) =>
+        z.literal(value as never),
+      ) as ZodTypeAny[];
       return buildUnionSchema(literals);
     }
   }
@@ -154,19 +203,27 @@ function internalConvertJsonSchemaToZod(schema: JsonSchema): ZodTypeAny {
       return z.null();
     default:
       if (schema['oneOf']) {
-        const variants = (schema['oneOf'] as JsonSchema[]).map((variant) => internalConvertJsonSchemaToZod(variant));
+        const variants = (schema['oneOf'] as JsonSchema[]).map((variant) =>
+          internalConvertJsonSchemaToZod(variant),
+        );
         return buildUnionSchema(variants);
       }
       if (schema['anyOf']) {
-        const variants = (schema['anyOf'] as JsonSchema[]).map((variant) => internalConvertJsonSchemaToZod(variant));
+        const variants = (schema['anyOf'] as JsonSchema[]).map((variant) =>
+          internalConvertJsonSchemaToZod(variant),
+        );
         return buildUnionSchema(variants);
       }
       if (schema['allOf']) {
-        const variants = (schema['allOf'] as JsonSchema[]).map((variant) => internalConvertJsonSchemaToZod(variant));
+        const variants = (schema['allOf'] as JsonSchema[]).map((variant) =>
+          internalConvertJsonSchemaToZod(variant),
+        );
         if (variants.length === 0) {
           return z.any();
         }
-        return variants.slice(1).reduce((acc, current) => z.intersection(acc, current), variants[0]);
+        return variants
+          .slice(1)
+          .reduce((acc, current) => z.intersection(acc, current), variants[0]);
       }
       return z.any();
   }
@@ -179,10 +236,12 @@ function buildUnionSchema(variants: ZodTypeAny[]): ZodTypeAny {
   if (variants.length === 1) {
     return variants[0];
   }
-  return variants.slice(1).reduce(
-    (acc, current) => z.union([acc, current] as [ZodTypeAny, ZodTypeAny]),
-    variants[0],
-  );
+  return variants
+    .slice(1)
+    .reduce(
+      (acc, current) => z.union([acc, current] as [ZodTypeAny, ZodTypeAny]),
+      variants[0],
+    );
 }
 
 function buildStringSchema(schema: JsonSchema): ZodTypeAny {
@@ -242,13 +301,18 @@ function buildNumberSchema(schema: JsonSchema, isInteger: boolean): ZodTypeAny {
     configured = configured.describe(schema['description'] as string);
   }
 
-  if (schema['multipleOf'] && typeof schema['multipleOf'] === 'number' && schema['multipleOf'] !== 0) {
+  if (
+    schema['multipleOf'] &&
+    typeof schema['multipleOf'] === 'number' &&
+    schema['multipleOf'] !== 0
+  ) {
     const divisor = schema['multipleOf'] as number;
     configured = configured.refine(
       (value) =>
         typeof value === 'number' &&
         Number.isFinite(value / divisor) &&
-        Math.abs((value / divisor) - Math.round(value / divisor)) < Number.EPSILON,
+        Math.abs(value / divisor - Math.round(value / divisor)) <
+          Number.EPSILON,
       { message: `Value must be a multiple of ${divisor}` },
     );
   }
@@ -277,9 +341,14 @@ function buildArraySchema(schema: JsonSchema): ZodTypeAny {
   let configured: ZodTypeAny = arrayBase;
 
   if (schema['uniqueItems'] === true) {
-    configured = configured.refine((arr) => Array.isArray(arr) && new Set(arr as unknown[]).size === (arr as unknown[]).length, {
-      message: 'Array items must be unique',
-    });
+    configured = configured.refine(
+      (arr) =>
+        Array.isArray(arr) &&
+        new Set(arr as unknown[]).size === (arr as unknown[]).length,
+      {
+        message: 'Array items must be unique',
+      },
+    );
   }
   if (schema['description'] && typeof schema['description'] === 'string') {
     configured = configured.describe(schema['description'] as string);
@@ -295,9 +364,7 @@ function buildArraySchema(schema: JsonSchema): ZodTypeAny {
 function buildObjectSchema(schema: JsonSchema): ZodTypeAny {
   const properties = (schema['properties'] ?? {}) as Record<string, JsonSchema>;
   const requiredKeys = new Set(
-    Array.isArray(schema['required'])
-      ? (schema['required'] as string[])
-      : [],
+    Array.isArray(schema['required']) ? (schema['required'] as string[]) : [],
   );
 
   const shape: Record<string, ZodTypeAny> = {};
@@ -339,9 +406,10 @@ function buildObjectSchema(schema: JsonSchema): ZodTypeAny {
 function normalizeArguments(
   tool: AnyDeclarativeTool,
   args: unknown,
+  normalizationContext: ArgumentNormalizationContext,
 ): Record<string, unknown> {
   const base = coerceToRecord(args);
-  return postProcessArguments(tool, base);
+  return postProcessArguments(tool, base, normalizationContext);
 }
 
 function coerceToRecord(args: unknown): Record<string, unknown> {
@@ -385,6 +453,7 @@ function coerceToRecord(args: unknown): Record<string, unknown> {
 function postProcessArguments(
   tool: AnyDeclarativeTool,
   args: Record<string, unknown>,
+  normalizationContext: ArgumentNormalizationContext,
 ): Record<string, unknown> {
   const result = { ...args };
 
@@ -396,13 +465,28 @@ function postProcessArguments(
       normalizeGlobArgs(result);
       break;
     case 'read_file':
-      normalizeFilePathArgs(result, 'absolute_path', ['path', 'file_path', 'filepath', 'filePath']);
+      normalizeFilePathArgs(
+        result,
+        'absolute_path',
+        ['path', 'file_path', 'filepath', 'filePath'],
+        normalizationContext,
+      );
       break;
     case 'write_file':
-      normalizeFilePathArgs(result, 'file_path', ['path', 'absolute_path', 'filepath', 'filePath']);
+      normalizeFilePathArgs(
+        result,
+        'file_path',
+        ['path', 'absolute_path', 'filepath', 'filePath'],
+        normalizationContext,
+      );
       break;
     case 'replace':
-      normalizeFilePathArgs(result, 'file_path', ['path', 'absolute_path', 'filepath', 'filePath']);
+      normalizeFilePathArgs(
+        result,
+        'file_path',
+        ['path', 'absolute_path', 'filepath', 'filePath'],
+        normalizationContext,
+      );
       break;
     default:
       break;
@@ -415,28 +499,107 @@ function normalizeFilePathArgs(
   target: Record<string, unknown>,
   canonicalKey: string,
   aliases: string[],
+  normalizationContext: ArgumentNormalizationContext,
 ): void {
-  if (target[canonicalKey] !== undefined) {
-    return;
+  const candidateKeys = [canonicalKey, ...aliases];
+
+  for (const key of candidateKeys) {
+    if (!(key in target)) {
+      continue;
+    }
+
+    const value = target[key];
+
+    if (value === undefined || value === null) {
+      deleteAliasIfNeeded(target, key, canonicalKey);
+      continue;
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length === 0) {
+        deleteAliasIfNeeded(target, key, canonicalKey);
+        continue;
+      }
+      const absolute = resolveToWorkspaceAbsolute(
+        trimmed,
+        normalizationContext,
+      );
+      target[canonicalKey] = absolute ?? trimmed;
+    } else {
+      target[canonicalKey] = value;
+    }
+
+    deleteAliasIfNeeded(target, key, canonicalKey);
+  }
+}
+
+function deleteAliasIfNeeded(
+  target: Record<string, unknown>,
+  key: string,
+  canonicalKey: string,
+): void {
+  if (key !== canonicalKey) {
+    delete target[key];
+  }
+}
+
+function resolveToWorkspaceAbsolute(
+  value: string,
+  context: ArgumentNormalizationContext,
+): string | undefined {
+  if (path.isAbsolute(value)) {
+    return value;
   }
 
-  for (const alias of aliases) {
-    if (target[alias] !== undefined) {
-      target[canonicalKey] = target[alias];
-      delete target[alias];
-      return;
+  const candidates: string[] = [];
+
+  for (const root of context.workspaceRoots) {
+    candidates.push(path.resolve(root, value));
+  }
+
+  candidates.push(path.resolve(context.targetDir, value));
+
+  for (const candidate of candidates) {
+    if (isPathWithinRoots(candidate, context.workspaceRoots)) {
+      return candidate;
     }
   }
+
+  return candidates.length > 0 ? candidates[candidates.length - 1] : undefined;
+}
+
+function isPathWithinRoots(
+  candidate: string,
+  roots: readonly string[],
+): boolean {
+  if (roots.length === 0) {
+    return true;
+  }
+  return roots.some((root) => {
+    const relative = path.relative(root, candidate);
+    return (
+      !relative.startsWith(`..${path.sep}`) &&
+      relative !== '..' &&
+      !path.isAbsolute(relative)
+    );
+  });
 }
 
 // Exposed for testing argument normalization logic without needing the Agents runtime
 export function normalizeToolArgumentsForTest(
   toolName: string,
   args: Record<string, unknown>,
+  options: { workspaceRoots?: readonly string[]; targetDir?: string } = {},
 ): Record<string, unknown> {
+  const normalizationContext: ArgumentNormalizationContext = {
+    workspaceRoots: options.workspaceRoots ?? ['/workspace'],
+    targetDir: options.targetDir ?? '/workspace',
+  };
   return postProcessArguments(
     { name: toolName } as AnyDeclarativeTool,
     { ...args },
+    normalizationContext,
   );
 }
 
@@ -450,7 +613,10 @@ function normalizeSearchTextArgs(args: Record<string, unknown>): void {
     const fallbackKeys = ['query', 'regex', 'term', 'text', 'search', 'value'];
     for (const key of fallbackKeys) {
       const candidate = extractStringValue(args[key]);
-      const trimmed = candidate && typeof candidate === 'string' ? candidate.trim() : candidate;
+      const trimmed =
+        candidate && typeof candidate === 'string'
+          ? candidate.trim()
+          : candidate;
       if (typeof trimmed === 'string' && trimmed.length > 0) {
         args['pattern'] = trimmed;
         break;
@@ -488,7 +654,10 @@ function normalizeGlobArgs(args: Record<string, unknown>): void {
     const fallbackKeys = ['glob', 'query', 'patternText', 'value'];
     for (const key of fallbackKeys) {
       const candidate = extractStringValue(args[key]);
-      const trimmed = candidate && typeof candidate === 'string' ? candidate.trim() : candidate;
+      const trimmed =
+        candidate && typeof candidate === 'string'
+          ? candidate.trim()
+          : candidate;
       if (typeof trimmed === 'string' && trimmed.length > 0) {
         args['pattern'] = trimmed;
         break;
@@ -497,7 +666,9 @@ function normalizeGlobArgs(args: Record<string, unknown>): void {
   }
 
   if (!args['pattern'] && Array.isArray(args['patterns'])) {
-    const first = (args['patterns'] as unknown[]).find((item) => typeof item === 'string');
+    const first = (args['patterns'] as unknown[]).find(
+      (item) => typeof item === 'string',
+    );
     if (typeof first === 'string' && first.trim().length > 0) {
       args['pattern'] = first.trim();
     }
@@ -590,7 +761,7 @@ function partListToString(content: PartListUnion): string {
 
   if (Array.isArray(content)) {
     return content
-      .map(part => {
+      .map((part) => {
         if (typeof part === 'string') {
           return part;
         }
@@ -599,7 +770,9 @@ function partListToString(content: PartListUnion): string {
           if (typeof text === 'string') {
             return text;
           }
-          const functionResponse = (part as Record<string, unknown>)['functionResponse'];
+          const functionResponse = (part as Record<string, unknown>)[
+            'functionResponse'
+          ];
           if (functionResponse) {
             try {
               return JSON.stringify(functionResponse);

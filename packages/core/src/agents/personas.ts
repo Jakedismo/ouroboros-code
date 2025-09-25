@@ -17,10 +17,37 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { LSTool } from '../tools/ls.js';
+import { GlobTool } from '../tools/glob.js';
+import { GrepTool } from '../tools/grep.js';
+import { RipGrepTool } from '../tools/ripGrep.js';
+import { ReadFileTool } from '../tools/read-file.js';
+import { ReadManyFilesTool } from '../tools/read-many-files.js';
+import { EditTool } from '../tools/edit.js';
+import { WriteFileTool } from '../tools/write-file.js';
+import { ShellTool } from '../tools/shell.js';
+import { MemoryTool } from '../tools/memoryTool.js';
+import { WebFetchTool } from '../tools/web-fetch.js';
+import { WebSearchTool } from '../tools/web-search.js';
 
 // ES modules equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const CORE_TOOL_SUGGESTIONS = [
+  LSTool?.Name ?? 'list_directory',
+  GlobTool?.Name ?? 'glob',
+  GrepTool?.Name ?? 'search_file_content',
+  RipGrepTool?.Name ?? 'ripgrep_search',
+  ReadFileTool?.Name ?? 'read_file',
+  ReadManyFilesTool?.Name ?? 'read_many_files',
+  EditTool?.Name ?? 'replace',
+  WriteFileTool?.Name ?? 'write_file',
+  ShellTool?.Name ?? 'run_shell_command',
+  MemoryTool?.Name ?? 'save_memory',
+  WebFetchTool?.Name ?? 'web_fetch',
+  WebSearchTool?.Name ?? 'google_web_search',
+].filter((name): name is string => typeof name === 'string' && name.length > 0);
 
 export interface AgentPersona {
   id: string;
@@ -82,7 +109,7 @@ const CATEGORY_DIRS: Record<string, string> = {
   [AGENT_CATEGORIES.PROCESS]: 'process-quality',
 };
 
-export const AGENT_PERSONAS: AgentPersona[] = [
+const RAW_AGENT_PERSONAS: AgentPersona[] = [
   // ============= ARCHITECTURE & DESIGN SPECIALISTS =============
   {
     id: 'systems-architect',
@@ -92,7 +119,6 @@ export const AGENT_PERSONAS: AgentPersona[] = [
     description: 'Designs large-scale distributed systems with focus on scalability and reliability',
     specialties: ['Enterprise architecture', 'Distributed systems', 'Scalability patterns', 'High availability'],
     systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE], 'systems-architect'),
-    suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
 
@@ -104,7 +130,6 @@ export const AGENT_PERSONAS: AgentPersona[] = [
     description: 'Designs RESTful and GraphQL APIs with exceptional developer experience',
     specialties: ['REST principles', 'GraphQL schemas', 'API versioning', 'OpenAPI specs'],
     systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE], 'api-designer'),
-    suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
 
@@ -116,7 +141,6 @@ export const AGENT_PERSONAS: AgentPersona[] = [
     description: 'Creates comprehensive solutions that bridge business and technical requirements',
     specialties: ['Business alignment', 'End-to-end solutions', 'Integration patterns', 'Technology selection'],
     systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE], 'solution-architect'),
-    suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
 
@@ -693,6 +717,13 @@ export const AGENT_PERSONAS: AgentPersona[] = [
     temperature: 0.6,
   },
 ];
+
+export const AGENT_PERSONAS: AgentPersona[] = RAW_AGENT_PERSONAS.map(
+  (persona) => ({
+    ...persona,
+    suggestedTools: CORE_TOOL_SUGGESTIONS,
+  }),
+);
 
 // Helper function to get agents by category
 export function getAgentsByCategory(category: string): AgentPersona[] {

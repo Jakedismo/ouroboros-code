@@ -59,20 +59,31 @@ class FakeContentGenerator implements ContentGenerator {
     });
   }
 
-  async generateContentStream(): Promise<AsyncGenerator<GenerateContentResponse>> {
+  async generateContentStream(): Promise<
+    AsyncGenerator<GenerateContentResponse>
+  > {
     async function* empty() {}
     return empty();
   }
 
-  async countTokens(_request: CountTokensParameters): Promise<CountTokensResponse> {
-    return { totalTokens: 0, totalBillableCharacters: 0 } as CountTokensResponse;
+  async countTokens(
+    _request: CountTokensParameters,
+  ): Promise<CountTokensResponse> {
+    return {
+      totalTokens: 0,
+      totalBillableCharacters: 0,
+    } as CountTokensResponse;
   }
 
-  async embedContent(_request: EmbedContentParameters): Promise<EmbedContentResponse> {
+  async embedContent(
+    _request: EmbedContentParameters,
+  ): Promise<EmbedContentResponse> {
     throw new Error('Not implemented in fake generator');
   }
 
-  private buildJsonResponse(obj: Record<string, unknown>): GenerateContentResponse {
+  private buildJsonResponse(
+    obj: Record<string, unknown>,
+  ): GenerateContentResponse {
     return {
       candidates: [
         {
@@ -108,7 +119,10 @@ describe('MultiAgentExecutor', () => {
   class FakeUnifiedClient {
     promptsByAgent = new Map<string, string[]>();
 
-    async createSession(sessionConfig: { systemPrompt?: string; metadata?: Record<string, unknown> }): Promise<any> {
+    async createSession(sessionConfig: {
+      systemPrompt?: string;
+      metadata?: Record<string, unknown>;
+    }): Promise<any> {
       return {
         id: `session-${Math.random()}`,
         systemPrompt: sessionConfig.systemPrompt ?? '',
@@ -122,8 +136,14 @@ describe('MultiAgentExecutor', () => {
       session: any,
       messages: UnifiedAgentMessage[],
     ): AsyncGenerator<UnifiedAgentsStreamEvent> {
-      const prompt = [session.systemPrompt, ...messages.map((m) => m.content)].join('\n');
-      const agentId = typeof session.metadata?.agentId === 'string' ? (session.metadata.agentId as string) : undefined;
+      const prompt = [
+        session.systemPrompt,
+        ...messages.map((m) => m.content),
+      ].join('\n');
+      const agentId =
+        typeof session.metadata?.agentId === 'string'
+          ? (session.metadata.agentId as string)
+          : undefined;
       if (agentId) {
         const existing = this.promptsByAgent.get(agentId) ?? [];
         existing.push(prompt);
@@ -185,15 +205,22 @@ describe('MultiAgentExecutor', () => {
     expect(qa).toBeTruthy();
 
     const { executor, client } = createExecutor();
-    const result = await executor.execute('Improve the system reliability.', [architect!, qa!]);
+    const result = await executor.execute('Improve the system reliability.', [
+      architect!,
+      qa!,
+    ]);
 
     expect(result.agentResults.length).toBeGreaterThanOrEqual(2);
     expect(result.finalResponse).toContain('Final consolidated plan');
-    expect(result.aggregateReasoning).toContain('Combined architecture and QA insights');
+    expect(result.aggregateReasoning).toContain(
+      'Combined architecture and QA insights',
+    );
     expect(result.totalAgents).toBe(result.agentResults.length);
     expect(result.timeline.length).toBeGreaterThan(0);
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
-    const architectResult = result.agentResults.find((r) => r.agent.id === 'systems-architect');
+    const architectResult = result.agentResults.find(
+      (r) => r.agent.id === 'systems-architect',
+    );
     expect(architectResult?.handoffAgentIds).toContain('code-quality-analyst');
 
     const qaPrompts = client.promptsByAgent.get('code-quality-analyst') ?? [];
@@ -207,12 +234,20 @@ describe('MultiAgentExecutor', () => {
     expect(architect).toBeTruthy();
 
     const { executor } = createExecutor();
-    const result = await executor.execute('Focus on architecture first.', [architect!]);
+    const result = await executor.execute('Focus on architecture first.', [
+      architect!,
+    ]);
     const agentIds = result.agentResults.map((res) => res.agent.id);
 
     expect(agentIds).toContain('systems-architect');
     expect(agentIds).toContain('code-quality-analyst');
-    expect(result.timeline[0]?.agents.some(agent => agent.id === 'systems-architect')).toBe(true);
-    expect(result.timeline.every(entry => entry.agents.length === 1)).toBe(true);
+    expect(
+      result.timeline[0]?.agents.some(
+        (agent) => agent.id === 'systems-architect',
+      ),
+    ).toBe(true);
+    expect(result.timeline.every((entry) => entry.agents.length === 1)).toBe(
+      true,
+    );
   });
 });

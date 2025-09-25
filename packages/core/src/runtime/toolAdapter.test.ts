@@ -44,4 +44,16 @@ describe('toolAdapter argument normalization', () => {
     });
     expect(normalized).not.toHaveProperty('filePath');
   });
+
+  it('coerces relative file paths into workspace absolute paths when possible', () => {
+    const normalized = normalizeToolArgumentsForTest(
+      'read_file',
+      { absolute_path: 'src/index.ts' },
+      { workspaceRoots: ['/repo'], targetDir: '/repo' },
+    );
+
+    expect(normalized).toMatchObject({
+      absolute_path: '/repo/src/index.ts',
+    });
+  });
 });

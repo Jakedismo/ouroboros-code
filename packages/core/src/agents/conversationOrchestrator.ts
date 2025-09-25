@@ -8,6 +8,26 @@ import { AgentSelectorService } from './agentSelectorService.js';
 import type { Config } from '../config/config.js';
 import { getAgentById, type AgentPersona } from './personas.js';
 import type { MultiAgentExecutionResult } from './multiAgentExecutor.js';
+import type { ToolResultDisplay } from '../tools/tools.js';
+
+type ToolEventSnapshot = {
+  callId: string;
+  toolName: string;
+  arguments: Record<string, unknown>;
+  outputText: string;
+  resultDisplay: ToolResultDisplay | undefined;
+  timestamp: number;
+};
+
+type AgentProgressSnapshot = {
+  agent: AgentPersona;
+  analysis: string;
+  solution: string;
+  confidence: number;
+  handoffAgentIds: string[];
+  rawText: string;
+  toolEvents: ToolEventSnapshot[];
+};
 
 /**
  * Orchestrates automatic agent selection and conversation flow integration
@@ -38,7 +58,9 @@ export class ConversationOrchestrator {
   /**
    * Process a user prompt with streaming agent selection
    */
-  async *processPromptWithAutoSelectionStream(userPrompt: string): AsyncGenerator<{
+  async *processPromptWithAutoSelectionStream(
+    userPrompt: string,
+  ): AsyncGenerator<{
     type: 'progress' | 'complete';
     message?: string;
     shouldProceed?: boolean;
@@ -47,6 +69,32 @@ export class ConversationOrchestrator {
       reasoning: string;
       confidence: number;
       processingTime: number;
+      execution?: {
+        totalAgents: number;
+        durationMs: number;
+        aggregateReasoning?: string;
+        finalResponse?: string;
+        timeline: Array<{
+          wave: number;
+          agents: AgentPersona[];
+        }>;
+        agentResults: Array<{
+          agent: AgentPersona;
+          analysis: string;
+          solution: string;
+          confidence: number;
+          handoffAgentIds: string[];
+          rawText: string;
+          toolEvents: Array<{
+            callId: string;
+            toolName: string;
+            arguments: Record<string, unknown>;
+            outputText: string;
+            resultDisplay: ToolResultDisplay | undefined;
+            timestamp: number;
+          }>;
+        }>;
+      };
     };
     selectionFeedback?: {
       selectedAgents: AgentPersona[];
@@ -54,6 +102,17 @@ export class ConversationOrchestrator {
       confidence: number;
       processingTime: number;
       execution?: MultiAgentExecutionResult;
+    };
+    toolEvent?: {
+      agent: AgentPersona;
+      event: {
+        callId: string;
+        toolName: string;
+        arguments: Record<string, unknown>;
+        outputText: string;
+        resultDisplay: ToolResultDisplay | undefined;
+        timestamp: number;
+      };
     };
     previousAgentState?: string[];
     finalResponse?: string;
@@ -73,7 +132,8 @@ export class ConversationOrchestrator {
     try {
       // Use non-streaming method for reliable JSON parsing
       // The streaming version was causing JSON parsing failures
-      const selectionResult = await this.agentSelectorService.analyzeAndSelectAgents(userPrompt);
+      const selectionResult =
+        await this.agentSelectorService.analyzeAndSelectAgents(userPrompt);
 
       if (selectionResult && selectionResult.selectedAgents.length > 0) {
         yield {
@@ -86,10 +146,230 @@ export class ConversationOrchestrator {
           },
         };
 
-        const execution = await this.agentSelectorService.executeWithSelectedAgents(
-          userPrompt,
-          selectionResult.selectedAgents,
-        );
+        const selectionStartedAt = Date.now();
+        const progressQueue: Array<{
+          type: 'progress';
+          message?: string;
+          selectionPreview?: {
+            selectedAgents: AgentPersona[];
+            reasoning: string;
+            confidence: number;
+            processingTime: number;
+            execution?: {
+              totalAgents: number;
+              durationMs: number;
+              aggregateReasoning?: string;
+              finalResponse?: string;
+              timeline: Array<{
+                wave: number;
+                agents: AgentPersona[];
+              }>;
+              agentResults: Array<{
+                agent: AgentPersona;
+                analysis: string;
+                solution: string;
+                confidence: number;
+                handoffAgentIds: string[];
+                rawText: string;
+                toolEvents: ToolEventSnapshot[];
+              }>;
+            };
+          };
+          toolEvent?: {
+            agent: AgentPersona;
+            event: ToolEventSnapshot;
+          };
+        }> = [];
+        let queueResolver: (() => void) | null = null;
+        let executionSettled = false;
+
+        const emitProgress = (event: (typeof progressQueue)[number]) => {
+          progressQueue.push(event);
+          if (queueResolver) {
+            const resolver = queueResolver;
+            queueResolver = null;
+            resolver();
+          }
+        };
+
+        const partialExecutionState: {
+          totalAgents: number;
+          durationMs: number;
+          aggregateReasoning?: string;
+          finalResponse?: string;
+          timeline: Array<{ wave: number; agents: AgentPersona[] }>;
+          agentResults: Map<string, AgentProgressSnapshot>;
+        } = {
+          totalAgents: selectionResult.selectedAgents.length,
+          durationMs: 0,
+          aggregateReasoning: undefined,
+          finalResponse: undefined,
+          timeline: [],
+          agentResults: new Map(),
+        };
+
+        const ensureAgentEntry = (agent: AgentPersona): AgentProgressSnapshot => {
+          const existing = partialExecutionState.agentResults.get(agent.id);
+          if (existing) {
+            return existing;
+          }
+          const created = {
+            agent,
+            analysis: '',
+            solution: '',
+            confidence: 0,
+            handoffAgentIds: [] as string[],
+            rawText: '',
+            toolEvents: [] as ToolEventSnapshot[],
+          };
+          partialExecutionState.agentResults.set(agent.id, created);
+          partialExecutionState.totalAgents = Math.max(
+            partialExecutionState.totalAgents,
+            partialExecutionState.agentResults.size,
+          );
+          return created;
+        };
+
+        const buildSelectionPreview = () => ({
+          selectedAgents: selectionResult.selectedAgents,
+          reasoning: selectionResult.reasoning,
+          confidence: selectionResult.confidence,
+          processingTime: Date.now() - selectionStartedAt,
+          execution: {
+            totalAgents: partialExecutionState.totalAgents,
+            durationMs: partialExecutionState.durationMs,
+            aggregateReasoning: partialExecutionState.aggregateReasoning,
+            finalResponse: partialExecutionState.finalResponse,
+            timeline: partialExecutionState.timeline.map((entry) => ({
+              wave: entry.wave,
+              agents: [...entry.agents],
+            })),
+            agentResults: Array.from(partialExecutionState.agentResults.values()).map((result) => ({
+              agent: result.agent,
+              analysis: result.analysis,
+              solution: result.solution,
+              confidence: result.confidence,
+              handoffAgentIds: [...result.handoffAgentIds],
+              rawText: result.rawText,
+              toolEvents: result.toolEvents.map((event) => ({
+                callId: event.callId,
+                toolName: event.toolName,
+                arguments: { ...event.arguments },
+                outputText: event.outputText,
+                resultDisplay: event.resultDisplay,
+                timestamp: event.timestamp,
+              })),
+            })),
+          },
+        });
+
+        const executionPromise =
+          this.agentSelectorService.executeWithSelectedAgents(
+            userPrompt,
+            selectionResult.selectedAgents,
+            {
+              onAgentStart: ({ agent, wave }) => {
+                partialExecutionState.timeline.push({ wave, agents: [agent] });
+                emitProgress({
+                  type: 'progress',
+                  message: `🤖 ${agent.emoji} ${agent.name} starting (wave ${wave})`,
+                  selectionPreview: buildSelectionPreview(),
+                });
+              },
+              onAgentComplete: ({ result, wave }) => {
+                partialExecutionState.durationMs =
+                  Date.now() - selectionStartedAt;
+                const entry = ensureAgentEntry(result.agent);
+                entry.analysis = result.analysis;
+                entry.solution = result.solution;
+                entry.confidence = result.confidence;
+                entry.handoffAgentIds = [...result.handoffAgentIds];
+                entry.rawText = result.rawText;
+                entry.toolEvents = (result.toolEvents ?? []).map((event) => ({
+                  callId: event.callId,
+                  toolName: event.toolName,
+                  arguments: { ...event.arguments },
+                  outputText: event.outputText,
+                  resultDisplay: event.resultDisplay,
+                  timestamp: event.timestamp,
+                }));
+                emitProgress({
+                  type: 'progress',
+                  message: `✅ ${result.agent.emoji} ${result.agent.name} completed (wave ${wave})`,
+                  selectionPreview: buildSelectionPreview(),
+                });
+              },
+              onToolEvent: ({ agent, event: toolEvent }) => {
+                partialExecutionState.durationMs =
+                  Date.now() - selectionStartedAt;
+                const entry = ensureAgentEntry(agent);
+                const snapshot: ToolEventSnapshot = {
+                  callId: toolEvent.callId,
+                  toolName: toolEvent.toolName,
+                  arguments: { ...toolEvent.arguments },
+                  outputText: toolEvent.outputText,
+                  resultDisplay: toolEvent.resultDisplay,
+                  timestamp: toolEvent.timestamp,
+                };
+                entry.toolEvents = [...entry.toolEvents, snapshot];
+                emitProgress({
+                  type: 'progress',
+                  toolEvent: { agent, event: snapshot },
+                  selectionPreview: buildSelectionPreview(),
+                });
+              },
+            },
+          );
+
+        executionPromise
+          .then((execution) => {
+            if (execution) {
+              partialExecutionState.aggregateReasoning =
+                execution.aggregateReasoning;
+              partialExecutionState.finalResponse = execution.finalResponse;
+              partialExecutionState.totalAgents = execution.totalAgents;
+              for (const agentResult of execution.agentResults) {
+                const entry = ensureAgentEntry(agentResult.agent);
+                entry.analysis = agentResult.analysis;
+                entry.solution = agentResult.solution;
+                entry.confidence = agentResult.confidence;
+                entry.handoffAgentIds = [...agentResult.handoffAgentIds];
+                entry.rawText = agentResult.rawText;
+                entry.toolEvents = (agentResult.toolEvents ?? []).map((event) => ({
+                  callId: event.callId,
+                  toolName: event.toolName,
+                  arguments: { ...event.arguments },
+                  outputText: event.outputText,
+                  resultDisplay: event.resultDisplay,
+                  timestamp: event.timestamp,
+                }));
+              }
+            }
+          })
+          .finally(() => {
+            executionSettled = true;
+            if (queueResolver) {
+              const resolver = queueResolver;
+              queueResolver = null;
+              resolver();
+            }
+          });
+
+        while (!executionSettled || progressQueue.length > 0) {
+          if (progressQueue.length === 0) {
+            await new Promise<void>((resolve) => {
+              queueResolver = resolve;
+            });
+            continue;
+          }
+
+          const event = progressQueue.shift();
+          if (event) {
+            yield event;
+          }
+        }
+
+        const execution = await executionPromise;
 
         if (execution) {
           yield {
@@ -125,7 +405,10 @@ export class ConversationOrchestrator {
    * Process a user prompt with automatic agent selection if enabled (legacy method)
    * Returns selection info and feedback for the user
    */
-  async processPromptWithAutoSelection(userPrompt: string, promptParts: any[]): Promise<{
+  async processPromptWithAutoSelection(
+    userPrompt: string,
+    promptParts: any[],
+  ): Promise<{
     shouldProceed: boolean;
     selectionFeedback?: {
       selectedAgents: AgentPersona[];
@@ -149,17 +432,19 @@ export class ConversationOrchestrator {
 
     try {
       // Analyze prompt and select appropriate agents
-      const selectionResult = await this.agentSelectorService.analyzeAndSelectAgents(userPrompt);
-      
+      const selectionResult =
+        await this.agentSelectorService.analyzeAndSelectAgents(userPrompt);
+
       if (selectionResult.selectedAgents.length === 0) {
         // No agents selected, continue without modification
         return { shouldProceed: true };
       }
 
-      const execution = await this.agentSelectorService.executeWithSelectedAgents(
-        userPrompt,
-        selectionResult.selectedAgents,
-      );
+      const execution =
+        await this.agentSelectorService.executeWithSelectedAgents(
+          userPrompt,
+          selectionResult.selectedAgents,
+        );
 
       if (execution) {
         return {
@@ -191,8 +476,10 @@ export class ConversationOrchestrator {
    */
   async restorePreviousAgentState(previousAgentState: string[]): Promise<void> {
     if (!previousAgentState) return;
-    
-    await this.agentSelectorService.restorePreviousAgentState(previousAgentState);
+
+    await this.agentSelectorService.restorePreviousAgentState(
+      previousAgentState,
+    );
   }
 
   /**
@@ -209,11 +496,15 @@ export class ConversationOrchestrator {
     text: string;
   } {
     const teamNames = selectionInfo.selectedAgents
-      .map(agent => `${agent.emoji} ${agent.name}`)
+      .map((agent) => `${agent.emoji} ${agent.name}`)
       .join(', ');
 
-    const confidenceEmoji = selectionInfo.confidence > 0.8 ? '🎯' :
-      selectionInfo.confidence > 0.6 ? '🎲' : '🤔';
+    const confidenceEmoji =
+      selectionInfo.confidence > 0.8
+        ? '🎯'
+        : selectionInfo.confidence > 0.6
+          ? '🎲'
+          : '🤔';
 
     const execution = selectionInfo.execution;
     const durationText = execution
@@ -223,9 +514,13 @@ export class ConversationOrchestrator {
     const lines: string[] = [];
     lines.push(`${confidenceEmoji} **Multi-Agent Orchestration Activated**`);
     lines.push('');
-    lines.push(`• **Team Size:** ${execution?.totalAgents ?? selectionInfo.selectedAgents.length} specialist${(execution?.totalAgents ?? selectionInfo.selectedAgents.length) === 1 ? '' : 's'}`);
+    lines.push(
+      `• **Team Size:** ${execution?.totalAgents ?? selectionInfo.selectedAgents.length} specialist${(execution?.totalAgents ?? selectionInfo.selectedAgents.length) === 1 ? '' : 's'}`,
+    );
     lines.push(`• **Team:** ${teamNames}`);
-    lines.push(`• **Selection Confidence:** ${(selectionInfo.confidence * 100).toFixed(0)}%`);
+    lines.push(
+      `• **Selection Confidence:** ${(selectionInfo.confidence * 100).toFixed(0)}%`,
+    );
     lines.push(`• **Orchestration Time:** ${durationText}`);
     lines.push(`• **Dispatcher Reasoning:** ${selectionInfo.reasoning}`);
 
@@ -235,7 +530,7 @@ export class ConversationOrchestrator {
       for (const entry of execution.timeline) {
         const label = waveEmojis[entry.wave - 1] ?? `Wave ${entry.wave}`;
         const participants = entry.agents
-          .map(agent => `${agent.emoji} ${agent.name}`)
+          .map((agent) => `${agent.emoji} ${agent.name}`)
           .join(', ');
         lines.push(`${label} ${participants}`);
       }
@@ -268,7 +563,9 @@ export class ConversationOrchestrator {
       lines.push(execution.aggregateReasoning);
     }
 
-    lines.push('\n*Multi-agent response synthesized by the Ouroboros orchestrator.*');
+    lines.push(
+      '\n*Multi-agent response synthesized by the Ouroboros orchestrator.*',
+    );
 
     return {
       type: 'INFO',
@@ -281,7 +578,9 @@ export class ConversationOrchestrator {
    */
   private isCommand(prompt: string): boolean {
     const trimmed = prompt.trim();
-    return trimmed.startsWith('/') || trimmed.startsWith('@') || trimmed.length === 0;
+    return (
+      trimmed.startsWith('/') || trimmed.startsWith('@') || trimmed.length === 0
+    );
   }
 
   /**

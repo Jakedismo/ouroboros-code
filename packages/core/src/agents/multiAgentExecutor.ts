@@ -4,11 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { GenerateContentParameters, GenerateContentResponse, Part } from '@google/genai';
+import type {
+  GenerateContentParameters,
+  GenerateContentResponse,
+  Part,
+} from '@google/genai';
 import type { ContentGenerator } from '../core/contentGenerator.js';
 import type { Config } from '../config/config.js';
 import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
-import type { UnifiedAgentMessage, UnifiedAgentStreamOptions } from '../runtime/types.js';
+import type {
+  UnifiedAgentMessage,
+  UnifiedAgentStreamOptions,
+} from '../runtime/types.js';
 import type { AgentPersona } from './personas.js';
 import { getAgentById } from './personas.js';
 import { injectToolExamples } from './toolInjector.js';
@@ -17,6 +24,26 @@ import type { ToolResultDisplay } from '../tools/tools.js';
 interface MultiAgentExecutorOptions {
   defaultModel?: string;
   client?: UnifiedAgentsClient;
+}
+
+export interface MultiAgentExecutionHooks {
+  onAgentStart?: (payload: {
+    agent: AgentPersona;
+    wave: number;
+    pendingAgents: AgentPersona[];
+    previousResults: AgentRunResult[];
+  }) => void | Promise<void>;
+  onAgentComplete?: (payload: {
+    agent: AgentPersona;
+    wave: number;
+    result: AgentRunResult;
+    completedAgents: number;
+    remainingAgents: number;
+  }) => void | Promise<void>;
+  onToolEvent?: (payload: {
+    agent: AgentPersona;
+    event: AgentToolEvent;
+  }) => void | Promise<void>;
 }
 
 interface AgentRunResult {
@@ -30,6 +57,7 @@ interface AgentRunResult {
 }
 
 interface AgentToolEvent {
+  callId: string;
   toolName: string;
   arguments: Record<string, unknown>;
   outputText: string;
@@ -70,6 +98,7 @@ export class MultiAgentExecutor {
   async execute(
     userPrompt: string,
     seedAgents: AgentPersona[],
+    hooks?: MultiAgentExecutionHooks,
   ): Promise<MultiAgentExecutionResult> {
     const toolEventLog = new Map<string, AgentToolEvent[]>();
     const unifiedClient =
@@ -77,19 +106,29 @@ export class MultiAgentExecutor {
       new UnifiedAgentsClient(this.config, {
         onToolExecuted: ({ session, request, response }) => {
           const meta = session.metadata;
-          const agentId = meta && typeof meta['agentId'] === 'string'
-            ? (meta['agentId'] as string)
-            : undefined;
+          const agentId =
+            meta && typeof meta['agentId'] === 'string'
+              ? (meta['agentId'] as string)
+              : undefined;
           if (!agentId) return;
           const list = toolEventLog.get(agentId) ?? [];
-          list.push({
+          const event: AgentToolEvent = {
+            callId: request.callId,
             toolName: request.name,
             arguments: request.args,
             outputText: this.formatResponseParts(response.responseParts),
             resultDisplay: response.resultDisplay,
             timestamp: Date.now(),
-          });
+          };
+          list.push(event);
           toolEventLog.set(agentId, list);
+
+          if (hooks?.onToolEvent) {
+            const persona = getAgentById(agentId);
+            if (persona) {
+              void hooks.onToolEvent({ agent: persona, event });
+            }
+          }
         },
       });
 
@@ -99,12 +138,25 @@ export class MultiAgentExecutor {
     const startedAt = Date.now();
     let passes = 0;
 
-    while (queue.length > 0 && passes < MAX_EXECUTION_PASSES && executed.size < MAX_AGENTS_PER_RUN) {
+    while (
+      queue.length > 0 &&
+      passes < MAX_EXECUTION_PASSES &&
+      executed.size < MAX_AGENTS_PER_RUN
+    ) {
       const agent = queue.shift();
       if (!agent) break;
 
       passes += 1;
       timeline.push({ wave: passes, agents: [agent] });
+
+      if (hooks?.onAgentStart) {
+        await hooks.onAgentStart({
+          agent,
+          wave: passes,
+          pendingAgents: [...queue],
+          previousResults: Array.from(executed.values()),
+        });
+      }
 
       const result = await this.runSingleAgent(
         agent,
@@ -120,6 +172,16 @@ export class MultiAgentExecutor {
 
       executed.set(result.agent.id, result);
 
+      if (hooks?.onAgentComplete) {
+        await hooks.onAgentComplete({
+          agent,
+          wave: passes,
+          result,
+          completedAgents: executed.size,
+          remainingAgents: queue.length,
+        });
+      }
+
       for (const handoffId of result.handoffAgentIds) {
         if (executed.has(handoffId)) continue;
         if (queue.some((queuedAgent) => queuedAgent.id === handoffId)) continue;
@@ -131,7 +193,10 @@ export class MultiAgentExecutor {
     }
 
     const agentResults = Array.from(executed.values());
-    const { finalResponse, aggregateReasoning } = await this.synthesize(userPrompt, agentResults);
+    const { finalResponse, aggregateReasoning } = await this.synthesize(
+      userPrompt,
+      agentResults,
+    );
 
     return {
       agentResults,
@@ -165,13 +230,16 @@ export class MultiAgentExecutor {
         solution: parsed.solution ?? '',
         confidence: this.clampConfidence(parsed.confidence),
         handoffAgentIds: Array.isArray(parsed.handoff)
-          ? parsed.handoff.filter((id: unknown): id is string => typeof id === 'string')
+          ? parsed.handoff.filter(
+              (id: unknown): id is string => typeof id === 'string',
+            )
           : [],
         rawText,
         toolEvents: agentToolEvents,
       };
     } catch (error) {
-      const fallbackText = error instanceof Error ? error.message : 'Agent execution failed';
+      const fallbackText =
+        error instanceof Error ? error.message : 'Agent execution failed';
       const agentToolEvents = toolEventLog.get(agent.id) ?? [];
       return {
         agent,
@@ -211,7 +279,11 @@ export class MultiAgentExecutor {
       }
     }
 
-    const userContent = this.buildAgentUserPrompt(agent, userPrompt, previousResults);
+    const userContent = this.buildAgentUserPrompt(
+      agent,
+      userPrompt,
+      previousResults,
+    );
 
     let accumulated = '';
 
@@ -233,7 +305,10 @@ export class MultiAgentExecutor {
   }
 
   private buildAgentSystemPrompt(agent: AgentPersona): string {
-    const domainKnowledge = injectToolExamples(agent.systemPrompt, agent.specialties);
+    const domainKnowledge = injectToolExamples(
+      agent.systemPrompt,
+      agent.specialties,
+    );
 
     return [
       `You are ${agent.name} (${agent.id}), a specialist in ${agent.specialties.join(', ')}.`,
@@ -251,12 +326,13 @@ export class MultiAgentExecutor {
   ): UnifiedAgentMessage[] {
     const priorInsights = this.formatPriorInsights(previousResults, agent.id);
     const instructions = `USER TASK:\n${userPrompt}\n\n${priorInsights}\nFINAL RESPONSE FORMAT:\nReturn a JSON object like:\n{\n  "analysis": "key findings...",\n  "solution": "proposed implementation or answer",\n  "confidence": 0.0-1.0,\n  "handoff": ["optional-agent-id", ...]\n}\nIf no handoff is needed, respond with an empty array.`;
-    return [
-      { role: 'user', content: instructions },
-    ];
+    return [{ role: 'user', content: instructions }];
   }
 
-  private formatPriorInsights(previousResults: AgentRunResult[], currentAgentId: string): string {
+  private formatPriorInsights(
+    previousResults: AgentRunResult[],
+    currentAgentId: string,
+  ): string {
     if (previousResults.length === 0) {
       return 'PREVIOUS SPECIALISTS: none yet. You are the first responder.';
     }
@@ -266,7 +342,17 @@ export class MultiAgentExecutor {
       .map((result, index) => {
         const analysis = this.truncateForContext(result.analysis);
         const solution = this.truncateForContext(result.solution);
-        return `${index + 1}. ${result.agent.name}: analysis → ${analysis || 'n/a'}; solution → ${solution || 'n/a'}; confidence ${Math.round(result.confidence * 100)}%`;
+        const raw = this.formatRawForContext(result.rawText);
+        const lines = [
+          `${index + 1}. ${result.agent.name} (${result.agent.id})`,
+          `   • Analysis: ${analysis || 'n/a'}`,
+          `   • Solution: ${solution || 'n/a'}`,
+          `   • Confidence: ${Math.round(result.confidence * 100)}%`,
+        ];
+        if (raw) {
+          lines.push('   • Full JSON output:', `     ${raw}`);
+        }
+        return lines.join('\n');
       })
       .join('\n');
 
@@ -284,6 +370,39 @@ export class MultiAgentExecutor {
       return normalized;
     }
     return `${normalized.slice(0, 277)}...`;
+  }
+
+  private formatRawForContext(raw: string): string {
+    if (!raw) return '';
+    const trimmed = raw.trim();
+    if (!trimmed) return '';
+    let pretty = trimmed;
+    try {
+      const parsed = JSON.parse(trimmed);
+      pretty = JSON.stringify(parsed, null, 2);
+    } catch (_error) {
+      const codeBlock = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (codeBlock) {
+        const candidate = codeBlock[1].trim();
+        try {
+          pretty = JSON.stringify(JSON.parse(candidate), null, 2);
+        } catch (_inner) {
+          pretty = candidate;
+        }
+      }
+    }
+
+    return this.limitForContext(pretty, 1200)
+      .split('\n')
+      .map((line) => (line.length > 0 ? line : ' '))
+      .join('\n     ');
+  }
+
+  private limitForContext(text: string, maxLength: number): string {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return `${text.slice(0, maxLength - 3)}...`;
   }
 
   private safeParse(raw: string): any {
@@ -320,26 +439,26 @@ export class MultiAgentExecutor {
   private async synthesize(
     userPrompt: string,
     agentResults: AgentRunResult[],
-  ): Promise<{ finalResponse: string; aggregateReasoning: string }>
-  {
+  ): Promise<{ finalResponse: string; aggregateReasoning: string }> {
     if (agentResults.length === 0) {
       return {
-        finalResponse: 'No specialised agents were able to contribute to this task.',
+        finalResponse:
+          'No specialised agents were able to contribute to this task.',
         aggregateReasoning: 'No agent responses available.',
       };
     }
 
-    const summaryPayload = agentResults
-      .map((result) => ({
-        agentId: result.agent.id,
-        name: result.agent.name,
-        expertise: result.agent.description,
-        analysis: result.analysis,
-        solution: result.solution,
-        confidence: result.confidence,
-      }));
+    const summaryPayload = agentResults.map((result) => ({
+      agentId: result.agent.id,
+      name: result.agent.name,
+      expertise: result.agent.description,
+      analysis: result.analysis,
+      solution: result.solution,
+      confidence: result.confidence,
+    }));
 
-    const synthesisPrompt = `You are the Ouroboros master orchestrator. Multiple specialists responded to the user's request.\n\n` +
+    const synthesisPrompt =
+      `You are the Ouroboros master orchestrator. Multiple specialists responded to the user's request.\n\n` +
       `USER PROMPT:\n${userPrompt}\n\n` +
       `SPECIALIST RESPONSES (JSON):\n${JSON.stringify(summaryPayload, null, 2)}\n\n` +
       `TASK: Combine the specialists' insights into a single, coherent answer.\n` +
