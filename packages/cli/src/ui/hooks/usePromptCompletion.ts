@@ -10,9 +10,22 @@ import {
   DEFAULT_GEMINI_FLASH_LITE_MODEL,
   getResponseText,
 } from '@ouroboros/ouroboros-code-core';
-import type { Content, GenerateContentConfig } from '@google/genai';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import { isSlashCommand } from '../utils/commandUtils.js';
+
+type PromptCompletionMessage = {
+  role: string;
+  parts: Array<Record<string, unknown>>;
+};
+
+type PromptCompletionConfig = {
+  temperature?: number;
+  maxOutputTokens?: number;
+  thinkingConfig?: {
+    thinkingBudget?: number;
+  };
+};
+
 
 export const PROMPT_COMPLETION_MIN_LENGTH = 5;
 export const PROMPT_COMPLETION_DEBOUNCE_MS = 250;
@@ -98,7 +111,7 @@ export function usePromptCompletion({
     const signal = abortControllerRef.current.signal;
 
     try {
-      const contents: Content[] = [
+      const contents: PromptCompletionMessage[] = [
         {
           role: 'user',
           parts: [
@@ -109,7 +122,7 @@ export function usePromptCompletion({
         },
       ];
 
-      const generationConfig: GenerateContentConfig = {
+      const generationConfig: PromptCompletionConfig = {
         temperature: 0.3,
         maxOutputTokens: 16000,
         thinkingConfig: {
@@ -118,8 +131,8 @@ export function usePromptCompletion({
       };
 
       const response = await geminiClient.generateContent(
-        contents,
-        generationConfig,
+        contents as unknown,
+        generationConfig as unknown,
         signal,
         DEFAULT_GEMINI_FLASH_LITE_MODEL,
       );
