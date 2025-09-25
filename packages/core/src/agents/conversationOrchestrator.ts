@@ -5,7 +5,6 @@
  */
 
 import { AgentSelectorService } from './agentSelectorService.js';
-import { AgentManager } from './agentManager.js';
 import type { Config } from '../config/config.js';
 import { getAgentById, type AgentPersona } from './personas.js';
 import type { MultiAgentExecutionResult } from './multiAgentExecutor.js';
@@ -16,11 +15,9 @@ import type { MultiAgentExecutionResult } from './multiAgentExecutor.js';
 export class ConversationOrchestrator {
   private static instance: ConversationOrchestrator | null = null;
   private agentSelectorService: AgentSelectorService;
-  private agentManager: AgentManager;
 
   private constructor() {
     this.agentSelectorService = AgentSelectorService.getInstance();
-    this.agentManager = AgentManager.getInstance();
   }
 
   static getInstance(): ConversationOrchestrator {
@@ -45,6 +42,12 @@ export class ConversationOrchestrator {
     type: 'progress' | 'complete';
     message?: string;
     shouldProceed?: boolean;
+    selectionPreview?: {
+      selectedAgents: AgentPersona[];
+      reasoning: string;
+      confidence: number;
+      processingTime: number;
+    };
     selectionFeedback?: {
       selectedAgents: AgentPersona[];
       reasoning: string;
@@ -68,14 +71,21 @@ export class ConversationOrchestrator {
     }
 
     try {
-      // Store current agent state for restoration
-      const previousAgentState = this.agentManager.getActiveAgents().map(a => a.id);
-
       // Use non-streaming method for reliable JSON parsing
       // The streaming version was causing JSON parsing failures
       const selectionResult = await this.agentSelectorService.analyzeAndSelectAgents(userPrompt);
 
       if (selectionResult && selectionResult.selectedAgents.length > 0) {
+        yield {
+          type: 'progress',
+          selectionPreview: {
+            selectedAgents: selectionResult.selectedAgents,
+            reasoning: selectionResult.reasoning,
+            confidence: selectionResult.confidence,
+            processingTime: selectionResult.processingTime,
+          },
+        };
+
         const execution = await this.agentSelectorService.executeWithSelectedAgents(
           userPrompt,
           selectionResult.selectedAgents,
@@ -89,22 +99,18 @@ export class ConversationOrchestrator {
               ...selectionResult,
               execution,
             },
-            previousAgentState,
+            previousAgentState: undefined,
             finalResponse: execution.finalResponse,
           };
           return;
         }
 
         // Fallback to legacy activation path if execution failed
-        await this.agentSelectorService.temporarilyActivateAgents(
-          selectionResult.selectedAgents,
-        );
-
         yield {
           type: 'complete',
-          shouldProceed: true,
+          shouldProceed: false,
           selectionFeedback: selectionResult,
-          previousAgentState,
+          previousAgentState: undefined,
         };
       } else {
         yield { type: 'complete', shouldProceed: true };
@@ -168,16 +174,10 @@ export class ConversationOrchestrator {
       }
 
       // Legacy fallback
-      const previousAgentState = this.agentManager.getActiveAgents().map(a => a.id);
-
-      await this.agentSelectorService.temporarilyActivateAgents(
-        selectionResult.selectedAgents,
-      );
-
       return {
-        shouldProceed: true,
+        shouldProceed: false,
         selectionFeedback: selectionResult,
-        previousAgentState,
+        previousAgentState: undefined,
       };
     } catch (error) {
       console.error('Automatic agent selection failed:', error);

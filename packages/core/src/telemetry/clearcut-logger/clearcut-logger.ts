@@ -88,7 +88,7 @@ export interface LogRequest {
 
 /**
  * Determine the surface that the user is currently using.  Surface is effectively the
- * distribution channel in which the user is using Gemini CLI.  Gemini CLI comes bundled
+ * distribution channel in which the user is using Ouroboros Code.  Ouroboros Code comes bundled
  * w/ Firebase Studio and Cloud Shell.  Users that manually download themselves will
  * likely be "SURFACE_NOT_SET".
  *
@@ -333,79 +333,79 @@ export class ClearcutLogger {
   logStartSessionEvent(event: StartSessionEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_START_SESSION_MODEL,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_START_SESSION_MODEL,
         value: event.model,
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_START_SESSION_EMBEDDING_MODEL,
+          EventMetadataKey.OUROBOROS_CLI_START_SESSION_EMBEDDING_MODEL,
         value: event.embedding_model,
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_START_SESSION_SANDBOX,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_START_SESSION_SANDBOX,
         value: event.sandbox_enabled.toString(),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_START_SESSION_CORE_TOOLS,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_START_SESSION_CORE_TOOLS,
         value: event.core_tools_enabled,
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_START_SESSION_APPROVAL_MODE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_START_SESSION_APPROVAL_MODE,
         value: event.approval_mode,
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_START_SESSION_API_KEY_ENABLED,
+          EventMetadataKey.OUROBOROS_CLI_START_SESSION_API_KEY_ENABLED,
         value: event.api_key_enabled.toString(),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_START_SESSION_VERTEX_API_ENABLED,
+          EventMetadataKey.OUROBOROS_CLI_START_SESSION_VERTEX_API_ENABLED,
         value: event.vertex_ai_enabled.toString(),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_START_SESSION_DEBUG_MODE_ENABLED,
+          EventMetadataKey.OUROBOROS_CLI_START_SESSION_DEBUG_MODE_ENABLED,
         value: event.debug_enabled.toString(),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_START_SESSION_VERTEX_API_ENABLED,
+          EventMetadataKey.OUROBOROS_CLI_START_SESSION_VERTEX_API_ENABLED,
         value: event.vertex_ai_enabled.toString(),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_START_SESSION_MCP_SERVERS,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_START_SESSION_MCP_SERVERS,
         value: event.mcp_servers,
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_START_SESSION_VERTEX_API_ENABLED,
+          EventMetadataKey.OUROBOROS_CLI_START_SESSION_VERTEX_API_ENABLED,
         value: event.vertex_ai_enabled.toString(),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_START_SESSION_TELEMETRY_ENABLED,
+          EventMetadataKey.OUROBOROS_CLI_START_SESSION_TELEMETRY_ENABLED,
         value: event.telemetry_enabled.toString(),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_START_SESSION_TELEMETRY_LOG_USER_PROMPTS_ENABLED,
+          EventMetadataKey.OUROBOROS_CLI_START_SESSION_TELEMETRY_LOG_USER_PROMPTS_ENABLED,
         value: event.telemetry_log_user_prompts_enabled.toString(),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_START_SESSION_MCP_SERVERS_COUNT,
+          EventMetadataKey.OUROBOROS_CLI_START_SESSION_MCP_SERVERS_COUNT,
         value: event.mcp_servers_count
           ? event.mcp_servers_count.toString()
           : '',
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_START_SESSION_MCP_TOOLS_COUNT,
+          EventMetadataKey.OUROBOROS_CLI_START_SESSION_MCP_TOOLS_COUNT,
         value: event.mcp_tools_count?.toString() ?? '',
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_START_SESSION_MCP_TOOLS,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_START_SESSION_MCP_TOOLS,
         value: event.mcp_tools ? event.mcp_tools : '',
       },
     ];
@@ -422,7 +422,7 @@ export class ClearcutLogger {
     this.promptId = event.prompt_id;
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_USER_PROMPT_LENGTH,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_USER_PROMPT_LENGTH,
         value: JSON.stringify(event.prompt_length),
       },
     ];
@@ -434,41 +434,41 @@ export class ClearcutLogger {
   logToolCallEvent(event: ToolCallEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_TOOL_CALL_NAME,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_TOOL_CALL_NAME,
         value: JSON.stringify(event.function_name),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_TOOL_CALL_DECISION,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_TOOL_CALL_DECISION,
         value: JSON.stringify(event.decision),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_TOOL_CALL_SUCCESS,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_TOOL_CALL_SUCCESS,
         value: JSON.stringify(event.success),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_TOOL_CALL_DURATION_MS,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_TOOL_CALL_DURATION_MS,
         value: JSON.stringify(event.duration_ms),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_TOOL_ERROR_MESSAGE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_TOOL_ERROR_MESSAGE,
         value: JSON.stringify(event.error),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_TOOL_CALL_ERROR_TYPE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_TOOL_CALL_ERROR_TYPE,
         value: JSON.stringify(event.error_type),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_TOOL_TYPE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_TOOL_TYPE,
         value: JSON.stringify(event.tool_type),
       },
     ];
 
     if (event.metadata) {
       const metadataMapping: { [key: string]: EventMetadataKey } = {
-        ai_added_lines: EventMetadataKey.GEMINI_CLI_AI_ADDED_LINES,
-        ai_removed_lines: EventMetadataKey.GEMINI_CLI_AI_REMOVED_LINES,
-        user_added_lines: EventMetadataKey.GEMINI_CLI_USER_ADDED_LINES,
-        user_removed_lines: EventMetadataKey.GEMINI_CLI_USER_REMOVED_LINES,
+        ai_added_lines: EventMetadataKey.OUROBOROS_CLI_AI_ADDED_LINES,
+        ai_removed_lines: EventMetadataKey.OUROBOROS_CLI_AI_REMOVED_LINES,
+        user_added_lines: EventMetadataKey.OUROBOROS_CLI_USER_ADDED_LINES,
+        user_removed_lines: EventMetadataKey.OUROBOROS_CLI_USER_REMOVED_LINES,
       };
 
       for (const [key, gemini_cli_key] of Object.entries(metadataMapping)) {
@@ -489,40 +489,40 @@ export class ClearcutLogger {
   logFileOperationEvent(event: FileOperationEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_TOOL_CALL_NAME,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_TOOL_CALL_NAME,
         value: JSON.stringify(event.tool_name),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_FILE_OPERATION_TYPE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_FILE_OPERATION_TYPE,
         value: JSON.stringify(event.operation),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_FILE_OPERATION_LINES,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_FILE_OPERATION_LINES,
         value: JSON.stringify(event.lines),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_FILE_OPERATION_MIMETYPE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_FILE_OPERATION_MIMETYPE,
         value: JSON.stringify(event.mimetype),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_FILE_OPERATION_EXTENSION,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_FILE_OPERATION_EXTENSION,
         value: JSON.stringify(event.extension),
       },
     ];
 
     if (event.programming_language) {
       data.push({
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_PROGRAMMING_LANGUAGE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_PROGRAMMING_LANGUAGE,
         value: event.programming_language,
       });
     }
 
     if (event.diff_stat) {
       const metadataMapping: { [key: string]: EventMetadataKey } = {
-        ai_added_lines: EventMetadataKey.GEMINI_CLI_AI_ADDED_LINES,
-        ai_removed_lines: EventMetadataKey.GEMINI_CLI_AI_REMOVED_LINES,
-        user_added_lines: EventMetadataKey.GEMINI_CLI_USER_ADDED_LINES,
-        user_removed_lines: EventMetadataKey.GEMINI_CLI_USER_REMOVED_LINES,
+        ai_added_lines: EventMetadataKey.OUROBOROS_CLI_AI_ADDED_LINES,
+        ai_removed_lines: EventMetadataKey.OUROBOROS_CLI_AI_REMOVED_LINES,
+        user_added_lines: EventMetadataKey.OUROBOROS_CLI_USER_ADDED_LINES,
+        user_removed_lines: EventMetadataKey.OUROBOROS_CLI_USER_REMOVED_LINES,
       };
 
       for (const [key, gemini_cli_key] of Object.entries(metadataMapping)) {
@@ -547,7 +547,7 @@ export class ClearcutLogger {
   logApiRequestEvent(event: ApiRequestEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_API_REQUEST_MODEL,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_API_REQUEST_MODEL,
         value: JSON.stringify(event.model),
       },
     ];
@@ -559,44 +559,44 @@ export class ClearcutLogger {
   logApiResponseEvent(event: ApiResponseEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_API_RESPONSE_MODEL,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_API_RESPONSE_MODEL,
         value: JSON.stringify(event.model),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_API_RESPONSE_STATUS_CODE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_API_RESPONSE_STATUS_CODE,
         value: JSON.stringify(event.status_code),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_API_RESPONSE_DURATION_MS,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_API_RESPONSE_DURATION_MS,
         value: JSON.stringify(event.duration_ms),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_API_ERROR_MESSAGE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_API_ERROR_MESSAGE,
         value: JSON.stringify(event.error),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_API_RESPONSE_INPUT_TOKEN_COUNT,
+          EventMetadataKey.OUROBOROS_CLI_API_RESPONSE_INPUT_TOKEN_COUNT,
         value: JSON.stringify(event.input_token_count),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_API_RESPONSE_OUTPUT_TOKEN_COUNT,
+          EventMetadataKey.OUROBOROS_CLI_API_RESPONSE_OUTPUT_TOKEN_COUNT,
         value: JSON.stringify(event.output_token_count),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_API_RESPONSE_CACHED_TOKEN_COUNT,
+          EventMetadataKey.OUROBOROS_CLI_API_RESPONSE_CACHED_TOKEN_COUNT,
         value: JSON.stringify(event.cached_content_token_count),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_API_RESPONSE_THINKING_TOKEN_COUNT,
+          EventMetadataKey.OUROBOROS_CLI_API_RESPONSE_THINKING_TOKEN_COUNT,
         value: JSON.stringify(event.thoughts_token_count),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_API_RESPONSE_TOOL_TOKEN_COUNT,
+          EventMetadataKey.OUROBOROS_CLI_API_RESPONSE_TOOL_TOKEN_COUNT,
         value: JSON.stringify(event.tool_token_count),
       },
     ];
@@ -608,19 +608,19 @@ export class ClearcutLogger {
   logApiErrorEvent(event: ApiErrorEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_API_ERROR_MODEL,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_API_ERROR_MODEL,
         value: JSON.stringify(event.model),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_API_ERROR_TYPE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_API_ERROR_TYPE,
         value: JSON.stringify(event.error_type),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_API_ERROR_STATUS_CODE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_API_ERROR_STATUS_CODE,
         value: JSON.stringify(event.status_code),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_API_ERROR_DURATION_MS,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_API_ERROR_DURATION_MS,
         value: JSON.stringify(event.duration_ms),
       },
     ];
@@ -632,11 +632,11 @@ export class ClearcutLogger {
   logChatCompressionEvent(event: ChatCompressionEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_COMPRESSION_TOKENS_BEFORE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_COMPRESSION_TOKENS_BEFORE,
         value: `${event.tokens_before}`,
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_COMPRESSION_TOKENS_AFTER,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_COMPRESSION_TOKENS_AFTER,
         value: `${event.tokens_after}`,
       },
     ];
@@ -656,7 +656,7 @@ export class ClearcutLogger {
   logLoopDetectedEvent(event: LoopDetectedEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_LOOP_DETECTED_TYPE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_LOOP_DETECTED_TYPE,
         value: JSON.stringify(event.loop_type),
       },
     ];
@@ -668,11 +668,11 @@ export class ClearcutLogger {
   logNextSpeakerCheck(event: NextSpeakerCheckEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_RESPONSE_FINISH_REASON,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_RESPONSE_FINISH_REASON,
         value: JSON.stringify(event.finish_reason),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_NEXT_SPEAKER_CHECK_RESULT,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_NEXT_SPEAKER_CHECK_RESULT,
         value: JSON.stringify(event.result),
       },
     ];
@@ -686,21 +686,21 @@ export class ClearcutLogger {
   logSlashCommandEvent(event: SlashCommandEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_SLASH_COMMAND_NAME,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_SLASH_COMMAND_NAME,
         value: JSON.stringify(event.command),
       },
     ];
 
     if (event.subcommand) {
       data.push({
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_SLASH_COMMAND_SUBCOMMAND,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_SLASH_COMMAND_SUBCOMMAND,
         value: JSON.stringify(event.subcommand),
       });
     }
 
     if (event.status) {
       data.push({
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_SLASH_COMMAND_STATUS,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_SLASH_COMMAND_STATUS,
         value: JSON.stringify(event.status),
       });
     }
@@ -713,7 +713,7 @@ export class ClearcutLogger {
     const data: EventValue[] = [
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_MALFORMED_JSON_RESPONSE_MODEL,
+          EventMetadataKey.OUROBOROS_CLI_MALFORMED_JSON_RESPONSE_MODEL,
         value: JSON.stringify(event.model),
       },
     ];
@@ -727,7 +727,7 @@ export class ClearcutLogger {
   logIdeConnectionEvent(event: IdeConnectionEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_IDE_CONNECTION_TYPE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_IDE_CONNECTION_TYPE,
         value: JSON.stringify(event.connection_type),
       },
     ];
@@ -739,15 +739,15 @@ export class ClearcutLogger {
   logConversationFinishedEvent(event: ConversationFinishedEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_SESSION_ID,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_SESSION_ID,
         value: this.config?.getSessionId() ?? '',
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_CONVERSATION_TURN_COUNT,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_CONVERSATION_TURN_COUNT,
         value: JSON.stringify(event.turnCount),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_APPROVAL_MODE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_APPROVAL_MODE,
         value: event.approvalMode,
       },
     ];
@@ -761,11 +761,11 @@ export class ClearcutLogger {
   logKittySequenceOverflowEvent(event: KittySequenceOverflowEvent): void {
     const data: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_KITTY_SEQUENCE_LENGTH,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_KITTY_SEQUENCE_LENGTH,
         value: event.sequence_length.toString(),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_KITTY_TRUNCATED_SEQUENCE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_KITTY_TRUNCATED_SEQUENCE,
         value: event.truncated_sequence,
       },
     ];
@@ -789,7 +789,7 @@ export class ClearcutLogger {
 
     if (event.error_message) {
       data.push({
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_INVALID_CHUNK_ERROR_MESSAGE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_INVALID_CHUNK_ERROR_MESSAGE,
         value: event.error_message,
       });
     }
@@ -802,15 +802,15 @@ export class ClearcutLogger {
     const data: EventValue[] = [
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_CONTENT_RETRY_ATTEMPT_NUMBER,
+          EventMetadataKey.OUROBOROS_CLI_CONTENT_RETRY_ATTEMPT_NUMBER,
         value: String(event.attempt_number),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_CONTENT_RETRY_ERROR_TYPE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_CONTENT_RETRY_ERROR_TYPE,
         value: event.error_type,
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_CONTENT_RETRY_DELAY_MS,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_CONTENT_RETRY_DELAY_MS,
         value: String(event.retry_delay_ms),
       },
     ];
@@ -823,12 +823,12 @@ export class ClearcutLogger {
     const data: EventValue[] = [
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_CONTENT_RETRY_FAILURE_TOTAL_ATTEMPTS,
+          EventMetadataKey.OUROBOROS_CLI_CONTENT_RETRY_FAILURE_TOTAL_ATTEMPTS,
         value: String(event.total_attempts),
       },
       {
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_CONTENT_RETRY_FAILURE_FINAL_ERROR_TYPE,
+          EventMetadataKey.OUROBOROS_CLI_CONTENT_RETRY_FAILURE_FINAL_ERROR_TYPE,
         value: event.final_error_type,
       },
     ];
@@ -836,7 +836,7 @@ export class ClearcutLogger {
     if (event.total_duration_ms) {
       data.push({
         gemini_cli_key:
-          EventMetadataKey.GEMINI_CLI_CONTENT_RETRY_FAILURE_TOTAL_DURATION_MS,
+          EventMetadataKey.OUROBOROS_CLI_CONTENT_RETRY_FAILURE_TOTAL_DURATION_MS,
         value: String(event.total_duration_ms),
       });
     }
@@ -856,41 +856,41 @@ export class ClearcutLogger {
 
     const defaultLogMetadata: EventValue[] = [
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_SESSION_ID,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_SESSION_ID,
         value: this.config?.getSessionId() ?? '',
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_AUTH_TYPE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_AUTH_TYPE,
         value: JSON.stringify(
           this.config?.getContentGeneratorConfig()?.authType,
         ),
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_GOOGLE_ACCOUNTS_COUNT,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_GOOGLE_ACCOUNTS_COUNT,
         value: `${totalAccounts}`,
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_SURFACE,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_SURFACE,
         value: surface,
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_VERSION,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_VERSION,
         value: CLI_VERSION,
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_GIT_COMMIT_HASH,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_GIT_COMMIT_HASH,
         value: GIT_COMMIT_INFO,
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_PROMPT_ID,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_PROMPT_ID,
         value: this.promptId,
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_OS,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_OS,
         value: process.platform,
       },
       {
-        gemini_cli_key: EventMetadataKey.GEMINI_CLI_NODE_VERSION,
+        gemini_cli_key: EventMetadataKey.OUROBOROS_CLI_NODE_VERSION,
         value: process.versions.node,
       },
     ];

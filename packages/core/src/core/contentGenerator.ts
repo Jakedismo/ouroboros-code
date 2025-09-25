@@ -12,14 +12,11 @@ import type {
   EmbedContentResponse,
   EmbedContentParameters,
 } from '@google/genai';
-import { GoogleGenAI } from '@google/genai';
-import { createCodeAssistContentGenerator } from '../code_assist/codeAssist.js';
 import { DEFAULT_GEMINI_MODEL } from '../config/models.js';
 import type { Config } from '../config/config.js';
 
 import type { UserTierId } from '../code_assist/types.js';
 import { LoggingContentGenerator } from './loggingContentGenerator.js';
-import { InstallationManager } from '../utils/installationManager.js';
 
 /**
  * Interface abstracting the core functionalities for generating content and counting tokens.
@@ -108,72 +105,9 @@ export async function createContentGenerator(
   gcConfig: Config,
   sessionId?: string,
 ): Promise<ContentGenerator> {
-  // Check if we should use a non-Gemini provider
-  const provider = gcConfig.getProvider();
-  if (provider === 'openai') {
-    const { OpenAIContentGenerator } = await import('../providers/openai/content-generator.js');
-    const apiKey = gcConfig.getProviderApiKey() || process.env['OPENAI_API_KEY'];
-    if (!apiKey) {
-      throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable.');
-    }
-    return new OpenAIContentGenerator(apiKey, config.model);
-  }
-  
-  if (provider === 'anthropic') {
-    const { AnthropicContentGenerator } = await import('../providers/anthropic/content-generator.js');
-    const apiKey = gcConfig.getProviderApiKey() || process.env['ANTHROPIC_API_KEY'];
-    if (!apiKey) {
-      throw new Error('Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable.');
-    }
-    return new AnthropicContentGenerator(apiKey, config.model);
-  }
-  
-  // Default to Gemini for backward compatibility
-  const version = process.env['CLI_VERSION'] || process.version;
-  const userAgent = `GeminiCLI/${version} (${process.platform}; ${process.arch})`;
-  const baseHeaders: Record<string, string> = {
-    'User-Agent': userAgent,
-  };
-
-  if (
-    config.authType === AuthType.LOGIN_WITH_GOOGLE ||
-    config.authType === AuthType.CLOUD_SHELL
-  ) {
-    const httpOptions = { headers: baseHeaders };
-    return new LoggingContentGenerator(
-      await createCodeAssistContentGenerator(
-        httpOptions,
-        config.authType,
-        gcConfig,
-        sessionId,
-      ),
-      gcConfig,
-    );
-  }
-
-  if (
-    config.authType === AuthType.USE_GEMINI ||
-    config.authType === AuthType.USE_VERTEX_AI
-  ) {
-    let headers: Record<string, string> = { ...baseHeaders };
-    if (gcConfig?.getUsageStatisticsEnabled()) {
-      const installationManager = new InstallationManager();
-      const installationId = installationManager.getInstallationId();
-      headers = {
-        ...headers,
-        'x-gemini-api-privileged-user-id': `${installationId}`,
-      };
-    }
-    const httpOptions = { headers };
-
-    const googleGenAI = new GoogleGenAI({
-      apiKey: config.apiKey === '' ? undefined : config.apiKey,
-      vertexai: config.vertexai,
-      httpOptions,
-    });
-    return new LoggingContentGenerator(googleGenAI.models, gcConfig);
-  }
-  throw new Error(
-    `Error creating contentGenerator: Unsupported authType: ${config.authType}`,
-  );
+  const { AgentsContentGenerator } = await import('../runtime/agentsContentGenerator.js');
+  const baseGenerator = new AgentsContentGenerator(gcConfig, {
+    defaultModel: gcConfig.getModel(),
+  });
+  return new LoggingContentGenerator(baseGenerator, gcConfig);
 }

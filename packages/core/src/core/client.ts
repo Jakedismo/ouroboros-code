@@ -546,12 +546,12 @@ export class GeminiClient {
       this.sessionTurnCount > this.config.getMaxSessionTurns()
     ) {
       yield { type: GeminiEventType.MaxSessionTurns };
-      return new Turn(this.getChat(), prompt_id, this.config, this.contentGenerator);
+      return new Turn(this.getChat(), prompt_id, this.config);
     }
     // Ensure turns never exceeds MAX_TURNS to prevent infinite loops
     const boundedTurns = Math.min(turns, MAX_TURNS);
     if (!boundedTurns) {
-      return new Turn(this.getChat(), prompt_id, this.config, this.contentGenerator);
+      return new Turn(this.getChat(), prompt_id, this.config);
     }
 
     // Track the original model from the first call to detect model switching
@@ -615,7 +615,7 @@ export class GeminiClient {
       this.forceFullIdeContext = false;
     }
 
-    const turn = new Turn(this.getChat(), prompt_id, this.config, this.contentGenerator);
+    const turn = new Turn(this.getChat(), prompt_id, this.config);
     
     // Debug: Log when Turn is created for continuation
     const currentProvider = this.config.getProvider();

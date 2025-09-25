@@ -8,11 +8,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { homedir, platform } from 'node:os';
 import * as dotenv from 'dotenv';
-import {
-  GEMINI_CONFIG_DIR as GEMINI_DIR,
-  getErrorMessage,
-  Storage,
-} from '@ouroboros/ouroboros-code-core';
+import { getErrorMessage, Storage } from '@ouroboros/ouroboros-code-core';
 import stripJsonComments from 'strip-json-comments';
 import { DefaultLight } from '../ui/themes/default-light.js';
 import { DefaultDark } from '../ui/themes/default.js';
@@ -22,7 +18,13 @@ import { mergeWith } from 'lodash-es';
 
 export type { Settings, MemoryImportFormat };
 
-export const SETTINGS_DIRECTORY_NAME = '.gemini';
+export const PRIMARY_SETTINGS_DIRECTORY_NAME = '.gemini';
+export const LEGACY_SETTINGS_DIRECTORY_NAME = '.ouroboros';
+export const SETTINGS_DIRECTORY_NAME = PRIMARY_SETTINGS_DIRECTORY_NAME;
+const SETTINGS_DIR_CANDIDATES = [
+  PRIMARY_SETTINGS_DIRECTORY_NAME,
+  LEGACY_SETTINGS_DIRECTORY_NAME,
+];
 
 export const USER_SETTINGS_PATH = Storage.getGlobalSettingsPath();
 export const USER_SETTINGS_DIR = path.dirname(USER_SETTINGS_PATH);
@@ -503,27 +505,33 @@ function resolveEnvVarsInObject<T>(obj: T): T {
   return obj;
 }
 
+function resolveConfigEnv(baseDir: string): string | undefined {
+  for (const dir of SETTINGS_DIR_CANDIDATES) {
+    const candidate = path.join(baseDir, dir, '.env');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
 function findEnvFile(startDir: string): string | null {
   let currentDir = path.resolve(startDir);
   while (true) {
-    // prefer gemini-specific .env under GEMINI_DIR
-    const geminiEnvPath = path.join(currentDir, GEMINI_DIR, '.env');
-    if (fs.existsSync(geminiEnvPath)) {
-      return geminiEnvPath;
+    const configEnvPath = resolveConfigEnv(currentDir);
+    if (configEnvPath) {
+      return configEnvPath;
     }
+
     const envPath = path.join(currentDir, '.env');
     if (fs.existsSync(envPath)) {
       return envPath;
     }
+
     const parentDir = path.dirname(currentDir);
     if (parentDir === currentDir || !parentDir) {
-      // check .env under home as fallback, again preferring gemini-specific .env
-      const homeGeminiEnvPath = path.join(homedir(), GEMINI_DIR, '.env');
-      if (fs.existsSync(homeGeminiEnvPath)) {
-        return homeGeminiEnvPath;
-      }
-      const homeEnvPath = path.join(homedir(), '.env');
-      if (fs.existsSync(homeEnvPath)) {
+      const homeEnvPath = resolveConfigEnv(homedir()) ?? path.join(homedir(), '.env');
+      if (homeEnvPath && fs.existsSync(homeEnvPath)) {
         return homeEnvPath;
       }
       return null;
@@ -575,7 +583,12 @@ export function loadEnvironment(settings: Settings): void {
 
       const excludedVars =
         settings?.advanced?.excludedEnvVars || DEFAULT_EXCLUDED_ENV_VARS;
-      const isProjectEnvFile = !envFilePath.includes(GEMINI_DIR);
+      const normalizedEnvPath = path.normalize(envFilePath);
+      const pathSegments = normalizedEnvPath.split(path.sep).filter(Boolean);
+      const isConfigManagedEnvFile = SETTINGS_DIR_CANDIDATES.some((dir) =>
+        pathSegments.includes(dir),
+      );
+      const isProjectEnvFile = !isConfigManagedEnvFile;
 
       for (const key in parsedEnv) {
         if (Object.hasOwn(parsedEnv, key)) {

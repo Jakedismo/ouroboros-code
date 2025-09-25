@@ -1,6 +1,6 @@
 {
   "name": "@ouroboros/ouroboros-code",
-  "version": "1.0.0-beta.6",
+  "version": "1.1.0-alpha.0",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -39,6 +39,7 @@
     "test:integration:sandbox:none": "GEMINI_SANDBOX=false vitest run --root ./integration-tests",
     "test:integration:sandbox:docker": "GEMINI_SANDBOX=docker npm run build:sandbox && GEMINI_SANDBOX=docker vitest run --root ./integration-tests",
     "test:integration:sandbox:podman": "GEMINI_SANDBOX=podman vitest run --root ./integration-tests",
+    "test:connectors": "cross-env RUN_CONNECTOR_MATRIX=true vitest run integration-tests/agents-sdk-provider-matrix.test.ts",
     "lint": "eslint . --ext .ts,.tsx && eslint integration-tests",
     "lint:fix": "eslint . --fix && eslint integration-tests --fix",
     "lint:ci": "eslint . --ext .ts,.tsx --max-warnings 0 && eslint integration-tests --max-warnings 0",
@@ -92,6 +93,8 @@
     "yargs": "^17.7.2"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.17",
+    "@ai-sdk/google": "^2.0.14",
     "@lvce-editor/ripgrep": "^1.6.0",
     "simple-git": "^3.28.0",
     "strip-ansi": "^7.1.0"

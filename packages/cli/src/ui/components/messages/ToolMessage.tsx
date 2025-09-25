@@ -41,6 +41,8 @@ export const ToolMessage: React.FC<ToolMessageProps> = ({
   terminalWidth,
   emphasis = 'medium',
   renderOutputAsMarkdown = true,
+  agentName,
+  agentEmoji,
 }) => {
   const availableHeight = availableTerminalHeight
     ? Math.max(
@@ -73,6 +75,7 @@ export const ToolMessage: React.FC<ToolMessageProps> = ({
           status={status}
           description={description}
           emphasis={emphasis}
+          agentLabel={agentName ? `${agentEmoji ? agentEmoji + ' ' : ''}${agentName}` : undefined}
         />
         {emphasis === 'high' && <TrailingIndicator />}
       </Box>
@@ -156,12 +159,14 @@ type ToolInfo = {
   description: string;
   status: ToolCallStatus;
   emphasis: TextEmphasis;
+  agentLabel?: string;
 };
 const ToolInfo: React.FC<ToolInfo> = ({
   name,
   description,
   status,
   emphasis,
+  agentLabel,
 }) => {
   const nameColor = React.useMemo<string>(() => {
     switch (emphasis) {
@@ -183,6 +188,9 @@ const ToolInfo: React.FC<ToolInfo> = ({
         wrap="truncate-end"
         strikethrough={status === ToolCallStatus.Canceled}
       >
+        {agentLabel && (
+          <Text color={Colors.Comment}>{`[${agentLabel}] `}</Text>
+        )}
         <Text color={nameColor} bold>
           {name}
         </Text>{' '}

@@ -154,7 +154,7 @@ describe('updateGitignore', () => {
 
   it('does not add duplicate entries', async () => {
     const gitignorePath = path.join(scratchDir, '.gitignore');
-    const existingContent = '.gemini/\nsome-other-file\ngha-creds-*.json\n';
+    const existingContent = '.gemini/\ngha-creds-*.json\n';
     await fs.writeFile(gitignorePath, existingContent);
 
     await updateGitignore(scratchDir);
@@ -173,10 +173,8 @@ describe('updateGitignore', () => {
 
     const content = await fs.readFile(gitignorePath, 'utf8');
 
-    // Should add only the missing gha-creds-*.json entry
     expect(content).toBe('.gemini/\nsome-other-file\n\ngha-creds-*.json\n');
     expect(content).toContain('gha-creds-*.json');
-    // Should not duplicate .gemini/ entry
     expect((content.match(/\.gemini\//g) || []).length).toBe(1);
   });
 

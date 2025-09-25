@@ -32,8 +32,18 @@ describe('reportError', () => {
     await fs.rm(testDir, { recursive: true, force: true });
   });
 
-  const getExpectedReportPath = (type: string) =>
-    path.join(testDir, `gemini-client-error-${type}-${MOCK_TIMESTAMP}.json`);
+  function extractLoggedPath(
+    baseMessage: string,
+    trailingMessage: string,
+  ): string {
+    const needle = `${baseMessage} ${trailingMessage}`;
+    const call = consoleErrorSpy.mock.calls.find(([message]) =>
+      typeof message === 'string' && message.startsWith(needle),
+    );
+    expect(call).toBeDefined();
+    const logged = call?.[0] as string;
+    return logged.slice(needle.length).trim();
+  }
 
   it('should generate a report and log the path', async () => {
     const error = new Error('Test error');
@@ -41,11 +51,12 @@ describe('reportError', () => {
     const baseMessage = 'An error occurred.';
     const context = { data: 'test context' };
     const type = 'test-type';
-    const expectedReportPath = getExpectedReportPath(type);
-
     await reportError(error, baseMessage, context, type, testDir);
 
-    // Verify the file was written
+    const expectedReportPath = extractLoggedPath(
+      baseMessage,
+      'Full report available at:',
+    );
     const reportContent = await fs.readFile(expectedReportPath, 'utf-8');
     const parsedReport = JSON.parse(reportContent);
 
@@ -64,10 +75,12 @@ describe('reportError', () => {
     const error = { message: 'Test plain object error' };
     const baseMessage = 'Another error.';
     const type = 'general';
-    const expectedReportPath = getExpectedReportPath(type);
-
     await reportError(error, baseMessage, undefined, type, testDir);
 
+    const expectedReportPath = extractLoggedPath(
+      baseMessage,
+      'Full report available at:',
+    );
     const reportContent = await fs.readFile(expectedReportPath, 'utf-8');
     const parsedReport = JSON.parse(reportContent);
 
@@ -84,10 +97,12 @@ describe('reportError', () => {
     const error = 'Just a string error';
     const baseMessage = 'String error occurred.';
     const type = 'general';
-    const expectedReportPath = getExpectedReportPath(type);
-
     await reportError(error, baseMessage, undefined, type, testDir);
 
+    const expectedReportPath = extractLoggedPath(
+      baseMessage,
+      'Full report available at:',
+    );
     const reportContent = await fs.readFile(expectedReportPath, 'utf-8');
     const parsedReport = JSON.parse(reportContent);
 
@@ -129,8 +144,6 @@ describe('reportError', () => {
     const stringifyError = new TypeError(
       'Do not know how to serialize a BigInt',
     );
-    const expectedMinimalReportPath = getExpectedReportPath(type);
-
     // Simulate JSON.stringify throwing an error for the full report
     const originalJsonStringify = JSON.stringify;
     let callCount = 0;
@@ -159,6 +172,10 @@ describe('reportError', () => {
     );
 
     // Check that it writes a minimal report
+    const expectedMinimalReportPath = extractLoggedPath(
+      baseMessage,
+      'Partial report (excluding context) available at:',
+    );
     const reportContent = await fs.readFile(expectedMinimalReportPath, 'utf-8');
     const parsedReport = JSON.parse(reportContent);
     expect(parsedReport).toEqual({
@@ -175,10 +192,12 @@ describe('reportError', () => {
     error.stack = 'No context stack';
     const baseMessage = 'Simple error.';
     const type = 'general';
-    const expectedReportPath = getExpectedReportPath(type);
-
     await reportError(error, baseMessage, undefined, type, testDir);
 
+    const expectedReportPath = extractLoggedPath(
+      baseMessage,
+      'Full report available at:',
+    );
     const reportContent = await fs.readFile(expectedReportPath, 'utf-8');
     const parsedReport = JSON.parse(reportContent);
 

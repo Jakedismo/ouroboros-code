@@ -9,11 +9,12 @@ import { GitIgnoreParser } from '../utils/gitIgnoreParser.js';
 import { isGitRepository } from '../utils/gitUtils.js';
 import * as path from 'node:path';
 
-const GEMINI_IGNORE_FILE_NAME = '.ouroborosignore';
+const OUROBOROS_IGNORE_FILE = '.ouroborosignore';
+const LEGACY_GEMINI_IGNORE_FILE = '.geminiignore';
 
 export interface FilterFilesOptions {
   respectGitIgnore?: boolean;
-  respectGeminiIgnore?: boolean; // Legacy name, actually respects .ouroborosignore
+  respectGeminiIgnore?: boolean; // Legacy flag; respects .ouroborosignore and legacy .geminiignore files
 }
 
 export class FileDiscoveryService {
@@ -33,10 +34,12 @@ export class FileDiscoveryService {
       this.gitIgnoreFilter = parser;
     }
     const gParser = new GitIgnoreParser(this.projectRoot);
-    try {
-      gParser.loadPatterns(GEMINI_IGNORE_FILE_NAME);
-    } catch (_error) {
-      // ignore file not found
+    for (const fileName of [OUROBOROS_IGNORE_FILE, LEGACY_GEMINI_IGNORE_FILE]) {
+      try {
+        gParser.loadPatterns(fileName);
+      } catch (_error) {
+        // ignore file not found
+      }
     }
     this.geminiIgnoreFilter = gParser;
   }

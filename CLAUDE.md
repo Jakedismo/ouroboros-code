@@ -92,9 +92,9 @@ This is **Ouroboros** - an open-source multi-agent AI framework that brings the 
 
 ## 🚨 CRITICAL: Merging Without Breaking Ouroboros Features
 
-### When Merging from Upstream (Google's Gemini CLI)
+### When Merging from Upstream (Google's legacy Gemini CLI)
 
-**IMPORTANT**: This project extends Google's Gemini CLI with significant additional features. When merging upstream changes, you MUST preserve all Ouroboros-specific functionality.
+**IMPORTANT**: This project extends Google's legacy Gemini CLI with significant additional features. When merging upstream changes, you MUST preserve all Ouroboros-specific functionality.
 
 ### Pre-Merge Checklist
 

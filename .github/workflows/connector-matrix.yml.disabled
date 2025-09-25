@@ -1,0 +1,70 @@
+name: 'Connector Matrix'
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_openai:
+        description: 'Include OpenAI connector smoke test'
+        type: boolean
+        default: true
+      run_anthropic:
+        description: 'Include Anthropic connector smoke test'
+        type: boolean
+        default: true
+      run_gemini:
+        description: 'Include Google Gemini connector smoke test'
+        type: boolean
+        default: true
+
+jobs:
+  matrix:
+    name: 'Connector Matrix Smoke Tests'
+    runs-on: ubuntu-latest
+    if: ${{ secrets.OPENAI_API_KEY != '' || secrets.ANTHROPIC_API_KEY != '' || secrets.GEMINI_API_KEY != '' }}
+    env:
+      RUN_CONNECTOR_MATRIX: 'true'
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          fetch-depth: 1
+
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: 'Install dependencies'
+        run: npm ci
+
+      - name: 'Install optional provider SDKs'
+        run: npm install --no-save @ai-sdk/anthropic @ai-sdk/google
+
+      - name: 'Run connector smoke tests'
+        run: npm run test:connectors
+        env:
+          RUN_CONNECTOR_MATRIX: 'true'
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: 'Summarise skipped providers'
+        if: always()
+        run: |
+          node <<'JS'
+          const providers = [
+            { id: 'openai', key: process.env.OPENAI_API_KEY },
+            { id: 'anthropic', key: process.env.ANTHROPIC_API_KEY },
+            { id: 'gemini', key: process.env.GEMINI_API_KEY },
+          ];
+          const missing = providers.filter(p => !p.key).map(p => p.id);
+          if (missing.length) {
+            console.log(`Skipped providers (missing API keys): ${missing.join(', ')}`);
+          } else {
+            console.log('All provider keys present.');
+          }
+          JS

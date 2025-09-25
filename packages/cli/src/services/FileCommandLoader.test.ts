@@ -9,7 +9,15 @@ import type { Config } from '@ouroboros/ouroboros-code-core';
 import { Storage } from '@ouroboros/ouroboros-code-core';
 import mock from 'mock-fs';
 import { FileCommandLoader } from './FileCommandLoader.js';
-import { assert, vi } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  assert,
+  vi,
+} from 'vitest';
 import { createMockCommandContext } from '../test-utils/mockCommandContext.js';
 import {
   SHELL_INJECTION_TRIGGER,
@@ -529,7 +537,7 @@ describe('FileCommandLoader', () => {
       ).getProjectCommandsDir();
       const extensionDir = path.join(
         process.cwd(),
-        '.gemini/extensions/test-ext',
+        '.ouroboros/extensions/test-ext',
       );
 
       mock({
@@ -540,7 +548,7 @@ describe('FileCommandLoader', () => {
           'project.toml': 'prompt = "Project command"',
         },
         [extensionDir]: {
-          'gemini-extension.json': JSON.stringify({
+          'ouroboros-extension.json': JSON.stringify({
             name: 'test-ext',
             version: '1.0.0',
           }),
@@ -582,12 +590,12 @@ describe('FileCommandLoader', () => {
       ).getProjectCommandsDir();
       const extensionDir = path.join(
         process.cwd(),
-        '.gemini/extensions/test-ext',
+        '.ouroboros/extensions/test-ext',
       );
 
       mock({
         [extensionDir]: {
-          'gemini-extension.json': JSON.stringify({
+          'ouroboros-extension.json': JSON.stringify({
             name: 'test-ext',
             version: '1.0.0',
           }),
@@ -678,16 +686,16 @@ describe('FileCommandLoader', () => {
     it('only loads commands from active extensions', async () => {
       const extensionDir1 = path.join(
         process.cwd(),
-        '.gemini/extensions/active-ext',
+        '.ouroboros/extensions/active-ext',
       );
       const extensionDir2 = path.join(
         process.cwd(),
-        '.gemini/extensions/inactive-ext',
+        '.ouroboros/extensions/inactive-ext',
       );
 
       mock({
         [extensionDir1]: {
-          'gemini-extension.json': JSON.stringify({
+          'ouroboros-extension.json': JSON.stringify({
             name: 'active-ext',
             version: '1.0.0',
           }),
@@ -696,7 +704,7 @@ describe('FileCommandLoader', () => {
           },
         },
         [extensionDir2]: {
-          'gemini-extension.json': JSON.stringify({
+          'ouroboros-extension.json': JSON.stringify({
             name: 'inactive-ext',
             version: '1.0.0',
           }),
@@ -737,12 +745,12 @@ describe('FileCommandLoader', () => {
     it('handles missing extension commands directory gracefully', async () => {
       const extensionDir = path.join(
         process.cwd(),
-        '.gemini/extensions/no-commands',
+        '.ouroboros/extensions/no-commands',
       );
 
       mock({
         [extensionDir]: {
-          'gemini-extension.json': JSON.stringify({
+          'ouroboros-extension.json': JSON.stringify({
             name: 'no-commands',
             version: '1.0.0',
           }),

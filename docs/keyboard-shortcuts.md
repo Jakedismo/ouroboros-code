@@ -1,6 +1,6 @@
-# Gemini CLI Keyboard Shortcuts
+# Ouroboros Code Keyboard Shortcuts
 
-This document lists the available keyboard shortcuts in the Gemini CLI.
+This document lists the available keyboard shortcuts in the Ouroboros Code.
 
 ## General
 

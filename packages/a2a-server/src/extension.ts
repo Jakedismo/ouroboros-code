@@ -12,8 +12,13 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { logger } from './logger.js';
 
-export const EXTENSIONS_DIRECTORY_NAME = path.join('.gemini', 'extensions');
-export const EXTENSIONS_CONFIG_FILENAME = 'gemini-extension.json';
+export const PRIMARY_EXTENSIONS_DIRECTORY = path.join('.gemini', 'extensions');
+export const LEGACY_EXTENSIONS_DIRECTORY = path.join('.ouroboros', 'extensions');
+
+export const PRIMARY_EXTENSION_CONFIG_FILENAME = 'gemini-extension.json';
+export const LEGACY_EXTENSION_CONFIG_FILENAME = 'ouroboros-extension.json';
+export const PRIMARY_INSTALL_METADATA_FILENAME = '.gemini-extension-install.json';
+export const LEGACY_INSTALL_METADATA_FILENAME = '.ouroboros-extension-install.json';
 
 export interface Extension {
   config: ExtensionConfig;
@@ -25,6 +30,25 @@ export interface ExtensionConfig {
   version: string;
   mcpServers?: Record<string, MCPServerConfig>;
   contextFileName?: string | string[];
+}
+
+const EXTENSION_DIR_CANDIDATES = [
+  PRIMARY_EXTENSIONS_DIRECTORY,
+  LEGACY_EXTENSIONS_DIRECTORY,
+];
+
+function existingExtensionDirs(baseDir: string): string[] {
+  return EXTENSION_DIR_CANDIDATES
+    .map((relativeDir) => path.join(baseDir, relativeDir))
+    .filter((candidate) => fs.existsSync(candidate));
+}
+
+function resolveExtensionConfigPath(extensionDir: string): string | undefined {
+  const primary = path.join(extensionDir, PRIMARY_EXTENSION_CONFIG_FILENAME);
+  const legacy = path.join(extensionDir, LEGACY_EXTENSION_CONFIG_FILENAME);
+  if (fs.existsSync(primary)) return primary;
+  if (fs.existsSync(legacy)) return legacy;
+  return undefined;
 }
 
 export function loadExtensions(workspaceDir: string): Extension[] {
@@ -49,18 +73,14 @@ export function loadExtensions(workspaceDir: string): Extension[] {
 }
 
 function loadExtensionsFromDir(dir: string): Extension[] {
-  const extensionsDir = path.join(dir, EXTENSIONS_DIRECTORY_NAME);
-  if (!fs.existsSync(extensionsDir)) {
-    return [];
-  }
-
   const extensions: Extension[] = [];
-  for (const subdir of fs.readdirSync(extensionsDir)) {
-    const extensionDir = path.join(extensionsDir, subdir);
-
-    const extension = loadExtension(extensionDir);
-    if (extension != null) {
-      extensions.push(extension);
+  for (const extensionsRoot of existingExtensionDirs(dir)) {
+    for (const subdir of fs.readdirSync(extensionsRoot)) {
+      const extensionDir = path.join(extensionsRoot, subdir);
+      const extension = loadExtension(extensionDir);
+      if (extension != null) {
+        extensions.push(extension);
+      }
     }
   }
   return extensions;
@@ -74,10 +94,10 @@ function loadExtension(extensionDir: string): Extension | null {
     return null;
   }
 
-  const configFilePath = path.join(extensionDir, EXTENSIONS_CONFIG_FILENAME);
-  if (!fs.existsSync(configFilePath)) {
+  const configFilePath = resolveExtensionConfigPath(extensionDir);
+  if (!configFilePath) {
     logger.error(
-      `Warning: extension directory ${extensionDir} does not contain a config file ${configFilePath}.`,
+      `Warning: extension directory ${extensionDir} does not contain an extension config file.`,
     );
     return null;
   }

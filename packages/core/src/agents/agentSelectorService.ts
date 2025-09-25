@@ -294,12 +294,20 @@ export class AgentSelectorService {
     }
 
     const selectionPrompt = this.buildSelectionPrompt(userPrompt);
-    const generationConfig = {
-      temperature: 0.1,
-      maxOutputTokens: 32000,
+    const generationConfig: {
+      temperature?: number;
+      maxOutputTokens?: number;
+      responseJsonSchema: typeof AGENT_SELECTION_SCHEMA.schema;
+      responseMimeType: 'application/json';
+    } = {
       responseJsonSchema: AGENT_SELECTION_SCHEMA.schema,
       responseMimeType: 'application/json',
-    } as const;
+    };
+
+    if (this.config?.getProvider() !== 'openai') {
+      generationConfig.temperature = 0.1;
+      generationConfig.maxOutputTokens = 32000;
+    }
 
     const contents = [
       {

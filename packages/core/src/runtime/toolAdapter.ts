@@ -395,11 +395,49 @@ function postProcessArguments(
     case 'glob':
       normalizeGlobArgs(result);
       break;
+    case 'read_file':
+      normalizeFilePathArgs(result, 'absolute_path', ['path', 'file_path', 'filepath', 'filePath']);
+      break;
+    case 'write_file':
+      normalizeFilePathArgs(result, 'file_path', ['path', 'absolute_path', 'filepath', 'filePath']);
+      break;
+    case 'replace':
+      normalizeFilePathArgs(result, 'file_path', ['path', 'absolute_path', 'filepath', 'filePath']);
+      break;
     default:
       break;
   }
 
   return result;
+}
+
+function normalizeFilePathArgs(
+  target: Record<string, unknown>,
+  canonicalKey: string,
+  aliases: string[],
+): void {
+  if (target[canonicalKey] !== undefined) {
+    return;
+  }
+
+  for (const alias of aliases) {
+    if (target[alias] !== undefined) {
+      target[canonicalKey] = target[alias];
+      delete target[alias];
+      return;
+    }
+  }
+}
+
+// Exposed for testing argument normalization logic without needing the Agents runtime
+export function normalizeToolArgumentsForTest(
+  toolName: string,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  return postProcessArguments(
+    { name: toolName } as AnyDeclarativeTool,
+    { ...args },
+  );
 }
 
 function normalizeSearchTextArgs(args: Record<string, unknown>): void {

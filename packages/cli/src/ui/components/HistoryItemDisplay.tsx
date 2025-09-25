@@ -14,6 +14,7 @@ import { ErrorMessage } from './messages/ErrorMessage.js';
 import { ToolGroupMessage } from './messages/ToolGroupMessage.js';
 import { GeminiMessageContent } from './messages/GeminiMessageContent.js';
 import { CompressionMessage } from './messages/CompressionMessage.js';
+import { MultiAgentStatusMessage } from './messages/MultiAgentStatusMessage.js';
 import { Box } from 'ink';
 import { AboutBox } from './AboutBox.js';
 import { StatsDisplay } from './StatsDisplay.js';
@@ -64,6 +65,13 @@ export const HistoryItemDisplay: React.FC<HistoryItemDisplayProps> = ({
       />
     )}
     {item.type === 'info' && <InfoMessage text={item.text} />}
+    {item.type === 'multi_agent_status' && (
+      <MultiAgentStatusMessage
+        selection={item.selection}
+        interactiveState={item.interactive}
+        isPending={isPending}
+      />
+    )}
     {item.type === 'error' && <ErrorMessage text={item.text} />}
     {item.type === 'about' && (
       <AboutBox

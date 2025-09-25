@@ -15,7 +15,7 @@ let AgentManager: any;
 async function getAgentSelectorService(config: any) {
   if (!AgentSelectorService) {
     try {
-      const module = await import('@ouroboros/ouroboros-code-core/dist/src/agents/agentSelectorService.js');
+      const module = await import('@ouroboros/ouroboros-code-core');
       AgentSelectorService = module.AgentSelectorService;
     } catch (error) {
       console.warn('AgentSelectorService not available:', error);
@@ -45,7 +45,7 @@ async function getAgentSelectorService(config: any) {
 async function getAgentManager() {
   if (!AgentManager) {
     try {
-      const module = await import('@ouroboros/ouroboros-code-core/dist/src/agents/agentManager.js');
+      const module = await import('@ouroboros/ouroboros-code-core');
       AgentManager = module.AgentManager;
     } catch (error) {
       console.warn('AgentManager not available:', error);
@@ -73,12 +73,12 @@ export const agentsCommand: SlashCommand = {
             type: MessageType.ERROR,
             text: `❌ **Agent Selector Service Unavailable**
 
-The automatic agent selection service is not available. This could be due to:
-• Missing OpenAI API key configuration
-• Service initialization failure
-• Build or import issues
+The automatic agent selection service is not available. This can happen when:
+• Required provider credentials (e.g. OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY) are missing
+• Optional agent connectors (@ai-sdk/anthropic or @ai-sdk/google) are not installed
+• The service failed to initialize inside the current session
 
-Please check your OpenAI API key configuration and try again.`,
+Please verify your API keys and optional connector packages, then try again.`,
           }, Date.now());
           return;
         }
@@ -91,25 +91,25 @@ Please check your OpenAI API key configuration and try again.`,
           text: `🤖 **Automatic Agent Selection ENABLED**
 
 🎯 **How it works:**
-• Every prompt will be analyzed by GPT-5-nano
-• The most appropriate specialist(s) will be automatically selected
-• Agents are temporarily activated for each conversation turn
-• You'll see which agents were selected and why
+• Every prompt is dispatched through the Unified Agents runtime
+• The orchestrator composes the best specialist team automatically
+• Specialists run in parallel waves and can hand off work mid-stream
+• You’ll see live orchestration panels with team status and outcomes
 
-🔧 **Features:**
-• ⚡ Fast selection using GPT-5-nano (2-3 second overhead)
-• 🧠 Intelligent fallbacks if selection fails
-• 📊 Selection history and analytics
-• 🔄 Seamless context preservation between turns
-• 🎯 1-3 agents selected per prompt for optimal focus
+🔧 **Highlights:**
+• ⚡ GPT-5 planner with millisecond turnaround for team selection
+• 🧠 Intelligent fallbacks if orchestration encounters an error
+• 📊 Selection history, analytics, and handoff tracking
+• 🔄 Seamless restoration of your original agent roster after each turn
+• 🎯 Designed for 1–3 specialists per prompt to stay focused
 
-**Try it now:** Send any prompt and watch the AI automatically select the best specialists!
+**Try it now:** Send any prompt and watch the orchestrator assemble specialists in real time.
 
 **Commands:**
-• \`/agents off\` - Disable automatic selection
-• \`/agents status\` - Check current mode and statistics
-• \`/agents history\` - View recent agent selections
-• \`/agents test "your prompt"\` - Test agent selection without execution`,
+• \`/agents off\` Disable automatic selection
+• \`/agents status\` Show current mode and stats
+• \`/agents history\` See recent specialist teams
+• \`/agents test "your prompt"\` Dry-run the planner without execution`,
         }, Date.now());
       },
     },
@@ -185,10 +185,20 @@ ${currentlyActive.map((a: any) => `• ${a.emoji} ${a.name} (${a.id})`).join('\n
           statusText += `**Selection Statistics:**
 • Total automatic selections: ${stats.totalSelections}
 • Average agents per selection: ${stats.averageAgentsPerSelection.toFixed(1)}
+• Average confidence: ${(stats.averageConfidence * 100).toFixed(0)}%
+• Avg. tool calls per selection: ${stats.averageToolCallsPerSelection.toFixed(1)}
+${stats.lastExecutionSummary ? `• Last orchestration: ${(stats.lastExecutionSummary.durationMs / 1000).toFixed(1)}s across ${stats.lastExecutionSummary.totalAgents} agents` : '• Last orchestration: n/a'}
 • Most selected agents:
 ${stats.mostSelectedAgents.slice(0, 5).map((s: any) => `  • ${s.agentId}: ${s.count} times`).join('\n')}
 
 `;
+
+          if (stats.toolUsageByAgent.length > 0) {
+            statusText += `**Top Tool Users:**
+${stats.toolUsageByAgent.slice(0, 5).map((entry: any) => `  • ${entry.agentId}: ${entry.toolCalls} call${entry.toolCalls === 1 ? '' : 's'}`).join('\n')}
+
+`;
+          }
         }
 
         statusText += `**Commands:**
@@ -390,9 +400,15 @@ No data available yet. Enable automatic selection with \`/agents on\` and start 
 • Total automatic selections: ${stats.totalSelections}
 • Average agents per selection: ${stats.averageAgentsPerSelection.toFixed(1)}
 • Average confidence: ${(stats.averageConfidence * 100).toFixed(0)}%
+• Avg. tool calls per selection: ${stats.averageToolCallsPerSelection.toFixed(1)}
+${stats.lastExecutionSummary ? `• Last orchestration: ${(stats.lastExecutionSummary.durationMs / 1000).toFixed(1)}s across ${stats.lastExecutionSummary.totalAgents} agents` : '• Last orchestration: n/a'}
 
 **Most Selected Agents:**
 ${topAgents}
+
+${stats.toolUsageByAgent.length > 0 ? `**Tool Usage (lifetime):**
+${stats.toolUsageByAgent.slice(0, 5).map((entry: any) => `  • ${entry.agentId}: ${entry.toolCalls} call${entry.toolCalls === 1 ? '' : 's'}`).join('\n')}
+` : ''}
 
 **Recent Patterns (Last 10 selections):**
 ${recentSelections.map((s: any) => `• ${s.selectedAgents.join(', ')}`).join('\n')}

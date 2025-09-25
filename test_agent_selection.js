@@ -9,8 +9,8 @@ async function testAgentSelection() {
     
     const selectorService = AgentSelectorService.getInstance();
     
-    // Initialize with OpenAI  
-    await selectorService.initialize('openai', process.env.OPENAI_API_KEY, 'gpt-5-codex');
+    // Initialize with OpenAI
+    await selectorService.initialize('openai', process.env.OPENAI_API_KEY, 'gpt-5');
     
     console.log('✅ Service initialized');
     

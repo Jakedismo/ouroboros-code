@@ -1,20 +1,20 @@
-# Gemini CLI Observability Guide
+# Ouroboros Code Observability Guide
 
-Telemetry provides data about Gemini CLI's performance, health, and usage. By enabling it, you can monitor operations, debug issues, and optimize tool usage through traces, metrics, and structured logs.
+Telemetry provides data about Ouroboros Code's performance, health, and usage. By enabling it, you can monitor operations, debug issues, and optimize tool usage through traces, metrics, and structured logs.
 
-Gemini CLI's telemetry system is built on the **[OpenTelemetry] (OTEL)** standard, allowing you to send data to any compatible backend.
+Ouroboros Code's telemetry system is built on the **[OpenTelemetry] (OTEL)** standard, allowing you to send data to any compatible backend. All instrumentation now terminates at the unified Agents runtime: `UnifiedAgentsClient` forwards every provider response (OpenAI, Anthropic, Gemini) through the same logging hooks, so tool calls, API requests, and streaming events emit identical telemetry regardless of the configured model.
 
 [OpenTelemetry]: https://opentelemetry.io/
 
 ## Enabling telemetry
 
-You can enable telemetry in multiple ways. Configuration is primarily managed via the [`.gemini/settings.json` file](./cli/configuration.md) and environment variables, but CLI flags can override these settings for a specific session.
+You can enable telemetry in multiple ways. Configuration is primarily managed via the [settings file](./cli/configuration.md) (stored under `~/.ouroboros/settings.json` by default, with backward-compatible support for legacy `~/.gemini/settings.json`) and environment variables, but CLI flags can override these settings for a specific session.
 
 ### Order of precedence
 
 The following lists the precedence for applying telemetry settings, with items listed higher having greater precedence:
 
-1.  **CLI flags (for `gemini` command):**
+1.  **CLI flags (for `ouroboros-code` command):**
     - `--telemetry` / `--no-telemetry`: Overrides `telemetry.enabled`.
     - `--telemetry-target <local|gcp>`: Overrides `telemetry.target`.
     - `--telemetry-otlp-endpoint <URL>`: Overrides `telemetry.otlpEndpoint`.
@@ -24,9 +24,9 @@ The following lists the precedence for applying telemetry settings, with items l
 1.  **Environment variables:**
     - `OTEL_EXPORTER_OTLP_ENDPOINT`: Overrides `telemetry.otlpEndpoint`.
 
-1.  **Workspace settings file (`.gemini/settings.json`):** Values from the `telemetry` object in this project-specific file.
+1.  **Workspace settings file (`.ouroboros/settings.json`, or legacy `.gemini/settings.json`):** Values from the `telemetry` object in this project-specific file.
 
-1.  **User settings file (`~/.gemini/settings.json`):** Values from the `telemetry` object in this global user file.
+1.  **User settings file (`~/.ouroboros/settings.json`, compatible with `~/.gemini/settings.json`):** Values from the `telemetry` object in this global user file.
 
 1.  **Defaults:** applied if not set by any of the above.
     - `telemetry.enabled`: `false`
@@ -39,7 +39,7 @@ The `--target` argument to this script _only_ overrides the `telemetry.target` f
 
 ### Example settings
 
-The following code can be added to your workspace (`.gemini/settings.json`) or user (`~/.gemini/settings.json`) settings to enable telemetry and send the output to Google Cloud:
+The following code can be added to your workspace (`.ouroboros/settings.json`) or user (`~/.ouroboros/settings.json`) settings (or their legacy `.gemini` equivalents) to enable telemetry and send the output to Google Cloud:
 
 ```json
 {
@@ -61,12 +61,12 @@ To enable file export, use the `--telemetry-outfile` flag with a path to your de
 
 ```bash
 # Set your desired output file path
-TELEMETRY_FILE=".gemini/telemetry.log"
+TELEMETRY_FILE=".ouroboros/telemetry.log"
 
-# Run Gemini CLI with local telemetry
+# Run Ouroboros Code with local telemetry
 # NOTE: --telemetry-otlp-endpoint="" is required to override the default
 # OTLP exporter and ensure telemetry is written to the local file.
-gemini --telemetry \
+ouroboros-code --telemetry \
   --telemetry-target=local \
   --telemetry-otlp-endpoint="" \
   --telemetry-outfile="$TELEMETRY_FILE" \
@@ -100,15 +100,15 @@ Use the `npm run telemetry -- --target=local` command to automate the process of
     The script will:
     - Download Jaeger and OTEL if needed.
     - Start a local Jaeger instance.
-    - Start an OTEL collector configured to receive data from Gemini CLI.
+    - Start an OTEL collector configured to receive data from Ouroboros Code.
     - Automatically enable telemetry in your workspace settings.
     - On exit, disable telemetry.
 
 1.  **View traces**:
-    Open your web browser and navigate to **http://localhost:16686** to access the Jaeger UI. Here you can inspect detailed traces of Gemini CLI operations.
+    Open your web browser and navigate to **http://localhost:16686** to access the Jaeger UI. Here you can inspect detailed traces of Ouroboros Code operations.
 
 1.  **Inspect logs and metrics**:
-    The script redirects the OTEL collector output (which includes logs and metrics) to `~/.gemini/tmp/<projectHash>/otel/collector.log`. The script will provide links to view and a command to tail your telemetry data (traces, metrics, logs) locally.
+    The script redirects the OTEL collector output (which includes logs and metrics) to `~/.ouroboros/tmp/<projectHash>/otel/collector.log` (falling back to the legacy `.gemini` location if it exists). The script will provide links to view and a command to tail your telemetry data (traces, metrics, logs) locally.
 
 1.  **Stop the services**:
     Press `Ctrl+C` in the terminal where the script is running to stop the OTEL Collector and Jaeger services.
@@ -135,34 +135,34 @@ Use the `npm run telemetry -- --target=gcp` command to automate setting up a loc
 
     The script will:
     - Download the `otelcol-contrib` binary if needed.
-    - Start an OTEL collector configured to receive data from Gemini CLI and export it to your specified Google Cloud project.
-    - Automatically enable telemetry and disable sandbox mode in your workspace settings (`.gemini/settings.json`).
+    - Start an OTEL collector configured to receive data from Ouroboros Code and export it to your specified Google Cloud project.
+    - Automatically enable telemetry and disable sandbox mode in your workspace settings (`.ouroboros/settings.json`).
     - Provide direct links to view traces, metrics, and logs in your Google Cloud Console.
     - On exit (Ctrl+C), it will attempt to restore your original telemetry and sandbox settings.
 
-1.  **Run Gemini CLI:**
-    In a separate terminal, run your Gemini CLI commands. This generates telemetry data that the collector captures.
+1.  **Run Ouroboros Code:**
+    In a separate terminal, run your Ouroboros Code commands. This generates telemetry data that the collector captures.
 
 1.  **View telemetry in Google Cloud**:
     Use the links provided by the script to navigate to the Google Cloud Console and view your traces, metrics, and logs.
 
 1.  **Inspect local collector logs**:
-    The script redirects the local OTEL collector output to `~/.gemini/tmp/<projectHash>/otel/collector-gcp.log`. The script provides links to view and command to tail your collector logs locally.
+    The script redirects the local OTEL collector output to `~/.ouroboros/tmp/<projectHash>/otel/collector-gcp.log` (or the legacy `.gemini` path). The script provides links to view and command to tail your collector logs locally.
 
 1.  **Stop the service**:
     Press `Ctrl+C` in the terminal where the script is running to stop the OTEL Collector.
 
 ## Logs and metric reference
 
-The following section describes the structure of logs and metrics generated for Gemini CLI.
+The following section describes the structure of logs and metrics generated for Ouroboros Code.
 
 - A `sessionId` is included as a common attribute on all logs and metrics.
 
 ### Logs
 
-Logs are timestamped records of specific events. The following events are logged for Gemini CLI:
+Logs are timestamped records of specific events. For backwards compatibility the OTEL event names retain the `gemini_cli.*` prefix, but the Clearcut metadata keys have been updated to `OUROBOROS_CLI_*`. The unified runtime emits the following events for Ouroboros Code:
 
-- `gemini_cli.config`: This event occurs once at startup with the CLI's configuration.
+- `gemini_cli.config`: Emitted once at startup with the CLI's configuration.
   - **Attributes**:
     - `model` (string)
     - `embedding_model` (string)
@@ -177,14 +177,14 @@ Logs are timestamped records of specific events. The following events are logged
     - `debug_mode` (boolean)
     - `mcp_servers` (string)
 
-- `gemini_cli.user_prompt`: This event occurs when a user submits a prompt.
+- `gemini_cli.user_prompt`: Emitted when a user submits a prompt.
   - **Attributes**:
     - `prompt_length` (int)
     - `prompt_id` (string)
     - `prompt` (string, this attribute is excluded if `log_prompts_enabled` is configured to be `false`)
     - `auth_type` (string)
 
-- `gemini_cli.tool_call`: This event occurs for each function call.
+- `gemini_cli.tool_call`: Emitted for every tool invocation routed through the Agents SDK bridge (including Anthropic and Gemini connectors).
   - **Attributes**:
     - `function_name`
     - `function_args`
@@ -195,12 +195,12 @@ Logs are timestamped records of specific events. The following events are logged
     - `error_type` (if applicable)
     - `metadata` (if applicable, dictionary of string -> any)
 
-- `gemini_cli.api_request`: This event occurs when making a request to Gemini API.
+- `gemini_cli.api_request`: Emitted whenever the unified runtime issues a model request.
   - **Attributes**:
     - `model`
     - `request_text` (if applicable)
 
-- `gemini_cli.api_error`: This event occurs if the API request fails.
+- `gemini_cli.api_error`: Emitted when a model request fails.
   - **Attributes**:
     - `model`
     - `error`
@@ -209,7 +209,7 @@ Logs are timestamped records of specific events. The following events are logged
     - `duration_ms`
     - `auth_type`
 
-- `gemini_cli.api_response`: This event occurs upon receiving a response from Gemini API.
+- `gemini_cli.api_response`: Emitted upon receiving a model response stream or final chunk.
   - **Attributes**:
     - `model`
     - `status_code`
@@ -223,22 +223,22 @@ Logs are timestamped records of specific events. The following events are logged
     - `response_text` (if applicable)
     - `auth_type`
 
-- `gemini_cli.malformed_json_response`: This event occurs when a `generateJson` response from Gemini API cannot be parsed as a json.
+- `gemini_cli.malformed_json_response`: Emitted when a `generateJson` response cannot be parsed as JSON.
   - **Attributes**:
     - `model`
 
-- `gemini_cli.flash_fallback`: This event occurs when Gemini CLI switches to flash as fallback.
+- `ouroboros_cli.flash_fallback`: Emitted when Ouroboros Code switches to flash as fallback.
   - **Attributes**:
     - `auth_type`
 
-- `gemini_cli.slash_command`: This event occurs when a user executes a slash command.
+- `gemini_cli.slash_command`: Emitted when a user executes a slash command.
   - **Attributes**:
     - `command` (string)
     - `subcommand` (string, if applicable)
 
 ### Metrics
 
-Metrics are numerical measurements of behavior over time. The following metrics are collected for Gemini CLI:
+Metrics are numerical measurements of behavior over time. The exporters still publish these metrics under the `gemini_cli.*` names for compatibility, but they now include unified Agents runtime data across every provider. The following metrics are collected for Ouroboros Code:
 
 - `gemini_cli.session.count` (Counter, Int): Incremented once per CLI startup.
 

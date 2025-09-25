@@ -43,3 +43,16 @@ packages/vscode-ide-companion/*.vsix
 
 # GHA credentials
 gha-creds-*.json
+
+# Agents
+AGENTS.md
+CLAUDE.md
+OUROBOROS.md
+QWEN.md
+.ouroboros/
+ouroboros/
+.crush/
+.claude/
+
+# Package build artifacts
+*.tgz

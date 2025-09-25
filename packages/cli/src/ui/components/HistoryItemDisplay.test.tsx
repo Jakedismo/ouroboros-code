@@ -80,7 +80,7 @@ describe('<HistoryItemDisplay />', () => {
     const { lastFrame } = render(
       <HistoryItemDisplay {...baseItem} item={item} />,
     );
-    expect(lastFrame()).toContain('About Gemini CLI');
+    expect(lastFrame()).toContain('About Ouroboros Code');
   });
 
   it('renders ModelStatsDisplay for "model_stats" type', () => {
@@ -125,5 +125,58 @@ describe('<HistoryItemDisplay />', () => {
       </SessionStatsProvider>,
     );
     expect(lastFrame()).toContain('Agent powering down. Goodbye!');
+  });
+
+  it('renders MultiAgentStatusMessage for multi-agent orchestration feedback', () => {
+    const persona = {
+      id: 'systems-architect',
+      name: 'Systems Architect',
+      emoji: '🏗️',
+      description: 'Designs large-scale distributed systems',
+      specialties: ['Architecture', 'Distributed systems'],
+    };
+
+    const item: HistoryItem = {
+      ...baseItem,
+      type: 'multi_agent_status',
+      selection: {
+        selectedAgents: [persona],
+        reasoning: 'Selected architecture specialist for system design.',
+        confidence: 0.92,
+        processingTime: 1250,
+        status: 'complete',
+        execution: {
+          totalAgents: 1,
+          durationMs: 1250,
+          timeline: [{ wave: 1, agents: [persona] }],
+          agentResults: [
+            {
+              agent: persona,
+              analysis: 'Analyzed requirements and proposed solution sketch.',
+              solution: 'Recommended microservice architecture with event backbone.',
+              confidence: 0.92,
+              handoffAgentIds: [],
+              tools: [
+                {
+                  name: 'write_file',
+                  args: '{"path":"docs/ARCH.md"}',
+                  output: 'Created architecture overview.',
+                },
+              ],
+            },
+          ],
+          aggregateReasoning: 'Architecture plan synthesized successfully.',
+        },
+      },
+    } as HistoryItem;
+
+    const { lastFrame } = render(
+      <HistoryItemDisplay {...baseItem} item={item} />,
+    );
+
+    expect(lastFrame()).toContain('Multi-Agent Orchestration Complete');
+    expect(lastFrame()).toContain('Systems Architect');
+    expect(lastFrame()).toContain('Architecture plan synthesized successfully.');
+    expect(lastFrame()).toContain('write_file');
   });
 });

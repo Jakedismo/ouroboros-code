@@ -225,6 +225,13 @@ export const useGeminiStream = (
     [setPendingHistoryItem],
   );
 
+  const {
+    processPromptWithAutoSelection,
+    processPromptWithAutoSelectionStream,
+    restorePreviousAgentState,
+    isAutoModeEnabled,
+  } = useAutomaticAgentSelection(config, addItem);
+
   const activatePanelForSelection = useCallback(
     (selection: SelectionFeedbackPayload, status: 'planning' | 'running' | 'complete') => {
       if (multiAgentClearTimeoutRef.current) {
@@ -242,6 +249,7 @@ export const useGeminiStream = (
       });
 
       if (status === 'complete') {
+        const autoModeActive = isAutoModeEnabled();
         setActiveSpecialistNames(
           agentSummaries.length
             ? agentSummaries.map((agent) => `${agent.emoji} ${agent.name}`).join(', ')
@@ -252,7 +260,11 @@ export const useGeminiStream = (
         setMultiAgentAgentIds([]);
         setMultiAgentFocusedId(null);
         setMultiAgentExpandedIds([]);
-        setPendingHistoryItem(null);
+        if (autoModeActive) {
+          setPendingHistoryItem(createMultiAgentHistoryItem(selection, 'complete'));
+        } else {
+          setPendingHistoryItem(null);
+        }
         return;
       }
 
@@ -287,6 +299,7 @@ export const useGeminiStream = (
     },
     [
       createMultiAgentHistoryItem,
+      isAutoModeEnabled,
       multiAgentExpandedIds,
       multiAgentFocusedId,
       setPendingHistoryItem,
@@ -363,13 +376,6 @@ export const useGeminiStream = (
     config,
     geminiClient,
   );
-
-  const {
-    processPromptWithAutoSelection,
-    processPromptWithAutoSelectionStream,
-    restorePreviousAgentState,
-    isAutoModeEnabled,
-  } = useAutomaticAgentSelection(config, addItem);
 
   const streamingState = useMemo(() => {
     if (toolCalls.some((tc) => tc.status === 'awaiting_approval')) {
@@ -1081,7 +1087,9 @@ export const useGeminiStream = (
         if (previousAgentState) {
           restorePreviousAgentState(previousAgentState);
         }
-        scheduleMultiAgentStatusClear(MULTI_AGENT_PANEL_IDLE_CLEAR_MS);
+        if (!isAutoModeEnabled()) {
+          scheduleMultiAgentStatusClear(MULTI_AGENT_PANEL_IDLE_CLEAR_MS);
+        }
         return;
       }
 
@@ -1237,7 +1245,9 @@ export const useGeminiStream = (
           );
         }
       } finally {
-        scheduleMultiAgentStatusClear(MULTI_AGENT_PANEL_IDLE_CLEAR_MS);
+        if (!isAutoModeEnabled()) {
+          scheduleMultiAgentStatusClear(MULTI_AGENT_PANEL_IDLE_CLEAR_MS);
+        }
         setIsResponding(false);
         
         // Restore previous agent state after conversation turn completes

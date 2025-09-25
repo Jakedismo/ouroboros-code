@@ -107,7 +107,7 @@ export class IdeClient {
     if (!this.currentIde || !this.currentIdeDisplayName) {
       this.setState(
         IDEConnectionStatus.Disconnected,
-        `IDE integration is not supported in your current environment. To use this feature, run Gemini CLI in one of these supported IDEs: VS Code or VS Code forks`,
+        `IDE integration is not supported in your current environment. To use this feature, run Ouroboros Code in one of these supported IDEs: VS Code or VS Code forks`,
         false,
       );
       return;
@@ -177,13 +177,13 @@ export class IdeClient {
    * A diff is accepted with any modifications if the user performs one of the
    * following actions:
    * - Clicks the checkbox icon in the IDE to accept
-   * - Runs `command+shift+p` > "Gemini CLI: Accept Diff in IDE" to accept
+   * - Runs `command+shift+p` > "Ouroboros Code: Accept Diff in IDE" to accept
    * - Selects "accept" in the CLI UI
    * - Saves the file via `ctrl/command+s`
    *
    * A diff is rejected if the user performs one of the following actions:
    * - Clicks the "x" icon in the IDE
-   * - Runs "Gemini CLI: Close Diff in IDE"
+   * - Runs "Ouroboros Code: Close Diff in IDE"
    * - Selects "no" in the CLI UI
    * - Closes the file
    */
@@ -330,7 +330,7 @@ export class IdeClient {
     if (!isWithinWorkspace) {
       return {
         isValid: false,
-        error: `Directory mismatch. Gemini CLI is running in a different location than the open workspace in ${currentIdeDisplayName}. Please run the CLI from one of the following directories: ${ideWorkspacePaths.join(
+        error: `Directory mismatch. Ouroboros Code is running in a different location than the open workspace in ${currentIdeDisplayName}. Please run the CLI from one of the following directories: ${ideWorkspacePaths.join(
           ', ',
         )}`,
       };

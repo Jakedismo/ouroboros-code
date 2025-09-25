@@ -7,8 +7,12 @@
 import path from 'node:path';
 import os from 'node:os';
 import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
 
-export const GEMINI_DIR = '.gemini';
+export const PRIMARY_CONFIG_DIR = '.gemini';
+export const LEGACY_CONFIG_DIR = '.ouroboros';
+// TODO(breaking-change): replace downstream GEMINI_DIR usage with a branded name.
+export const GEMINI_DIR = PRIMARY_CONFIG_DIR;
 export const GOOGLE_ACCOUNTS_FILENAME = 'google_accounts.json';
 
 /**
@@ -99,6 +103,24 @@ export function shortenPath(filePath: string, maxLen: number = 35): string {
   }
 
   return result;
+}
+
+export function resolveConfigDir(baseDir: string): string {
+  const primary = path.join(baseDir, PRIMARY_CONFIG_DIR);
+  const legacy = path.join(baseDir, LEGACY_CONFIG_DIR);
+
+  if (typeof fs.existsSync !== 'function') {
+    return primary;
+  }
+
+  try {
+    if (fs.existsSync(legacy) && !fs.existsSync(primary)) {
+      return legacy;
+    }
+  } catch (_error) {
+    // Ignored: fall back to primary directory when the underlying fs mock lacks support.
+  }
+  return primary;
 }
 
 /**

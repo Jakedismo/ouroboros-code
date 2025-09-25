@@ -4,13 +4,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { vi } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  afterAll,
+  vi,
+} from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   EXTENSIONS_CONFIG_FILENAME,
   INSTALL_METADATA_FILENAME,
+  PRIMARY_EXTENSION_CONFIG_FILENAME,
+  LEGACY_EXTENSION_CONFIG_FILENAME,
+  PRIMARY_INSTALL_METADATA_FILENAME,
+  LEGACY_INSTALL_METADATA_FILENAME,
   annotateActiveExtensions,
   disableExtension,
   enableExtension,
@@ -38,9 +50,10 @@ vi.mock('simple-git', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const os = await importOriginal<typeof os>();
+  const defaultHome = os.homedir();
   return {
     ...os,
-    homedir: vi.fn(),
+    homedir: vi.fn(() => defaultHome),
   };
 });
 
@@ -60,7 +73,8 @@ vi.mock('child_process', async (importOriginal) => {
   };
 });
 
-const EXTENSIONS_DIRECTORY_NAME = path.join(GEMINI_DIR, 'extensions');
+const PRIMARY_EXTENSIONS_DIRECTORY = path.join('.ouroboros', 'extensions');
+const LEGACY_EXTENSIONS_DIRECTORY = path.join('.gemini', 'extensions');
 
 describe('loadExtensions', () => {
   let tempWorkspaceDir: string;
@@ -79,7 +93,7 @@ describe('loadExtensions', () => {
 
     workspaceExtensionsDir = path.join(
       tempWorkspaceDir,
-      EXTENSIONS_DIRECTORY_NAME,
+      PRIMARY_EXTENSIONS_DIRECTORY,
     );
     fs.mkdirSync(workspaceExtensionsDir, { recursive: true });
   });
@@ -161,6 +175,27 @@ describe('loadExtensions', () => {
     expect(ext1?.contextFiles).toEqual([
       path.join(workspaceExtensionsDir, 'ext1', 'my-context-file.md'),
     ]);
+  });
+
+  it('loads extensions defined in the legacy directory and config format', () => {
+    const legacyExtensionsDir = path.join(
+      tempWorkspaceDir,
+      LEGACY_EXTENSIONS_DIRECTORY,
+    );
+
+    createExtension({
+      extensionsDir: legacyExtensionsDir,
+      name: 'legacy-ext',
+      version: '0.1.0',
+      configFilename: LEGACY_EXTENSION_CONFIG_FILENAME,
+      addContextFile: true,
+    });
+
+    const extensions = loadExtensions(tempWorkspaceDir);
+
+    expect(
+      extensions.some((extension) => extension.config.name === 'legacy-ext'),
+    ).toBe(true);
   });
 
   it('should filter out disabled extensions', () => {
@@ -351,14 +386,14 @@ describe('installExtension', () => {
     );
   });
 
-  it('should throw an error and cleanup if gemini-extension.json is missing', async () => {
+  it('should throw an error when no extension config file is present', async () => {
     const sourceExtDir = path.join(tempHomeDir, 'bad-extension');
     fs.mkdirSync(sourceExtDir, { recursive: true });
 
     await expect(
       installExtension({ source: sourceExtDir, type: 'local' }),
     ).rejects.toThrow(
-      `Invalid extension at ${sourceExtDir}. Please make sure it has a valid gemini-extension.json file.`,
+      `Invalid extension at ${sourceExtDir}. Please make sure it has a valid ${PRIMARY_EXTENSION_CONFIG_FILENAME} (or legacy ${LEGACY_EXTENSION_CONFIG_FILENAME}) file.`,
     );
 
     const targetExtDir = path.join(userExtensionsDir, 'bad-extension');
@@ -471,7 +506,7 @@ describe('performWorkspaceExtensionMigration', () => {
 
     workspaceExtensionsDir = path.join(
       tempWorkspaceDir,
-      EXTENSIONS_DIRECTORY_NAME,
+      PRIMARY_EXTENSIONS_DIRECTORY,
     );
     fs.mkdirSync(workspaceExtensionsDir, { recursive: true });
   });
@@ -594,11 +629,12 @@ function createExtension({
   addContextFile = false,
   contextFileName = undefined as string | undefined,
   mcpServers = {} as Record<string, MCPServerConfig>,
+  configFilename = PRIMARY_EXTENSION_CONFIG_FILENAME,
 } = {}): string {
   const extDir = path.join(extensionsDir, name);
   fs.mkdirSync(extDir, { recursive: true });
   fs.writeFileSync(
-    path.join(extDir, EXTENSIONS_CONFIG_FILENAME),
+    path.join(extDir, configFilename),
     JSON.stringify({ name, version, contextFileName, mcpServers }),
   );
 

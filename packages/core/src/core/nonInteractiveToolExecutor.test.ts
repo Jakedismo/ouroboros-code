@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { executeToolCall } from './nonInteractiveToolExecutor.js';
 import type {
   ToolRegistry,
@@ -15,12 +15,14 @@ import type {
 import { ToolErrorType, ApprovalMode } from '../index.js';
 import type { Part } from '@google/genai';
 import { MockTool } from '../test-utils/tools.js';
+import * as telemetryLoggers from '../telemetry/loggers.js';
 
 describe('executeToolCall', () => {
   let mockToolRegistry: ToolRegistry;
   let mockTool: MockTool;
   let abortController: AbortController;
   let mockConfig: Config;
+  let logToolCallSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     mockTool = new MockTool();
@@ -44,6 +46,13 @@ describe('executeToolCall', () => {
     } as unknown as Config;
 
     abortController = new AbortController();
+    logToolCallSpy = vi
+      .spyOn(telemetryLoggers, 'logToolCall')
+      .mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('should execute a tool successfully', async () => {
@@ -84,6 +93,7 @@ describe('executeToolCall', () => {
         },
       ],
     });
+    expect(logToolCallSpy).toHaveBeenCalledTimes(1);
   });
 
   it('should return an error if tool is not found', async () => {

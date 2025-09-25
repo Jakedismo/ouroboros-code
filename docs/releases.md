@@ -1,4 +1,4 @@
-# Gemini CLI Releases
+# Ouroboros Code Releases
 
 ## Release Cadence and Tags
 

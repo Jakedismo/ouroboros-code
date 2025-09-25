@@ -160,7 +160,7 @@ export function AuthDialog({
         <Text color={Colors.Gray}>(Use Enter to select)</Text>
       </Box>
       <Box marginTop={1}>
-        <Text>Terms of Services and Privacy Notice for Gemini CLI</Text>
+        <Text>Terms of Services and Privacy Notice for Ouroboros Code</Text>
       </Box>
       <Box marginTop={1}>
         <Text color={Colors.AccentBlue}>

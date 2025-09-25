@@ -8,9 +8,9 @@ import type {
   Part,
   PartListUnion,
   GenerateContentResponse,
-  FunctionCall,
   FunctionDeclaration,
   FinishReason,
+  Content,
 } from '@google/genai';
 import type {
   ToolCallConfirmationDetails,
@@ -18,7 +18,6 @@ import type {
   ToolResultDisplay,
 } from '../tools/tools.js';
 import type { ToolErrorType } from '../tools/tool-error.js';
-import { getResponseText } from '../utils/partUtils.js';
 import { reportError } from '../utils/errorReporting.js';
 import {
   getErrorMessage,
@@ -27,7 +26,8 @@ import {
 } from '../utils/errors.js';
 import type { GeminiChat } from './geminiChat.js';
 import type { Config } from '../config/config.js';
-import type { ContentGenerator } from './contentGenerator.js';
+import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
+import type { UnifiedAgentMessage, UnifiedAgentToolCall } from '../runtime/types.js';
 
 // Define a structure for tools passed to the server
 export interface ServerTool {
@@ -74,6 +74,9 @@ export interface ToolCallRequestInfo {
   args: Record<string, unknown>;
   isClientInitiated: boolean;
   prompt_id: string;
+  agentId?: string;
+  agentName?: string;
+  agentEmoji?: string;
 }
 
 export interface ToolCallResponseInfo {
@@ -190,14 +193,13 @@ export type ServerGeminiStreamEvent =
 export class Turn {
   readonly pendingToolCalls: ToolCallRequestInfo[] = [];
   private debugResponses: GenerateContentResponse[] = [];
-  private pendingCitations = new Set<string>();
   finishReason: FinishReason | undefined = undefined;
+  private unifiedAgentsClient?: UnifiedAgentsClient;
 
   constructor(
     private readonly chat: GeminiChat,
     private readonly prompt_id: string,
     private readonly config?: Config,
-    private readonly contentGenerator?: ContentGenerator,
   ) {}
   // The run method yields simpler events suitable for server logic
   async *run(
@@ -205,101 +207,8 @@ export class Turn {
     signal: AbortSignal,
   ): AsyncGenerator<ServerGeminiStreamEvent> {
     try {
-      // Check if we're using a non-Gemini provider and handle it appropriately
-      const currentProvider = this.config?.getProvider?.() || 'gemini';
-      
-      console.log(`[Turn.run] Called with provider: ${currentProvider}, request type:`, typeof req);
-      if (Array.isArray(req)) {
-        console.log(`[Turn.run] Request array length: ${req.length}`);
-        if (req.length > 0 && req[0]) {
-          console.log(`[Turn.run] First part keys:`, Object.keys(req[0]));
-        }
-      }
-      
-      if (currentProvider !== 'gemini') {
-        console.log(`[Turn] Using provider-aware streaming for: ${currentProvider}`);
-        // For non-Gemini providers, use ContentGenerator directly to avoid GeminiChat compatibility issues
-        yield* this.runWithContentGenerator(req, signal, currentProvider);
-        return;
-      }
-      
-      const responseStream = await this.chat.sendMessageStream(
-        {
-          message: req,
-          config: {
-            abortSignal: signal,
-          },
-        },
-        this.prompt_id,
-      );
-
-      for await (const resp of responseStream) {
-        if (signal?.aborted) {
-          yield { type: GeminiEventType.UserCancelled };
-          // Do not add resp to debugResponses if aborted before processing
-          return;
-        }
-        this.debugResponses.push(resp);
-
-        const thoughtPart = resp.candidates?.[0]?.content?.parts?.[0];
-        if (thoughtPart?.thought) {
-          // Thought always has a bold "subject" part enclosed in double asterisks
-          // (e.g., **Subject**). The rest of the string is considered the description.
-          const rawText = thoughtPart.text ?? '';
-          const subjectStringMatches = rawText.match(/\*\*(.*?)\*\*/s);
-          const subject = subjectStringMatches
-            ? subjectStringMatches[1].trim()
-            : '';
-          const description = rawText.replace(/\*\*(.*?)\*\*/s, '').trim();
-          const thought: ThoughtSummary = {
-            subject,
-            description,
-          };
-
-          yield {
-            type: GeminiEventType.Thought,
-            value: thought,
-          };
-          continue;
-        }
-
-        const text = getResponseText(resp);
-        if (text) {
-          yield { type: GeminiEventType.Content, value: text };
-        }
-
-        // Handle function calls (requesting tool execution)
-        const functionCalls = resp.functionCalls ?? [];
-        for (const fnCall of functionCalls) {
-          const event = this.handlePendingFunctionCall(fnCall);
-          if (event) {
-            yield event;
-          }
-        }
-
-        for (const citation of getCitations(resp)) {
-          this.pendingCitations.add(citation);
-        }
-
-        // Check if response was truncated or stopped for various reasons
-        const finishReason = resp.candidates?.[0]?.finishReason;
-
-        if (finishReason) {
-          if (this.pendingCitations.size > 0) {
-            yield {
-              type: GeminiEventType.Citation,
-              value: `Citations:\n${[...this.pendingCitations].sort().join('\n')}`,
-            };
-            this.pendingCitations.clear();
-          }
-
-          this.finishReason = finishReason;
-          yield {
-            type: GeminiEventType.Finished,
-            value: finishReason as FinishReason,
-          };
-        }
-      }
+      const providerId = this.config?.getProvider?.() || 'gemini';
+      yield* this.runWithUnifiedAgents(req, signal, providerId);
     } catch (e) {
       if (signal.aborted) {
         yield { type: GeminiEventType.UserCancelled };
@@ -348,179 +257,213 @@ export class Turn {
     }
   }
 
-  private handlePendingFunctionCall(
-    fnCall: FunctionCall,
-  ): ServerGeminiStreamEvent | null {
-    const callId =
-      fnCall.id ??
-      `${fnCall.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const name = fnCall.name || 'undefined_tool_name';
-    const args = (fnCall.args || {}) as Record<string, unknown>;
+  private getUnifiedAgentsClient(): UnifiedAgentsClient {
+    if (!this.config) {
+      throw new Error('Unified agents runtime requires configuration context');
+    }
+    if (!this.unifiedAgentsClient) {
+      this.unifiedAgentsClient = new UnifiedAgentsClient(this.config);
+    }
+    return this.unifiedAgentsClient;
+  }
 
-    const toolCallRequest: ToolCallRequestInfo = {
-      callId,
-      name,
+  private async *runWithUnifiedAgents(
+    req: PartListUnion,
+    signal: AbortSignal,
+    provider: string,
+  ): AsyncGenerator<ServerGeminiStreamEvent> {
+    try {
+      const client = this.getUnifiedAgentsClient();
+      const wrappedReq = this.normalizeRequestParts(req);
+      const isFunctionResponse = wrappedReq.some(part => 'functionResponse' in part);
+
+      const historyRole = isFunctionResponse ? ('function' as const) : ('user' as const);
+      this.chat.addHistory({
+        role: historyRole,
+        parts: wrappedReq,
+      });
+
+      const messages = this.buildUnifiedAgentMessages();
+      const session = await client.createSession({
+        providerId: provider,
+        model: this.config?.getModel() || 'gpt-5',
+        systemPrompt: this.config?.getSystemPrompt() || undefined,
+      });
+
+      for await (const event of client.streamResponse(session, messages)) {
+        if (signal.aborted) {
+          yield { type: GeminiEventType.UserCancelled };
+          return;
+        }
+
+        switch (event.type) {
+          case 'final': {
+            const content = event.message.content ?? '';
+            if (content.length > 0) {
+              yield { type: GeminiEventType.Content, value: content };
+              this.chat.addHistory({ role: 'model', parts: [{ text: content }] });
+            }
+            this.finishReason = 'STOP' as FinishReason;
+            yield { type: GeminiEventType.Finished, value: 'STOP' as FinishReason };
+            break;
+          }
+          case 'error': {
+            yield {
+              type: GeminiEventType.Error,
+              value: {
+                error: {
+                  message: event.error?.message || 'Unified runtime error',
+                },
+              },
+            };
+            break;
+          }
+          case 'text-delta': {
+            if (event.delta) {
+              yield { type: GeminiEventType.Content, value: event.delta };
+            }
+            break;
+          }
+          case 'tool-call': {
+            const request = this.createToolCallRequestFromUnifiedEvent(event.toolCall);
+            if (request) {
+              this.pendingToolCalls.push(request);
+              yield {
+                type: GeminiEventType.ToolCallRequest,
+                value: request,
+              };
+            }
+            break;
+          }
+          default:
+            break;
+        }
+      }
+    } catch (error) {
+      yield {
+        type: GeminiEventType.Error,
+        value: { error: { message: getErrorMessage(error) } },
+      };
+    }
+  }
+
+  private buildUnifiedAgentMessages(): UnifiedAgentMessage[] {
+    const history = this.chat.getHistory();
+    const messages: UnifiedAgentMessage[] = [];
+    for (const entry of history) {
+      const unified = this.convertContentToUnifiedMessage(entry);
+      if (unified) {
+        messages.push(unified);
+      }
+    }
+    return messages;
+  }
+
+  private convertContentToUnifiedMessage(content: Content): UnifiedAgentMessage | null {
+    const roleMap: Record<string, UnifiedAgentMessage['role']> = {
+      user: 'user',
+      model: 'assistant',
+      system: 'system',
+      function: 'tool',
+      tool: 'tool',
+    };
+
+    const roleKey = typeof content.role === 'string' ? content.role : 'user';
+    const role = roleMap[roleKey] ?? 'user';
+    const text = this.extractTextFromParts(content.parts);
+    if (!text) {
+      return null;
+    }
+
+    return {
+      role,
+      content: text,
+    };
+  }
+
+  private normalizeRequestParts(req: PartListUnion): Part[] {
+    if (typeof req === 'string') {
+      return [{ text: req }];
+    }
+
+    if (Array.isArray(req)) {
+      return req.map(part => (typeof part === 'string' ? { text: part } : part));
+    }
+
+    if (typeof req === 'object' && req !== null) {
+      const maybePart = req as Part;
+      if (typeof maybePart === 'object') {
+        return [maybePart];
+      }
+    }
+
+    return [{ text: String(req) }];
+  }
+
+  private extractTextFromParts(parts: Part[] | undefined): string {
+    if (!parts || parts.length === 0) {
+      return '';
+    }
+    const textParts: string[] = [];
+    for (const part of parts) {
+      const maybeText = (part as any).text;
+      if (typeof maybeText === 'string' && maybeText.trim().length > 0) {
+        textParts.push(maybeText.trim());
+        continue;
+      }
+
+      const functionResponse = (part as any).functionResponse;
+      if (functionResponse && typeof functionResponse === 'object') {
+        try {
+          textParts.push(JSON.stringify(functionResponse));
+        } catch {
+          // Ignore serialization issues
+        }
+      }
+    }
+    return textParts.join('\n').trim();
+  }
+
+  private createToolCallRequestFromUnifiedEvent(toolCall: UnifiedAgentToolCall) {
+    if (!toolCall) {
+      return null;
+    }
+
+    const args = this.normalizeToolArguments(toolCall.arguments);
+    return {
+      callId: toolCall.id,
+      name: toolCall.name,
       args,
       isClientInitiated: false,
       prompt_id: this.prompt_id,
-    };
-
-    this.pendingToolCalls.push(toolCallRequest);
-
-    // Yield a request for the tool call, not the pending/confirming status
-    return { type: GeminiEventType.ToolCallRequest, value: toolCallRequest };
+    } satisfies ToolCallRequestInfo;
   }
 
-  /**
-   * Provider-aware streaming method that uses ContentGenerator directly
-   * to avoid GeminiChat compatibility issues with non-Gemini providers
-   */
-  private async *runWithContentGenerator(
-    req: PartListUnion,
-    signal: AbortSignal,
-    provider: string
-  ): AsyncGenerator<ServerGeminiStreamEvent> {
-    try {
-      // Use the passed content generator
-      if (!this.contentGenerator) {
-        console.error('[Turn] ContentGenerator not available for provider:', provider);
-        yield { type: GeminiEventType.Error, value: { error: { message: 'ContentGenerator not available' } } };
-        return;
-      }
-      
-      const contentGenerator = this.contentGenerator;
-      
-      // Convert request to the format expected by ContentGenerator
-      const wrappedReq: Part[] = typeof req === 'string'
-        ? [{ text: req }]
-        : Array.isArray(req)
-        ? req.map(part => typeof part === 'string' ? { text: part } : part)
-        : [typeof req === 'string' ? { text: req } : req];
-      
-      // Check if this is a tool response (contains functionResponse parts)
-      const isFunctionResponse = wrappedReq.some(part => 'functionResponse' in part);
-      
-      console.log(`[Turn] Processing request for ${provider}, isFunctionResponse: ${isFunctionResponse}`);
-      if (isFunctionResponse) {
-        console.log('[Turn] Function response parts:', JSON.stringify(wrappedReq, null, 2));
-      }
-      
-      // Add to chat history with appropriate role
-      const historyContent = {
-        role: isFunctionResponse ? ('function' as const) : ('user' as const),
-        parts: wrappedReq
-      };
-      this.chat.addHistory(historyContent);
-      console.log(`[Turn] Added to history with role: ${historyContent.role}`);
-      
-      // For function responses, we don't need to stream again - the model should continue
-      // automatically based on the history
-      if (isFunctionResponse && provider === 'openai') {
-        console.log('[Turn] Function response added to history for OpenAI, triggering continuation');
-        // Get the current history to see what will be sent
-        const currentHistory = this.chat.getHistory();
-        console.log('[Turn] Current history length:', currentHistory.length);
-        console.log('[Turn] Last 2 history entries:', JSON.stringify(currentHistory.slice(-2).map(h => ({
-          role: h.role,
-          partsLength: h.parts?.length,
-          firstPartKeys: h.parts?.[0] ? Object.keys(h.parts[0]) : []
-        })), null, 2));
-        // Don't return here - continue to let OpenAI process the complete history
-      }
-      
-      // Get tools from config's tool registry
-      const toolRegistry = this.config?.getToolRegistry?.();
-      const toolDeclarations = toolRegistry?.getFunctionDeclarations?.() || [];
-      const tools = toolDeclarations.length > 0 ? [{ functionDeclarations: toolDeclarations }] : [];
-      
-      // Import provider-specific handlers
-      const { handleOpenAIStreaming, handleAnthropicStreaming, handleGenericStreaming } = await import('./turn-provider-support.js');
-      
-      // Callbacks for tool handling
-      const onToolCall = (toolCall: ToolCallRequestInfo) => {
-        this.pendingToolCalls.push(toolCall);
-      };
-      
-      const onAddHistory = (content: any) => {
-        this.chat.addHistory(content);
-      };
-      
-      // Route to provider-specific handler
-      let streamGenerator: AsyncGenerator<ServerGeminiStreamEvent>;
-      
-      switch (provider) {
-        case 'openai':
-          streamGenerator = handleOpenAIStreaming(
-            contentGenerator,
-            this.chat.getHistory(),
-            tools,
-            this.prompt_id,
-            signal,
-            onToolCall,
-            onAddHistory,
-            this.config
-          );
-          break;
-          
-        case 'anthropic':
-          streamGenerator = handleAnthropicStreaming(
-            contentGenerator,
-            this.chat.getHistory(),
-            tools,
-            this.prompt_id,
-            signal,
-            onToolCall,
-            onAddHistory,
-            this.config
-          );
-          break;
-          
-        default:
-          streamGenerator = handleGenericStreaming(
-            contentGenerator,
-            this.chat.getHistory(),
-            tools,
-            this.prompt_id,
-            signal,
-            onToolCall,
-            onAddHistory,
-            provider,
-            this.config
-          );
-          break;
-      }
-      
-      // Yield all events from the provider-specific handler
-      for await (const event of streamGenerator) {
-        yield event;
-        
-        // Update finish reason if we have one
-        if (event.type === GeminiEventType.Content) {
-          // Content is being streamed successfully
-          this.finishReason = 'STOP' as any;
-        }
-      }
-      
-      console.log(`[Turn] Successfully completed streaming for provider: ${provider}`);
-      
-    } catch (error) {
-      console.error(`[Turn] Error in provider-aware streaming for ${provider}:`, error);
-      yield { type: GeminiEventType.Error, value: { error: { message: getErrorMessage(error) } } };
+  private normalizeToolArguments(args: unknown): Record<string, unknown> {
+    if (args === null || args === undefined) {
+      return {};
     }
+
+    if (typeof args === 'string') {
+      try {
+        const parsed = JSON.parse(args);
+        if (parsed && typeof parsed === 'object') {
+          return parsed as Record<string, unknown>;
+        }
+        return { value: parsed } as Record<string, unknown>;
+      } catch {
+        return { value: args } as Record<string, unknown>;
+      }
+    }
+
+    if (typeof args === 'object') {
+      return args as Record<string, unknown>;
+    }
+
+    return { value: args } as Record<string, unknown>;
   }
 
   getDebugResponses(): GenerateContentResponse[] {
     return this.debugResponses;
   }
-}
-
-function getCitations(resp: GenerateContentResponse): string[] {
-  return (resp.candidates?.[0]?.citationMetadata?.citations ?? [])
-    .filter((citation) => citation.uri !== undefined)
-    .map((citation) => {
-      if (citation.title) {
-        return `(${citation.title}) ${citation.uri}`;
-      }
-      return citation.uri!;
-    });
 }

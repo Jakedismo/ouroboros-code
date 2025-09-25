@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Test Anthropic provider with agent selection
-import { AgentSelectorService } from './packages/core/dist/src/agents/agentSelectorService.js';
+import { AgentSelectorService } from './packages/core/dist/index.js';
 
 async function testAnthropicAgentSelection() {
   try {

@@ -14,13 +14,7 @@ import {
   type Mocked,
 } from 'vitest';
 
-import type {
-  Chat,
-  Content,
-  EmbedContentResponse,
-  GenerateContentResponse,
-  Part,
-} from '@google/genai';
+import type { Chat, Content, GenerateContentResponse, Part } from '@google/genai';
 import { GoogleGenAI } from '@google/genai';
 import { findIndexAfterFraction, GeminiClient } from './client.js';
 import {
@@ -200,6 +194,7 @@ describe('Gemini Client (client.ts)', () => {
     const mockToolRegistry = {
       getFunctionDeclarations: vi.fn().mockReturnValue([]),
       getTool: vi.fn().mockReturnValue(null),
+      getAllTools: vi.fn().mockReturnValue([]),
     };
     const fileService = new FileDiscoveryService('/test/dir');
     const contentGeneratorConfig: ContentGeneratorConfig = {
@@ -214,6 +209,9 @@ describe('Gemini Client (client.ts)', () => {
         .mockReturnValue(contentGeneratorConfig),
       getToolRegistry: vi.fn().mockReturnValue(mockToolRegistry),
       getModel: vi.fn().mockReturnValue('test-model'),
+      getProvider: vi.fn().mockReturnValue('openai'),
+      getProviderApiKey: vi.fn().mockReturnValue('test-key'),
+      getSystemPrompt: vi.fn().mockReturnValue(''),
       getEmbeddingModel: vi.fn().mockReturnValue('test-embedding-model'),
       getApiKey: vi.fn().mockReturnValue('test-key'),
       getVertexAI: vi.fn().mockReturnValue(false),
@@ -281,95 +279,17 @@ describe('Gemini Client (client.ts)', () => {
 
   describe('generateEmbedding', () => {
     const texts = ['hello world', 'goodbye world'];
-    const testEmbeddingModel = 'test-embedding-model';
-
-    it('should call embedContent with correct parameters and return embeddings', async () => {
-      const mockEmbeddings = [
-        [0.1, 0.2, 0.3],
-        [0.4, 0.5, 0.6],
-      ];
-      const mockResponse: EmbedContentResponse = {
-        embeddings: [
-          { values: mockEmbeddings[0] },
-          { values: mockEmbeddings[1] },
-        ],
-      };
-      mockEmbedContentFn.mockResolvedValue(mockResponse);
-
-      const result = await client.generateEmbedding(texts);
-
-      expect(mockEmbedContentFn).toHaveBeenCalledTimes(1);
-      expect(mockEmbedContentFn).toHaveBeenCalledWith({
-        model: testEmbeddingModel,
-        contents: texts,
-      });
-      expect(result).toEqual(mockEmbeddings);
-    });
-
     it('should return an empty array if an empty array is passed', async () => {
       const result = await client.generateEmbedding([]);
       expect(result).toEqual([]);
       expect(mockEmbedContentFn).not.toHaveBeenCalled();
     });
 
-    it('should throw an error if API response has no embeddings array', async () => {
-      mockEmbedContentFn.mockResolvedValue({} as EmbedContentResponse); // No `embeddings` key
-
+    it('should throw an informative error while embeddings are unsupported', async () => {
       await expect(client.generateEmbedding(texts)).rejects.toThrow(
-        'No embeddings found in API response.',
+        'Embeddings are not supported in the unified Agents runtime yet.',
       );
-    });
-
-    it('should throw an error if API response has an empty embeddings array', async () => {
-      const mockResponse: EmbedContentResponse = {
-        embeddings: [],
-      };
-      mockEmbedContentFn.mockResolvedValue(mockResponse);
-      await expect(client.generateEmbedding(texts)).rejects.toThrow(
-        'No embeddings found in API response.',
-      );
-    });
-
-    it('should throw an error if API returns a mismatched number of embeddings', async () => {
-      const mockResponse: EmbedContentResponse = {
-        embeddings: [{ values: [1, 2, 3] }], // Only one for two texts
-      };
-      mockEmbedContentFn.mockResolvedValue(mockResponse);
-
-      await expect(client.generateEmbedding(texts)).rejects.toThrow(
-        'API returned a mismatched number of embeddings. Expected 2, got 1.',
-      );
-    });
-
-    it('should throw an error if any embedding has nullish values', async () => {
-      const mockResponse: EmbedContentResponse = {
-        embeddings: [{ values: [1, 2, 3] }, { values: undefined }], // Second one is bad
-      };
-      mockEmbedContentFn.mockResolvedValue(mockResponse);
-
-      await expect(client.generateEmbedding(texts)).rejects.toThrow(
-        'API returned an empty embedding for input text at index 1: "goodbye world"',
-      );
-    });
-
-    it('should throw an error if any embedding has an empty values array', async () => {
-      const mockResponse: EmbedContentResponse = {
-        embeddings: [{ values: [] }, { values: [1, 2, 3] }], // First one is bad
-      };
-      mockEmbedContentFn.mockResolvedValue(mockResponse);
-
-      await expect(client.generateEmbedding(texts)).rejects.toThrow(
-        'API returned an empty embedding for input text at index 0: "hello world"',
-      );
-    });
-
-    it('should propagate errors from the API call', async () => {
-      const apiError = new Error('API Failure');
-      mockEmbedContentFn.mockRejectedValue(apiError);
-
-      await expect(client.generateEmbedding(texts)).rejects.toThrow(
-        'API Failure',
-      );
+      expect(mockEmbedContentFn).not.toHaveBeenCalled();
     });
   });
 

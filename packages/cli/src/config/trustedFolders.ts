@@ -12,8 +12,26 @@ import type { Settings } from './settings.js';
 import stripJsonComments from 'strip-json-comments';
 
 export const TRUSTED_FOLDERS_FILENAME = 'trustedFolders.json';
-export const SETTINGS_DIRECTORY_NAME = '.gemini';
-export const USER_SETTINGS_DIR = path.join(homedir(), SETTINGS_DIRECTORY_NAME);
+export const PRIMARY_SETTINGS_DIRECTORY_NAME = '.gemini';
+export const LEGACY_SETTINGS_DIRECTORY_NAME = '.ouroboros';
+export const SETTINGS_DIRECTORY_NAME = PRIMARY_SETTINGS_DIRECTORY_NAME;
+const SETTINGS_DIRECTORY_CANDIDATES = [
+  PRIMARY_SETTINGS_DIRECTORY_NAME,
+  LEGACY_SETTINGS_DIRECTORY_NAME,
+];
+
+function resolveUserSettingsDir(): string {
+  const home = homedir();
+  for (const dir of SETTINGS_DIRECTORY_CANDIDATES) {
+    const candidate = path.join(home, dir);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return path.join(home, PRIMARY_SETTINGS_DIRECTORY_NAME);
+}
+
+export const USER_SETTINGS_DIR = resolveUserSettingsDir();
 export const USER_TRUSTED_FOLDERS_PATH = path.join(
   USER_SETTINGS_DIR,
   TRUSTED_FOLDERS_FILENAME,

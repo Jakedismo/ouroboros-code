@@ -81,7 +81,7 @@ describe('activate', () => {
     vi.mocked(context.globalState.get).mockReturnValue(undefined);
     await activate(context);
     expect(showInformationMessageMock).toHaveBeenCalledWith(
-      'Gemini CLI Companion extension successfully installed.',
+      'Ouroboros Code Companion extension successfully installed.',
     );
   });
 
@@ -91,17 +91,17 @@ describe('activate', () => {
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
 
-  it('should launch the Gemini CLI when the user clicks the button', async () => {
+  it('should launch the Ouroboros Code when the user clicks the button', async () => {
     const showInformationMessageMock = vi
       .mocked(vscode.window.showInformationMessage)
-      .mockResolvedValue('Re-launch Gemini CLI' as never);
+      .mockResolvedValue('Re-launch Ouroboros Code' as never);
     vi.mocked(context.globalState.get).mockReturnValue(undefined);
     await activate(context);
     expect(showInformationMessageMock).toHaveBeenCalled();
     await new Promise(process.nextTick); // Wait for the promise to resolve
     const commandCallback = vi
       .mocked(vscode.commands.registerCommand)
-      .mock.calls.find((call) => call[0] === 'gemini-cli.runGeminiCLI')?.[1];
+      .mock.calls.find((call) => call[0] === 'ouroboros-code.runCli')?.[1];
 
     expect(commandCallback).toBeDefined();
   });

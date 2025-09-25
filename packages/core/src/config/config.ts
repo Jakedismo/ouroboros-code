@@ -26,8 +26,6 @@ import { ReadManyFilesTool } from '../tools/read-many-files.js';
 import { MemoryTool, setGeminiMdFilename } from '../tools/memoryTool.js';
 import { WebSearchTool } from '../tools/web-search.js';
 import { GeminiClient } from '../core/client.js';
-import { LLMProviderFactory } from '../providers/factory.js';
-import type { Provider } from '../providers/types.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { GitService } from '../services/gitService.js';
 import type { TelemetryTarget } from '../telemetry/index.js';
@@ -47,6 +45,10 @@ import { IdeClient } from '../ide/ide-client.js';
 import type { Content } from '@google/genai';
 import type { FileSystemService } from '../services/fileSystemService.js';
 import { StandardFileSystemService } from '../services/fileSystemService.js';
+import type {
+  ToolCallRequestInfo,
+  ToolCallResponseInfo,
+} from '../core/turn.js';
 import { logCliConfiguration, logIdeConnection } from '../telemetry/loggers.js';
 import { IdeConnectionEvent, IdeConnectionType } from '../telemetry/types.js';
 
@@ -154,6 +156,18 @@ export type FlashFallbackHandler = (
   error?: unknown,
 ) => Promise<boolean | string | null>;
 
+export interface ToolExecutionMetadata {
+  agentId?: string;
+  agentName?: string;
+  agentEmoji?: string;
+}
+
+export type ToolExecutionBridge = (
+  request: ToolCallRequestInfo,
+  abortSignal: AbortSignal,
+  metadata?: ToolExecutionMetadata,
+) => Promise<ToolCallResponseInfo>;
+
 export interface ConfigParameters {
   sessionId: string;
   embeddingModel?: string;
@@ -247,7 +261,6 @@ export class Config {
   private readonly telemetrySettings: TelemetrySettings;
   private readonly usageStatisticsEnabled: boolean;
   private geminiClient!: GeminiClient;
-  private currentProvider?: Provider;
   private readonly fileFiltering: {
     respectGitIgnore: boolean;
     respectGeminiIgnore: boolean;
@@ -300,6 +313,7 @@ export class Config {
   readonly storage: Storage;
   private readonly fileExclusions: FileExclusions;
   private readonly eventEmitter?: EventEmitter;
+  private toolExecutionBridge?: ToolExecutionBridge;
 
   constructor(params: ConfigParameters) {
     this.sessionId = params.sessionId;
@@ -407,10 +421,6 @@ export class Config {
     }
     this.promptRegistry = new PromptRegistry();
     this.toolRegistry = await this.createToolRegistry();
-    
-    // Initialize the provider based on configuration
-    await this.initializeCurrentProvider();
-    
     logCliConfiguration(this, new StartSessionEvent(this, this.toolRegistry));
   }
 
@@ -509,55 +519,29 @@ export class Config {
   }
 
   /**
-   * Get the current provider instance, creating it if necessary
-   */
-  async getCurrentProvider(): Promise<Provider> {
-    if (!this.currentProvider) {
-      await this.initializeCurrentProvider();
-    }
-    return this.currentProvider!;
-  }
-
-  /**
-   * Initialize the current provider based on configuration
-   */
-  private async initializeCurrentProvider(): Promise<void> {
-    const factory = LLMProviderFactory.getInstance();
-    
-    const providerOptions = {
-      apiKey: this.getEffectiveApiKey(),
-      model: this.getModel(),
-    };
-
-    this.currentProvider = factory.createProvider(this.provider, providerOptions);
-  }
-
-  /**
-   * Get the effective API key for the current provider
-   */
-  private getEffectiveApiKey(): string | undefined {
-    // First check explicit provider API key, then environment variables
-    if (this.providerApiKey) {
-      return this.providerApiKey;
-    }
-
-    switch (this.provider) {
-      case 'openai':
-        return process.env['OPENAI_API_KEY'];
-      case 'anthropic':
-        return process.env['ANTHROPIC_API_KEY'];
-      case 'gemini':
-        return process.env['GEMINI_API_KEY'] || process.env['GOOGLE_API_KEY'];
-      default:
-        return undefined;
-    }
-  }
-
-  /**
    * Get OpenAI API key specifically for agent selection service
    */
   getOpenAIApiKey(): string | undefined {
     return process.env['OPENAI_API_KEY'];
+  }
+
+  setToolExecutionBridge(handler?: ToolExecutionBridge): void {
+    this.toolExecutionBridge = handler;
+  }
+
+  async executeToolCall(
+    request: ToolCallRequestInfo,
+    abortSignal: AbortSignal,
+    metadata?: ToolExecutionMetadata,
+  ): Promise<ToolCallResponseInfo> {
+    if (this.toolExecutionBridge) {
+      return this.toolExecutionBridge(request, abortSignal, metadata);
+    }
+
+    const { executeToolCall } = await import(
+      '../core/nonInteractiveToolExecutor.js'
+    );
+    return executeToolCall(this, request, abortSignal);
   }
 
   /**
@@ -571,12 +555,6 @@ export class Config {
     // Update the provider configuration
     (this as any).provider = newProvider;
     
-    // Clear the current provider to force recreation
-    this.currentProvider = undefined;
-    
-    // Initialize the new provider
-    await this.initializeCurrentProvider();
-
     // Determine appropriate auth type for the new provider
     let authType = this.contentGeneratorConfig?.authType || AuthType.USE_GEMINI;
     

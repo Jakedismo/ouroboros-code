@@ -52,6 +52,9 @@ export interface IndividualToolCallDisplay {
   status: ToolCallStatus;
   confirmationDetails: ToolCallConfirmationDetails | undefined;
   renderOutputAsMarkdown?: boolean;
+  agentId?: string;
+  agentName?: string;
+  agentEmoji?: string;
 }
 
 export interface CompressionProps {
@@ -59,6 +62,56 @@ export interface CompressionProps {
   originalTokenCount: number | null;
   newTokenCount: number | null;
   compressionStatus: CompressionStatus | null;
+}
+
+export interface AgentPersonaSummary {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  specialties: string[];
+}
+
+export interface MultiAgentTimelineEntry {
+  wave: number;
+  agents: AgentPersonaSummary[];
+}
+
+export interface MultiAgentAgentResultDisplay {
+  agent: AgentPersonaSummary;
+  analysis: string;
+  solution: string;
+  confidence: number;
+  handoffAgentIds: string[];
+  tools?: MultiAgentToolEventDisplay[];
+}
+
+export interface MultiAgentExecutionDisplay {
+  totalAgents: number;
+  durationMs: number;
+  timeline: MultiAgentTimelineEntry[];
+  agentResults: MultiAgentAgentResultDisplay[];
+  aggregateReasoning?: string;
+}
+
+export interface MultiAgentSelectionDisplay {
+  selectedAgents: AgentPersonaSummary[];
+  reasoning: string;
+  confidence: number;
+  processingTime: number;
+  status: 'planning' | 'running' | 'complete';
+  execution?: MultiAgentExecutionDisplay;
+}
+
+export interface MultiAgentToolEventDisplay {
+  name: string;
+  args: string;
+  output?: string;
+}
+
+export interface MultiAgentInteractiveState {
+  focusedAgentId?: string;
+  expandedAgentIds?: string[];
 }
 
 export interface HistoryItemBase {
@@ -129,6 +182,12 @@ export type HistoryItemToolGroup = HistoryItemBase & {
   tools: IndividualToolCallDisplay[];
 };
 
+export type HistoryItemMultiAgentStatus = HistoryItemBase & {
+  type: 'multi_agent_status';
+  selection: MultiAgentSelectionDisplay;
+  interactive?: MultiAgentInteractiveState;
+};
+
 export type HistoryItemUserShell = HistoryItemBase & {
   type: 'user_shell';
   text: string;
@@ -157,7 +216,8 @@ export type HistoryItemWithoutId =
   | HistoryItemModelStats
   | HistoryItemToolStats
   | HistoryItemQuit
-  | HistoryItemCompression;
+  | HistoryItemCompression
+  | HistoryItemMultiAgentStatus;
 
 export type HistoryItem = HistoryItemWithoutId & { id: number };
 

@@ -123,7 +123,7 @@ describe('IDEServer', () => {
     const port = getPortFromMock(replaceMock);
     const expectedPortFile = path.join(
       '/tmp',
-      `gemini-ide-server-${process.ppid}.json`,
+      `ouroboros-ide-server-${process.ppid}.json`,
     );
     expect(fs.writeFile).toHaveBeenCalledWith(
       expectedPortFile,
@@ -148,7 +148,7 @@ describe('IDEServer', () => {
     const port = getPortFromMock(replaceMock);
     const expectedPortFile = path.join(
       '/tmp',
-      `gemini-ide-server-${process.ppid}.json`,
+      `ouroboros-ide-server-${process.ppid}.json`,
     );
     expect(fs.writeFile).toHaveBeenCalledWith(
       expectedPortFile,
@@ -173,7 +173,7 @@ describe('IDEServer', () => {
     const port = getPortFromMock(replaceMock);
     const expectedPortFile = path.join(
       '/tmp',
-      `gemini-ide-server-${process.ppid}.json`,
+      `ouroboros-ide-server-${process.ppid}.json`,
     );
     expect(fs.writeFile).toHaveBeenCalledWith(
       expectedPortFile,
@@ -212,7 +212,7 @@ describe('IDEServer', () => {
     const port = getPortFromMock(replaceMock);
     const expectedPortFile = path.join(
       '/tmp',
-      `gemini-ide-server-${process.ppid}.json`,
+      `ouroboros-ide-server-${process.ppid}.json`,
     );
     expect(fs.writeFile).toHaveBeenCalledWith(
       expectedPortFile,
@@ -243,7 +243,7 @@ describe('IDEServer', () => {
     await ideServer.start(mockContext);
     const portFile = path.join(
       '/tmp',
-      `gemini-ide-server-${process.ppid}.json`,
+      `ouroboros-ide-server-${process.ppid}.json`,
     );
     expect(fs.writeFile).toHaveBeenCalledWith(portFile, expect.any(String));
 
@@ -273,7 +273,7 @@ describe('IDEServer', () => {
       const port = getPortFromMock(replaceMock);
       const expectedPortFile = path.join(
         '/tmp',
-        `gemini-ide-server-${process.ppid}.json`,
+        `ouroboros-ide-server-${process.ppid}.json`,
       );
       expect(fs.writeFile).toHaveBeenCalledWith(
         expectedPortFile,

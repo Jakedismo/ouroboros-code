@@ -89,7 +89,7 @@ export class IDEServer {
     this.diffManager = diffManager;
     this.portFile = path.join(
       os.tmpdir(),
-      `gemini-ide-server-${process.ppid}.json`,
+      `ouroboros-ide-server-${process.ppid}.json`,
     );
   }
 
@@ -286,7 +286,7 @@ export class IDEServer {
 const createMcpServer = (diffManager: DiffManager) => {
   const server = new McpServer(
     {
-      name: 'gemini-cli-companion-mcp-server',
+      name: 'ouroboros-code-companion-mcp-server',
       version: '1.0.0',
     },
     { capabilities: { logging: {} } },

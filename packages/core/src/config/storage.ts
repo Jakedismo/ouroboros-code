@@ -9,7 +9,7 @@ import * as os from 'node:os';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 
-export const GEMINI_DIR = '.gemini';
+import { resolveConfigDir } from '../utils/paths.js';
 export const GOOGLE_ACCOUNTS_FILENAME = 'google_accounts.json';
 const TMP_DIR_NAME = 'tmp';
 
@@ -22,10 +22,8 @@ export class Storage {
 
   static getGlobalGeminiDir(): string {
     const homeDir = os.homedir();
-    if (!homeDir) {
-      return path.join(os.tmpdir(), '.gemini');
-    }
-    return path.join(homeDir, GEMINI_DIR);
+    const baseDir = homeDir || os.tmpdir();
+    return resolveConfigDir(baseDir);
   }
 
   static getMcpOAuthTokensPath(): string {
@@ -57,7 +55,7 @@ export class Storage {
   }
 
   getGeminiDir(): string {
-    return path.join(this.targetDir, GEMINI_DIR);
+    return resolveConfigDir(this.targetDir);
   }
 
   getProjectTempDir(): string {
@@ -105,7 +103,13 @@ export class Storage {
   }
 
   getExtensionsConfigPath(): string {
-    return path.join(this.getExtensionsDir(), 'gemini-extension.json');
+    const dir = this.getExtensionsDir();
+    const primary = path.join(dir, 'ouroboros-extension.json');
+    const legacy = path.join(dir, 'gemini-extension.json');
+    if (fs.existsSync(legacy) && !fs.existsSync(primary)) {
+      return legacy;
+    }
+    return primary;
   }
 
   getHistoryFilePath(): string {

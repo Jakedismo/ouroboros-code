@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+## [1.1.0-alpha.0] - 2025-09-19
+
+### Added
+
+#### Multi-Agent Orchestration 2.0 🚀
+- Specialists now execute through the unified Agents SDK, so their tool calls (files, shell, git, web, etc.) run in parallel waves and stream back into the TUI.
+- Live orchestration panel shows planning → running → complete status with per-specialist tool usage, handoffs, duration, and confidence.
+- `/agents status` and `/agents stats` report richer analytics: average confidence, tool calls per selection, top tool-using personas, and last orchestration timing.
+- Thinking indicator adapts to the active specialist roster instead of the generic provider banner, making it obvious which personas are working.
+- Selection history stores tool usage summaries for top-level analytics and troubleshooting.
+
+#### Documentation & Releases
+- README and CLI docs highlight the 50 specialist personas and the upgraded multi-agent orchestration workflow.
+- All workspace packages bumped to the `1.1.0-alpha.0` prerelease channel.
+
 ### Fixed
 
 #### Multi-Provider Integration Fixes 🔧
@@ -26,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI OpenAI flag alias** - Added `--openai-key` as an alias for `--openai-api-key` to simplify provider startup flows.
 
 #### CLI User Experience
-- **Multi-agent orchestration HUD** - The CLI now surfaces live progress for automatic agent selection and displays detailed team summaries (waves, outcomes, handoffs, timing) once orchestration completes.
+- **Multi-agent orchestration HUD** - The CLI surfaces live progress for automatic agent selection and displays detailed team summaries (waves, outcomes, handoffs, timing) once orchestration completes.
 
 #### Technical Implementation Details
 - **packages/core/src/core/turn.ts** - Added provider detection and routing logic

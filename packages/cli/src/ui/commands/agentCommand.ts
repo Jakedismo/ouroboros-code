@@ -21,7 +21,7 @@ let AgentManager: any;
 async function getAgentManager() {
   if (!AgentManager) {
     try {
-      const module = await import('@ouroboros/ouroboros-code-core/dist/src/agents/agentManager.js');
+      const module = await import('@ouroboros/ouroboros-code-core');
       AgentManager = module.AgentManager;
     } catch (error) {
       console.warn('AgentManager not available:', error);

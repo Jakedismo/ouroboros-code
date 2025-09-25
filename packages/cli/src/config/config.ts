@@ -319,7 +319,7 @@ Autonomous agent: ouroboros-code --autonomous "continue autonomously"`,
         .option('openai-model', {
           type: 'string',
           description: 'OpenAI model to use',
-          default: 'gpt-5-codex',
+          default: 'gpt-5',
         })
         .option('openai-use-oauth', {
           type: 'boolean',
@@ -531,7 +531,7 @@ export async function loadHierarchicalGeminiMemory(
  * Extract provider options from CLI arguments
  */
 const SUPPORTED_PROVIDER_MODELS: Record<string, string[]> = {
-  openai: ['gpt-5-codex', 'gpt-5'],
+  openai: ['gpt-5', 'gpt-5-codex'],
   anthropic: ['claude-sonnet-4-20250514[1m]', 'claude-opus-4-1-20250805'],
   gemini: ['gemini-2.5-pro'],
 };
@@ -564,7 +564,7 @@ function extractProviderOptions(
     case 'openai':
       return {
         apiKey: argv.openaiApiKey || process.env['OPENAI_API_KEY'],
-        model: normalizeModel('openai', argv.openaiModel || process.env['OPENAI_MODEL'] || 'gpt-5-codex'),
+        model: normalizeModel('openai', argv.openaiModel || process.env['OPENAI_MODEL'] || 'gpt-5'),
         useOauth: argv.openaiUseOauth || false,
       };
     case 'anthropic':

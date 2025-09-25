@@ -15,6 +15,11 @@ import type {
 } from '@google/genai';
 import type { ContentGenerator } from '../core/contentGenerator.js';
 import { MultiAgentExecutor } from './multiAgentExecutor.js';
+import type { Config } from '../config/config.js';
+import type {
+  UnifiedAgentMessage,
+  UnifiedAgentsStreamEvent,
+} from '../runtime/types.js';
 import { getAgentById } from './personas.js';
 
 class FakeContentGenerator implements ContentGenerator {
@@ -96,9 +101,82 @@ class FakeContentGenerator implements ContentGenerator {
 
 describe('MultiAgentExecutor', () => {
   const fakeGenerator = new FakeContentGenerator();
-  const executor = new MultiAgentExecutor(fakeGenerator as unknown as ContentGenerator, {
-    defaultModel: 'test-model',
-  });
+  const fakeConfig = {
+    getProvider: () => 'openai',
+  } as unknown as Config;
+
+  class FakeUnifiedClient {
+    promptsByAgent = new Map<string, string[]>();
+
+    async createSession(sessionConfig: { systemPrompt?: string; metadata?: Record<string, unknown> }): Promise<any> {
+      return {
+        id: `session-${Math.random()}`,
+        systemPrompt: sessionConfig.systemPrompt ?? '',
+        providerId: 'openai',
+        model: 'test-model',
+        metadata: sessionConfig.metadata ?? {},
+      };
+    }
+
+    async *streamResponse(
+      session: any,
+      messages: UnifiedAgentMessage[],
+    ): AsyncGenerator<UnifiedAgentsStreamEvent> {
+      const prompt = [session.systemPrompt, ...messages.map((m) => m.content)].join('\n');
+      const agentId = typeof session.metadata?.agentId === 'string' ? (session.metadata.agentId as string) : undefined;
+      if (agentId) {
+        const existing = this.promptsByAgent.get(agentId) ?? [];
+        existing.push(prompt);
+        this.promptsByAgent.set(agentId, existing);
+      }
+
+      let finalJson = JSON.stringify({
+        analysis: 'Generic analysis',
+        solution: 'Generic solution',
+        confidence: 0.7,
+        handoff: [],
+      });
+
+      if (prompt.includes('(systems-architect)')) {
+        finalJson = JSON.stringify({
+          analysis: 'Assessed architecture bottlenecks.',
+          solution: 'Introduce service boundaries and async messaging.',
+          confidence: 0.85,
+          handoff: ['code-quality-analyst'],
+        });
+      } else if (prompt.includes('(code-quality-analyst)')) {
+        finalJson = JSON.stringify({
+          analysis: 'Evaluated unit test gaps.',
+          solution: 'Add regression tests and static analysis gating.',
+          confidence: 0.78,
+          handoff: [],
+        });
+      }
+
+      yield {
+        type: 'final',
+        message: {
+          role: 'assistant',
+          content: finalJson,
+        },
+      } as UnifiedAgentsStreamEvent;
+    }
+  }
+
+  function createExecutor() {
+    const client = new FakeUnifiedClient();
+    return {
+      executor: new MultiAgentExecutor(
+        fakeGenerator as unknown as ContentGenerator,
+        fakeConfig,
+        {
+          defaultModel: 'test-model',
+          client: client as any,
+        },
+      ),
+      client,
+    };
+  }
 
   it('runs seed agents and synthesises a master response', async () => {
     const architect = getAgentById('systems-architect');
@@ -106,6 +184,7 @@ describe('MultiAgentExecutor', () => {
     expect(architect).toBeTruthy();
     expect(qa).toBeTruthy();
 
+    const { executor, client } = createExecutor();
     const result = await executor.execute('Improve the system reliability.', [architect!, qa!]);
 
     expect(result.agentResults.length).toBeGreaterThanOrEqual(2);
@@ -116,17 +195,24 @@ describe('MultiAgentExecutor', () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
     const architectResult = result.agentResults.find((r) => r.agent.id === 'systems-architect');
     expect(architectResult?.handoffAgentIds).toContain('code-quality-analyst');
+
+    const qaPrompts = client.promptsByAgent.get('code-quality-analyst') ?? [];
+    expect(qaPrompts[0]).toMatch(/Assessed architecture bottlenecks/);
+    expect(qaPrompts[0]).toMatch(/Tool Operations Playbook/);
+    expect(qaPrompts[0]).not.toMatch(/\${LSTool.Name}/);
   });
 
   it('enqueues handoff agents requested by specialists', async () => {
     const architect = getAgentById('systems-architect');
     expect(architect).toBeTruthy();
 
+    const { executor } = createExecutor();
     const result = await executor.execute('Focus on architecture first.', [architect!]);
     const agentIds = result.agentResults.map((res) => res.agent.id);
 
     expect(agentIds).toContain('systems-architect');
     expect(agentIds).toContain('code-quality-analyst');
     expect(result.timeline[0]?.agents.some(agent => agent.id === 'systems-architect')).toBe(true);
+    expect(result.timeline.every(entry => entry.agents.length === 1)).toBe(true);
   });
 });

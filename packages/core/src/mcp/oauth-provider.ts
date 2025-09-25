@@ -109,7 +109,7 @@ export class MCPOAuthProvider {
       `http://localhost:${this.REDIRECT_PORT}${this.REDIRECT_PATH}`;
 
     const registrationRequest: OAuthClientRegistrationRequest = {
-      client_name: 'Gemini CLI MCP Client',
+      client_name: 'Ouroboros Code MCP Client',
       redirect_uris: [redirectUri],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
@@ -235,7 +235,7 @@ export class MCPOAuthProvider {
             <html>
               <body>
                 <h1>Authentication Successful!</h1>
-                <p>You can close this window and return to Gemini CLI.</p>
+                <p>You can close this window and return to Ouroboros Code.</p>
                 <script>window.close();</script>
               </body>
             </html>

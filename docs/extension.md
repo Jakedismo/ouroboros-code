@@ -1,15 +1,15 @@
-# Gemini CLI Extensions
+# Ouroboros Code Extensions
 
-Gemini CLI supports extensions that can be used to configure and extend its functionality.
+Ouroboros Code supports extensions that can be used to configure and extend its functionality. The runtime still reads from the legacy `.gemini` directories for backward compatibility, but the experience is fully branded as Ouroboros Code.
 
 ## How it works
 
-On startup, Gemini CLI looks for extensions in two locations:
+On startup, Ouroboros Code looks for extensions in two locations:
 
 1.  `<workspace>/.gemini/extensions`
 2.  `<home>/.gemini/extensions`
 
-Gemini CLI loads all extensions from both locations. If an extension with the same name exists in both locations, the extension in the workspace directory takes precedence.
+Ouroboros Code loads all extensions from both locations. If an extension with the same name exists in both locations, the extension in the workspace directory takes precedence.
 
 Within each location, individual extensions exist as a directory that contains a `gemini-extension.json` file. For example:
 
@@ -39,7 +39,7 @@ The `gemini-extension.json` file contains the configuration for the extension. T
 - `contextFileName`: The name of the file that contains the context for the extension. This will be used to load the context from the workspace. If this property is not used but a `GEMINI.md` file is present in your extension directory, then that file will be loaded.
 - `excludeTools`: An array of tool names to exclude from the model. You can also specify command-specific restrictions for tools that support it, like the `run_shell_command` tool. For example, `"excludeTools": ["run_shell_command(rm -rf)"]` will block the `rm -rf` command.
 
-When Gemini CLI starts, it loads all the extensions and merges their configurations. If there are any conflicts, the workspace configuration takes precedence.
+When Ouroboros Code starts, it loads all the extensions and merges their configurations. If there are any conflicts, the workspace configuration takes precedence.
 
 ## Extension Commands
 
@@ -81,7 +81,7 @@ You can install extensions using the `install` command. This command allows you 
 
 ### Usage
 
-`gemini extensions install <source> | [options]`
+`ouroboros extensions install <source> | [options]`
 
 ### Options
 
@@ -90,7 +90,7 @@ You can install extensions using the `install` command. This command allows you 
 
 # Variables
 
-Gemini CLI extensions allow variable substitution in `gemini-extension.json`. This can be useful if e.g., you need the current directory to run an MCP server using `"cwd": "${extensionPath}${/}run.ts"`.
+Ouroboros Code extensions allow variable substitution in `gemini-extension.json`. This can be useful if e.g., you need the current directory to run an MCP server using `"cwd": "${extensionPath}${/}run.ts"`.
 
 **Supported variables:**
 

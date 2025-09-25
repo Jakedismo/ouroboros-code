@@ -9,14 +9,38 @@ import * as path from 'node:path';
 import { homedir } from 'node:os';
 
 import type { MCPServerConfig } from '@ouroboros/ouroboros-code-core';
-import {
-  getErrorMessage,
-  type TelemetrySettings,
-} from '@ouroboros/ouroboros-code-core';
+import { getErrorMessage, type TelemetrySettings } from '@ouroboros/ouroboros-code-core';
 import stripJsonComments from 'strip-json-comments';
 
-export const SETTINGS_DIRECTORY_NAME = '.gemini';
-export const USER_SETTINGS_DIR = path.join(homedir(), SETTINGS_DIRECTORY_NAME);
+export const PRIMARY_SETTINGS_DIRECTORY_NAME = '.gemini';
+export const LEGACY_SETTINGS_DIRECTORY_NAME = '.ouroboros';
+const SETTINGS_DIRECTORY_CANDIDATES = [
+  PRIMARY_SETTINGS_DIRECTORY_NAME,
+  LEGACY_SETTINGS_DIRECTORY_NAME,
+];
+
+function resolveUserSettingsDir(): string {
+  const home = homedir();
+  for (const dir of SETTINGS_DIRECTORY_CANDIDATES) {
+    const candidate = path.join(home, dir);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return path.join(home, PRIMARY_SETTINGS_DIRECTORY_NAME);
+}
+
+function resolveSettingsPath(baseDir: string): string {
+  for (const dir of SETTINGS_DIRECTORY_CANDIDATES) {
+    const candidate = path.join(baseDir, dir, 'settings.json');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return path.join(baseDir, PRIMARY_SETTINGS_DIRECTORY_NAME, 'settings.json');
+}
+
+export const USER_SETTINGS_DIR = resolveUserSettingsDir();
 export const USER_SETTINGS_PATH = path.join(USER_SETTINGS_DIR, 'settings.json');
 
 // Reconcile with https://github.com/google-gemini/gemini-cli/blob/b09bc6656080d4d12e1d06734aae2ec33af5c1ed/packages/cli/src/config/settings.ts#L53
@@ -73,11 +97,7 @@ export function loadSettings(workspaceDir: string): Settings {
     });
   }
 
-  const workspaceSettingsPath = path.join(
-    workspaceDir,
-    SETTINGS_DIRECTORY_NAME,
-    'settings.json',
-  );
+  const workspaceSettingsPath = resolveSettingsPath(workspaceDir);
 
   // Load workspace settings
   try {

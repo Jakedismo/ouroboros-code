@@ -7,12 +7,25 @@
 type Model = string;
 type TokenCount = number;
 
-export const DEFAULT_TOKEN_LIMIT = 1_048_576;
+const DEFAULT_TOKEN_LIMIT = 1_048_576; // ~1M tokens, matches Gemini 2.5
+const OPENAI_GPT5_LIMIT = 282_000;
+const ANTHROPIC_OPUS_LIMIT = 200_000;
+const ANTHROPIC_SONNET_LIMIT = 1_000_000;
+
+function normalize(model: Model | undefined): string {
+  if (!model) return '';
+  return model.replace(/^models\//i, '').toLowerCase();
+}
 
 export function tokenLimit(model: Model): TokenCount {
-  // Add other models as they become relevant or if specified by config
-  // Pulled from https://ai.google.dev/gemini-api/docs/models
-  switch (model) {
+  const normalized = normalize(model);
+
+  if (normalized === '') {
+    return DEFAULT_TOKEN_LIMIT;
+  }
+
+  // Gemini family (default remains 1_048_576 unless explicitly overridden)
+  switch (normalized) {
     case 'gemini-1.5-pro':
       return 2_097_152;
     case 'gemini-1.5-flash':
@@ -23,10 +36,29 @@ export function tokenLimit(model: Model): TokenCount {
     case 'gemini-2.5-flash':
     case 'gemini-2.5-flash-lite':
     case 'gemini-2.0-flash':
-      return 1_048_576;
+      return DEFAULT_TOKEN_LIMIT;
     case 'gemini-2.0-flash-preview-image-generation':
       return 32_000;
     default:
-      return DEFAULT_TOKEN_LIMIT;
+      break;
   }
+
+  // OpenAI GPT-5 family (multimodal + coding variants share the same 282k window)
+  if (
+    normalized.startsWith('gpt-5') ||
+    normalized.startsWith('gpt5') ||
+    normalized.startsWith('o5')
+  ) {
+    return OPENAI_GPT5_LIMIT;
+  }
+
+  // Anthropic premium models
+  if (normalized.includes('claude-opus-4-1')) {
+    return ANTHROPIC_OPUS_LIMIT;
+  }
+  if (normalized.includes('claude-sonnet-4-20250514')) {
+    return ANTHROPIC_SONNET_LIMIT;
+  }
+
+  return DEFAULT_TOKEN_LIMIT;
 }

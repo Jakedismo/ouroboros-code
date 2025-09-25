@@ -238,6 +238,9 @@ export function mapToDisplay(
         name: displayName,
         description,
         renderOutputAsMarkdown,
+        agentId: trackedCall.request.agentId,
+        agentName: trackedCall.request.agentName,
+        agentEmoji: trackedCall.request.agentEmoji,
       };
 
       switch (trackedCall.status) {

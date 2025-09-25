@@ -11,14 +11,14 @@ import { appEvents, AppEvent } from '../../utils/events.js';
 // Model configurations organized by provider
 const MODEL_CONFIGS = {
   openai: {
-    'gpt-5-codex': {
-      description: 'Coding-optimized GPT-5 variant with extended reasoning depth',
-      capabilities: ['reasoning', 'coding', 'analysis'],
-      contextWindow: '2M tokens',
-    },
     'gpt-5': {
       description: 'General-purpose GPT-5 with comprehensive reasoning',
       capabilities: ['reasoning', 'analysis', 'creative'],
+      contextWindow: '2M tokens',
+    },
+    'gpt-5-codex': {
+      description: 'Coding-optimized GPT-5 variant with extended reasoning depth',
+      capabilities: ['reasoning', 'coding', 'analysis'],
       contextWindow: '2M tokens',
     },
   },
@@ -125,6 +125,9 @@ Use \`/model\` to see detailed information about each model.`,
 };
 
 function getCurrentProvider(context: any): string | null {
+  if (context.config && typeof context.config.getProvider === 'function') {
+    return context.config.getProvider();
+  }
   return context.config?.provider || process.env['OUROBOROS_PROVIDER'] || 'gemini';
 }
 
@@ -136,7 +139,7 @@ function getCurrentModel(context: any, provider: string): string | null {
   
   // Fallback to provider defaults
   const providerDefaults = {
-    openai: 'gpt-5-codex',
+    openai: 'gpt-5',
     anthropic: 'claude-sonnet-4-20250514[1m]',
     gemini: 'gemini-2.5-pro',
   } as const;

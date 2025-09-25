@@ -19,6 +19,7 @@ vi.mock('node:fs', () => ({
     unlink: vi.fn(),
   },
   mkdirSync: vi.fn(),
+  existsSync: vi.fn(() => false),
 }));
 
 vi.mock('node:os', () => ({

@@ -1,11 +1,11 @@
 # Authentication Setup
 
-The Gemini CLI requires you to authenticate with Google's AI services. On initial startup you'll need to configure **one** of the following authentication methods:
+The Ouroboros Code requires you to authenticate with Google's AI services. On initial startup you'll need to configure **one** of the following authentication methods:
 
 1.  **Login with Google (Gemini Code Assist):**
     - Use this option to log in with your Google account.
-    - During initial startup, Gemini CLI will direct you to a webpage for authentication. Once authenticated, your credentials will be cached locally so the web login can be skipped on subsequent runs.
-    - Note that the web login must be done in a browser that can communicate with the machine Gemini CLI is being run from. (Specifically, the browser will be redirected to a localhost url that Gemini CLI will be listening on).
+    - During initial startup, Ouroboros Code will direct you to a webpage for authentication. Once authenticated, your credentials will be cached locally so the web login can be skipped on subsequent runs.
+    - Note that the web login must be done in a browser that can communicate with the machine Ouroboros Code is being run from. (Specifically, the browser will be redirected to a localhost url that Ouroboros Code will be listening on).
     - <a id="workspace-gca">Users may have to specify a GOOGLE_CLOUD_PROJECT if:</a>
       1. You have a Google Workspace account. Google Workspace is a paid service for businesses and organizations that provides a suite of productivity tools, including a custom email domain (e.g. your-name@your-company.com), enhanced security features, and administrative controls. These accounts are often managed by an employer or school.
       1. You have received a Gemini Code Assist license through the [Google Developer Program](https://developers.google.com/program/plans-and-pricing) (including qualified Google Developer Experts)
@@ -119,9 +119,9 @@ The Gemini CLI requires you to authenticate with Google's AI services. On initia
 
 You can create a **`.gemini/.env`** file in your project directory or in your home directory. Creating a plain **`.env`** file also works, but `.gemini/.env` is recommended to keep Gemini variables isolated from other tools.
 
-**Important:** Some environment variables (like `DEBUG` and `DEBUG_MODE`) are automatically excluded from project `.env` files to prevent interference with gemini-cli behavior. Use `.gemini/.env` files for gemini-cli specific variables.
+**Important:** Some environment variables (like `DEBUG` and `DEBUG_MODE`) are automatically excluded from project `.env` files to prevent interference with Ouroboros Code behavior. Use `.ouroboros/.env` (or the legacy `.gemini/.env`) files for CLI-specific variables.
 
-Gemini CLI automatically loads environment variables from the **first** `.env` file it finds, using the following search order:
+Ouroboros Code automatically loads environment variables from the **first** `.env` file it finds, using the following search order:
 
 1. Starting in the **current directory** and moving upward toward `/`, for each directory it checks:
    1. `.gemini/.env`
@@ -153,7 +153,7 @@ EOF
 
 ## Non-Interactive Mode / Headless Environments
 
-When running the Gemini CLI in a non-interactive environment, you cannot use the interactive login flow.
+When running the Ouroboros Code in a non-interactive environment, you cannot use the interactive login flow.
 Instead, you must configure authentication using environment variables.
 
 The CLI will automatically detect if it is running in a non-interactive terminal and will use one of the

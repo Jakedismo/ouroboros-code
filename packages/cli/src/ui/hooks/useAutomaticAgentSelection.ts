@@ -5,8 +5,14 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import type { Config } from '@ouroboros/ouroboros-code-core';
-import type { HistoryItemWithoutId } from '../types.js';
+import type { AgentPersona, Config } from '@ouroboros/ouroboros-code-core';
+import type {
+  AgentPersonaSummary,
+  HistoryItemMultiAgentStatus,
+  HistoryItemWithoutId,
+  MultiAgentInteractiveState,
+  MultiAgentSelectionDisplay,
+} from '../types.js';
 import { MessageType } from '../types.js';
 
 // ConversationOrchestrator will be dynamically imported in the hook
@@ -14,6 +20,119 @@ import { MessageType } from '../types.js';
 /**
  * Custom hook for integrating automatic agent selection into conversation flow
  */
+interface SelectionExecutionPayload {
+  totalAgents: number;
+  durationMs: number;
+  aggregateReasoning?: string;
+  timeline: Array<{
+    wave: number;
+    agents: AgentPersona[];
+  }>;
+  agentResults: Array<{
+    agent: AgentPersona;
+    analysis: string;
+    solution: string;
+    confidence: number;
+    handoffAgentIds: string[];
+    toolEvents?: Array<{
+      toolName: string;
+      arguments: Record<string, unknown>;
+      outputText?: string;
+    }>;
+  }>;
+}
+
+export interface SelectionFeedbackPayload {
+  selectedAgents: AgentPersona[];
+  reasoning: string;
+  confidence: number;
+  processingTime: number;
+  execution?: SelectionExecutionPayload;
+}
+
+export type SelectionStreamEvent =
+  | {
+      type: 'progress';
+      message?: string;
+      selectionPreview?: SelectionFeedbackPayload;
+    }
+  | {
+      type: 'complete';
+      message?: string;
+      shouldProceed?: boolean;
+      selectionFeedback?: SelectionFeedbackPayload;
+      previousAgentState?: string[];
+      showSelectionFeedback?: () => void;
+      finalResponse?: string;
+    };
+
+const toPersonaSummary = (agent: AgentPersona): AgentPersonaSummary => ({
+  id: agent.id,
+  name: agent.name,
+  emoji: agent.emoji,
+  description: agent.description,
+  specialties: agent.specialties ?? [],
+});
+
+const buildSelectionDisplay = (
+  selection: SelectionFeedbackPayload,
+  status: 'planning' | 'running' | 'complete',
+): MultiAgentSelectionDisplay => {
+  const display: MultiAgentSelectionDisplay = {
+    selectedAgents: selection.selectedAgents.map(toPersonaSummary),
+    reasoning: selection.reasoning,
+    confidence: selection.confidence,
+    processingTime: selection.processingTime,
+    status,
+  };
+
+  if (selection.execution) {
+    const exec = selection.execution;
+    display.execution = {
+      totalAgents: exec.totalAgents,
+      durationMs: exec.durationMs,
+      aggregateReasoning: exec.aggregateReasoning,
+      timeline: exec.timeline.map((entry) => ({
+        wave: entry.wave,
+        agents: entry.agents.map(toPersonaSummary),
+      })),
+      agentResults: exec.agentResults.map((result) => ({
+        agent: toPersonaSummary(result.agent),
+        analysis: result.analysis,
+        solution: result.solution,
+        confidence: result.confidence,
+        handoffAgentIds: result.handoffAgentIds,
+        tools: result.toolEvents?.map((event) => ({
+          name: event.toolName,
+          args: stringifyArgs(event.arguments),
+          output: event.outputText,
+        })),
+      })),
+    };
+  }
+
+  return display;
+};
+
+const stringifyArgs = (value: unknown): string => {
+  try {
+    const json = JSON.stringify(value, null, 2);
+    return json.length > 120 ? `${json.slice(0, 117)}...` : json;
+  } catch (_error) {
+    return String(value);
+  }
+};
+
+export const createMultiAgentHistoryItem = (
+  selection: SelectionFeedbackPayload,
+  status: 'planning' | 'running' | 'complete',
+  interactive?: MultiAgentInteractiveState,
+): Omit<HistoryItemMultiAgentStatus, 'id'> => ({
+  type: 'multi_agent_status',
+  selection: buildSelectionDisplay(selection, status),
+  interactive,
+});
+
 export const useAutomaticAgentSelection = (
   config: Config,
   addItem: (item: HistoryItemWithoutId, timestamp: number) => void,
@@ -76,14 +195,7 @@ export const useAutomaticAgentSelection = (
    * Process a user prompt with streaming agent selection
    */
   const processPromptWithAutoSelectionStream = useCallback(
-    async function* (userPrompt: string): AsyncGenerator<{
-      type: 'progress' | 'complete';
-      message?: string;
-      shouldProceed?: boolean;
-      previousAgentState?: string[];
-      showSelectionFeedback?: () => void;
-      finalResponse?: string;
-    }> {
+    async function* (userPrompt: string): AsyncGenerator<SelectionStreamEvent> {
       if (!orchestrator || !isInitialized) {
         yield { type: 'complete', shouldProceed: true };
         return;
@@ -93,27 +205,31 @@ export const useAutomaticAgentSelection = (
         const selectionStream = orchestrator.processPromptWithAutoSelectionStream(userPrompt);
         
         for await (const event of selectionStream) {
-          if (event.type === 'progress' && event.message) {
-            // Show streaming progress messages immediately
-            addItem(
-              {
-                type: MessageType.INFO,
-                text: event.message,
-              },
-              Date.now(),
-            );
-            yield { type: 'progress' };
-          } else if (event.type === 'complete' && event.selectionFeedback) {
-            // Create final selection feedback
-            const showSelectionFeedback = () => {
-              const feedbackMessage = orchestrator.generateSelectionFeedback(event.selectionFeedback);
+          if (event.type === 'progress') {
+            if (event.selectionPreview) {
+              yield {
+                type: 'progress',
+                selectionPreview: event.selectionPreview,
+              };
+              continue;
+            }
+
+            if (event.message) {
+              // Show streaming progress messages immediately
               addItem(
                 {
                   type: MessageType.INFO,
-                  text: feedbackMessage.text,
+                  text: event.message,
                 },
                 Date.now(),
               );
+              yield { type: 'progress' };
+            }
+          } else if (event.type === 'complete' && event.selectionFeedback) {
+            // Create final selection feedback
+            const selectionSnapshot = event.selectionFeedback;
+            const showSelectionFeedback = () => {
+              addItem(createMultiAgentHistoryItem(selectionSnapshot, 'complete'), Date.now());
             };
 
             if (event.finalResponse) {
@@ -128,7 +244,7 @@ export const useAutomaticAgentSelection = (
 
             yield {
               type: 'complete',
-              shouldProceed: event.shouldProceed || true,
+              shouldProceed: event.shouldProceed ?? true,
               previousAgentState: event.previousAgentState,
               showSelectionFeedback,
               finalResponse: event.finalResponse,
@@ -137,7 +253,7 @@ export const useAutomaticAgentSelection = (
           } else if (event.type === 'complete') {
             yield {
               type: 'complete',
-              shouldProceed: event.shouldProceed || true,
+              shouldProceed: event.shouldProceed ?? true,
             };
             return;
           }
@@ -179,26 +295,20 @@ export const useAutomaticAgentSelection = (
 
         if (result.selectionFeedback) {
           // Create a callback to show the selection feedback
+          const selectionSnapshot = result.selectionFeedback;
           const showSelectionFeedback = () => {
-            const feedbackMessage = orchestrator.generateSelectionFeedback(result.selectionFeedback);
-            addItem(
-              {
-                type: MessageType.INFO,
-                text: feedbackMessage.text,
-              },
-              Date.now(),
-            );
+            addItem(createMultiAgentHistoryItem(selectionSnapshot, 'complete'), Date.now());
           };
 
           return {
-            shouldProceed: result.shouldProceed,
+            shouldProceed: result.shouldProceed ?? true,
             previousAgentState: result.previousAgentState,
             showSelectionFeedback,
             finalResponse: result.finalResponse,
           };
         }
 
-        return { shouldProceed: result.shouldProceed, finalResponse: result.finalResponse };
+        return { shouldProceed: result.shouldProceed ?? true, finalResponse: result.finalResponse };
       } catch (error) {
         console.error('Automatic agent selection failed:', error);
         return { shouldProceed: true };

@@ -16,3 +16,4 @@ export {
 export { AgentManager } from './agentManager.js';
 export { AgentSelectorService } from './agentSelectorService.js';
 export { ConversationOrchestrator } from './conversationOrchestrator.js';
+export { MultiAgentExecutor } from './multiAgentExecutor.js';

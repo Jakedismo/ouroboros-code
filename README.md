@@ -10,7 +10,8 @@ Ouroboros Code is an advanced multi-agent AI framework that brings the power of 
 
 ## 🚀 Why Ouroboros Code?
 
-- **🤖 Dynamic Agent Selection**: GPT-5-nano automatically chooses the best specialists (from 50+ agents) for every prompt
+- **🤖 Dynamic Agent Selection**: GPT-5-nano automatically assembles specialist squads from 50 curated personas for every prompt
+- **🕹️ Interactive Orchestration HUD**: Watch agents plan, run tools, and hand off in real time right inside your terminal
 - **⚡ Multi-Provider Power**: Seamlessly switch between OpenAI, Anthropic, and Gemini with unified tools
 - **🎯 Zero Learning Curve**: Works with any prompt - just type naturally and watch agents adapt
 - **🧠 50+ Specialist Agents**: Architecture, AI/ML, Security, Performance, DevOps, Frontend, Backend experts
@@ -153,6 +154,23 @@ The `/agents` auto mode transforms Ouroboros Code into an adaptive problem-solvi
 - **Performance Tracking**: Monitors selection accuracy and adjusts over time
 - **Command-Aware**: Automatically skips agent selection for slash commands and @ directives
 
+#### Meet the Specialist Personas
+
+Ouroboros ships with **50 pre-defined personas** that cover architecture, frontend, backend, security, DevOps, AI/ML, performance, and more. Auto mode will assemble a team for you, but you can always work with a single specialist when you know exactly who you need:
+
+```bash
+# List every persona with its emoji, name, and description
+/agent list
+
+# Activate one specialist for the next turn
+/agent activate systems-architect
+
+# Restore your previous roster
+/agent reset
+```
+
+All persona definitions live in `packages/core/src/agents/personas.ts`, so you can customize them or add your own.
+
 ### ⚡ Multi-Provider Architecture
 
 - **Unified Tool Experience**: 11 builtin tools work identically across OpenAI, Anthropic, and Gemini
@@ -181,7 +199,7 @@ All tools work identically across every provider:
 
 ### GitHub Integration
 
-Integrate Gemini CLI directly into your GitHub workflows with [**Gemini CLI GitHub Action**](https://github.com/google-github-actions/run-gemini-cli):
+Integrate Ouroboros Code directly into your GitHub workflows with [**Ouroboros Code GitHub Action**](https://github.com/google-github-actions/run-gemini-cli):
 
 - **Pull Request Reviews**: Automated code review with contextual feedback and suggestions
 - **Issue Triage**: Automated labeling and prioritization of GitHub issues based on content analysis
@@ -203,7 +221,7 @@ Choose the authentication method that best fits your needs:
 - **No API key management** - just sign in with your Google account
 - **Automatic updates** to latest models
 
-#### Start Gemini CLI, then choose OAuth and follow the browser authentication flow when prompted
+#### Start Ouroboros Code, then choose OAuth and follow the browser authentication flow when prompted
 
 ```bash
 gemini
@@ -329,7 +347,7 @@ ouroboros-code
 
 ### Advanced Topics
 
-- [**Architecture Overview**](./docs/architecture.md) - How Gemini CLI works
+- [**Architecture Overview**](./docs/architecture.md) - How Ouroboros Code works
 - [**IDE Integration**](./docs/ide-integration.md) - VS Code companion
 - [**Sandboxing & Security**](./docs/sandbox.md) - Safe execution environments
 - [**Enterprise Deployment**](./docs/deployment.md) - Docker, system-wide config
@@ -351,7 +369,7 @@ ouroboros-code
 
 ### Using MCP Servers
 
-Configure MCP servers in `~/.gemini/settings.json` to extend Gemini CLI with custom tools:
+Configure MCP servers in `~/.ouroboros/settings.json` (or legacy `~/.gemini/settings.json`) to extend Ouroboros Code with custom tools:
 
 ```text
 > @github List my open pull requests
@@ -363,7 +381,7 @@ See the [MCP Server Integration guide](./docs/tools/mcp-server.md) for setup ins
 
 ## 🤝 Contributing
 
-We welcome contributions! Gemini CLI is fully open source (Apache 2.0), and we encourage the community to:
+We welcome contributions! Ouroboros Code is fully open source (Apache 2.0), and we encourage the community to:
 
 - Report bugs and suggest features
 - Improve documentation

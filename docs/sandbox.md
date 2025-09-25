@@ -1,10 +1,10 @@
-# Sandboxing in the Gemini CLI
+# Sandboxing in the Ouroboros Code
 
-This document provides a guide to sandboxing in the Gemini CLI, including prerequisites, quickstart, and configuration.
+This document provides a guide to sandboxing in the Ouroboros Code, including prerequisites, quickstart, and configuration.
 
 ## Prerequisites
 
-Before using sandboxing, you need to install and set up the Gemini CLI:
+Before using sandboxing, you need to install and set up the Ouroboros Code:
 
 ```bash
 npm install -g @google/gemini-cli
@@ -128,19 +128,19 @@ export SANDBOX_SET_UID_GID=false  # Disable UID/GID mapping
 ### Debug mode
 
 ```bash
-DEBUG=1 gemini -s -p "debug command"
+DEBUG=1 ouroboros-code -s -p "debug command"
 ```
 
-**Note:** If you have `DEBUG=true` in a project's `.env` file, it won't affect gemini-cli due to automatic exclusion. Use `.gemini/.env` files for gemini-cli specific debug settings.
+**Note:** If you have `DEBUG=true` in a project's `.env` file, it won't affect Ouroboros Code due to automatic exclusion. Use `.ouroboros/.env` (or the legacy `.gemini/.env`) files for CLI-specific debug settings.
 
 ### Inspect sandbox
 
 ```bash
 # Check environment
-gemini -s -p "run shell command: env | grep SANDBOX"
+ouroboros-code -s -p "run shell command: env | grep SANDBOX"
 
 # List mounts
-gemini -s -p "run shell command: mount | grep workspace"
+ouroboros-code -s -p "run shell command: mount | grep workspace"
 ```
 
 ## Security notes

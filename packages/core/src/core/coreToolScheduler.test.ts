@@ -10,6 +10,7 @@ import type { ToolCall, WaitingToolCall } from './coreToolScheduler.js';
 import {
   CoreToolScheduler,
   convertToFunctionResponse,
+  type CompletedToolCall,
 } from './coreToolScheduler.js';
 import type {
   ToolCallConfirmationDetails,
@@ -28,6 +29,7 @@ import {
 } from '../index.js';
 import type { Part, PartListUnion } from '@google/genai';
 import { MockModifiableTool, MockTool } from '../test-utils/tools.js';
+import * as telemetryLoggers from '../telemetry/loggers.js';
 
 class TestApprovalTool extends BaseDeclarativeTool<{ id: string }, ToolResult> {
   static readonly Name = 'testApprovalTool';
@@ -1123,5 +1125,79 @@ describe('CoreToolScheduler request queueing', () => {
 
     // Verify approval mode was changed
     expect(approvalMode).toBe(ApprovalMode.AUTO_EDIT);
+  });
+
+  it('logs telemetry for each completed tool call in sequence', async () => {
+    const logToolCallSpy = vi
+      .spyOn(telemetryLoggers, 'logToolCall')
+      .mockImplementation(() => {});
+
+    const mockTool = new MockTool('seq-tool');
+    mockTool.executeFn.mockReturnValue({
+      llmContent: 'done',
+      returnDisplay: 'done',
+    });
+
+    const mockToolRegistry = {
+      getTool: vi.fn().mockReturnValue(mockTool),
+      getFunctionDeclarations: () => [],
+    } as unknown as ToolRegistry;
+
+    const config = {
+      getSessionId: () => 'session-seq',
+      getUsageStatisticsEnabled: () => false,
+      getDebugMode: () => false,
+      getApprovalMode: () => ApprovalMode.DEFAULT,
+      getAllowedTools: () => [],
+      getContentGeneratorConfig: () => ({
+        model: 'mock-model',
+        authType: 'oauth-personal',
+      }),
+      getToolRegistry: () => mockToolRegistry,
+    } as unknown as Config;
+
+    const onAllToolCallsComplete = vi.fn();
+
+    const scheduler = new CoreToolScheduler({
+      config,
+      onAllToolCallsComplete,
+      onToolCallsUpdate: vi.fn(),
+      getPreferredEditor: () => undefined,
+      onEditorClose: () => {},
+    });
+
+    const abortController = new AbortController();
+
+    const requests = [
+      {
+        callId: 'call-1',
+        name: 'seq-tool',
+        args: { message: 'first' },
+        isClientInitiated: false,
+        prompt_id: 'prompt-seq',
+      },
+      {
+        callId: 'call-2',
+        name: 'seq-tool',
+        args: { message: 'second' },
+        isClientInitiated: false,
+        prompt_id: 'prompt-seq',
+      },
+    ];
+
+    await scheduler.schedule(requests, abortController.signal);
+
+    await vi.waitFor(() => {
+      expect(onAllToolCallsComplete).toHaveBeenCalled();
+      const calls = onAllToolCallsComplete.mock.calls.at(-1)?.[0] as CompletedToolCall[];
+      expect(calls?.length).toBe(2);
+      expect(calls?.every(call => call.status === 'success')).toBe(true);
+    });
+
+    expect(logToolCallSpy).toHaveBeenCalledTimes(2);
+    const functionNames = logToolCallSpy.mock.calls.map(([, event]) => event.function_name);
+    expect(functionNames).toEqual(['seq-tool', 'seq-tool']);
+
+    logToolCallSpy.mockRestore();
   });
 });

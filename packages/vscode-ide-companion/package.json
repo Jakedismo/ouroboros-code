@@ -2,7 +2,7 @@
   "name": "ouroboros-code-vscode-ide-companion",
   "displayName": "Ouroboros Code Companion",
   "description": "Enable Ouroboros Code with direct access to your IDE workspace.",
-  "version": "1.0.0-beta.6",
+  "version": "1.1.0-alpha.0",
   "publisher": "google",
   "icon": "assets/icon.png",
   "repository": {
@@ -19,10 +19,12 @@
     "AI"
   ],
   "keywords": [
+    "ouroboros-code",
+    "ouroboros cli",
+    "ouroboros",
+    "ouroboros ai",
     "gemini-cli",
-    "gemini cli",
     "gemini",
-    "gemini code",
     "cli",
     "ide integration",
     "ide companion"
@@ -33,63 +35,63 @@
   "contributes": {
     "languages": [
       {
-        "id": "gemini-diff-editable"
+        "id": "ouroboros-diff-editable"
       }
     ],
     "commands": [
       {
-        "command": "gemini.diff.accept",
-        "title": "Gemini CLI: Accept Diff",
+        "command": "ouroboros.diff.accept",
+        "title": "Ouroboros Code: Accept Diff",
         "icon": "$(check)"
       },
       {
-        "command": "gemini.diff.cancel",
-        "title": "Gemini CLI: Close Diff Editor",
+        "command": "ouroboros.diff.cancel",
+        "title": "Ouroboros Code: Close Diff Editor",
         "icon": "$(close)"
       },
       {
-        "command": "gemini-cli.runGeminiCLI",
-        "title": "Gemini CLI: Run"
+        "command": "ouroboros-code.runCli",
+        "title": "Ouroboros Code: Run"
       },
       {
-        "command": "gemini-cli.showNotices",
-        "title": "Gemini CLI: View Third-Party Notices"
+        "command": "ouroboros-code.showNotices",
+        "title": "Ouroboros Code: View Third-Party Notices"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "gemini.diff.accept",
-          "when": "gemini.diff.isVisible"
+          "command": "ouroboros.diff.accept",
+          "when": "ouroboros.diff.isVisible"
         },
         {
-          "command": "gemini.diff.cancel",
-          "when": "gemini.diff.isVisible"
+          "command": "ouroboros.diff.cancel",
+          "when": "ouroboros.diff.isVisible"
         }
       ],
       "editor/title": [
         {
-          "command": "gemini.diff.accept",
-          "when": "gemini.diff.isVisible",
+          "command": "ouroboros.diff.accept",
+          "when": "ouroboros.diff.isVisible",
           "group": "navigation"
         },
         {
-          "command": "gemini.diff.cancel",
-          "when": "gemini.diff.isVisible",
+          "command": "ouroboros.diff.cancel",
+          "when": "ouroboros.diff.isVisible",
           "group": "navigation"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "gemini.diff.accept",
+        "command": "ouroboros.diff.accept",
         "key": "ctrl+s",
-        "when": "gemini.diff.isVisible"
+        "when": "ouroboros.diff.isVisible"
       },
       {
-        "command": "gemini.diff.accept",
+        "command": "ouroboros.diff.accept",
         "key": "cmd+s",
-        "when": "gemini.diff.isVisible"
+        "when": "ouroboros.diff.isVisible"
       }
     ]
   },

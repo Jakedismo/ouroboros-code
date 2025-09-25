@@ -53,6 +53,9 @@ describe('InstallationManager', () => {
 
   afterEach(() => {
     fs.rmSync(tempHomeDir, { recursive: true, force: true });
+    (fs.readFileSync as unknown as Mock).mockReset();
+    (fs.existsSync as unknown as Mock).mockReset();
+    (randomUUID as Mock).mockReset();
     vi.clearAllMocks();
   });
 

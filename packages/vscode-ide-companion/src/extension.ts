@@ -9,8 +9,8 @@ import { IDEServer } from './ide-server.js';
 import { DiffContentProvider, DiffManager } from './diff-manager.js';
 import { createLogger } from './utils/logger.js';
 
-const INFO_MESSAGE_SHOWN_KEY = 'geminiCliInfoMessageShown';
-export const DIFF_SCHEME = 'gemini-diff';
+const INFO_MESSAGE_SHOWN_KEY = 'ouroborosCliInfoMessageShown';
+export const DIFF_SCHEME = 'ouroboros-diff';
 
 let ideServer: IDEServer;
 let logger: vscode.OutputChannel;
@@ -18,7 +18,7 @@ let logger: vscode.OutputChannel;
 let log: (message: string) => void = () => {};
 
 export async function activate(context: vscode.ExtensionContext) {
-  logger = vscode.window.createOutputChannel('Gemini CLI IDE Companion');
+  logger = vscode.window.createOutputChannel('Ouroboros Code IDE Companion');
   log = createLogger(context, logger);
   log('Extension activated');
 
@@ -36,7 +36,7 @@ export async function activate(context: vscode.ExtensionContext) {
       diffContentProvider,
     ),
     vscode.commands.registerCommand(
-      'gemini.diff.accept',
+      'ouroboros.diff.accept',
       (uri?: vscode.Uri) => {
         const docUri = uri ?? vscode.window.activeTextEditor?.document.uri;
         if (docUri && docUri.scheme === DIFF_SCHEME) {
@@ -45,7 +45,7 @@ export async function activate(context: vscode.ExtensionContext) {
       },
     ),
     vscode.commands.registerCommand(
-      'gemini.diff.cancel',
+      'ouroboros.diff.cancel',
       (uri?: vscode.Uri) => {
         const docUri = uri ?? vscode.window.activeTextEditor?.document.uri;
         if (docUri && docUri.scheme === DIFF_SCHEME) {
@@ -65,7 +65,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   if (!context.globalState.get(INFO_MESSAGE_SHOWN_KEY)) {
     void vscode.window.showInformationMessage(
-      'Gemini CLI Companion extension successfully installed.',
+      'Ouroboros Code Companion extension successfully installed.',
     );
     context.globalState.update(INFO_MESSAGE_SHOWN_KEY, true);
   }
@@ -74,11 +74,11 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       ideServer.updateWorkspacePath();
     }),
-    vscode.commands.registerCommand('gemini-cli.runGeminiCLI', async () => {
+    vscode.commands.registerCommand('ouroboros-code.runCli', async () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders || workspaceFolders.length === 0) {
         vscode.window.showInformationMessage(
-          'No folder open. Please open a folder to run Gemini CLI.',
+          'No folder open. Please open a folder to run Ouroboros Code.',
         );
         return;
       }
@@ -88,21 +88,21 @@ export async function activate(context: vscode.ExtensionContext) {
         selectedFolder = workspaceFolders[0];
       } else {
         selectedFolder = await vscode.window.showWorkspaceFolderPick({
-          placeHolder: 'Select a folder to run Gemini CLI in',
+          placeHolder: 'Select a folder to run Ouroboros Code in',
         });
       }
 
       if (selectedFolder) {
-        const geminiCmd = 'gemini';
+        const cliCommand = 'ouroboros-code';
         const terminal = vscode.window.createTerminal({
-          name: `Gemini CLI (${selectedFolder.name})`,
+          name: `Ouroboros Code (${selectedFolder.name})`,
           cwd: selectedFolder.uri.fsPath,
         });
         terminal.show();
-        terminal.sendText(geminiCmd);
+        terminal.sendText(cliCommand);
       }
     }),
-    vscode.commands.registerCommand('gemini-cli.showNotices', async () => {
+    vscode.commands.registerCommand('ouroboros-code.showNotices', async () => {
       const noticePath = vscode.Uri.joinPath(
         context.extensionUri,
         'NOTICES.txt',

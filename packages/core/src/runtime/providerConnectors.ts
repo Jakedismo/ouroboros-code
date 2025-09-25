@@ -47,8 +47,8 @@ export function createDefaultConnectorRegistry(): ProviderConnectorRegistry {
 }
 
 const DEFAULT_OPENAI_MODELS: ProviderModelDescriptor[] = [
-  { id: 'gpt-5-codex', label: 'GPT-5 Codex', default: true },
-  { id: 'gpt-5', label: 'GPT-5' },
+  { id: 'gpt-5', label: 'GPT-5', default: true },
+  { id: 'gpt-5-codex', label: 'GPT-5 Codex' },
 ];
 
 function createOpenAIConnector(): ProviderConnector {
