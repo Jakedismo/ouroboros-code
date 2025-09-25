@@ -13,7 +13,7 @@ import type {
   type CommandContext,
 } from './types.js';
 import { createMockCommandContext } from '../../test-utils/mockCommandContext.js';
-import type { Content } from '@google/genai';
+import type { GeminiContent } from '../types/geminiCompat.js';
 import type { GeminiClient } from '@ouroboros/ouroboros-code-core';
 
 import * as fsPromises from 'node:fs/promises';
@@ -235,7 +235,7 @@ describe('chatCommand', () => {
     });
 
     it('should save the conversation if overwrite is confirmed', async () => {
-      const history: Content[] = [
+      const history: GeminiContent[] = [
         { role: 'user', parts: [{ text: 'context for our chat' }] },
         { role: 'model', parts: [{ text: 'Got it. Thanks for the context!' }] },
         { role: 'user', parts: [{ text: 'hello' }] },
@@ -288,7 +288,7 @@ describe('chatCommand', () => {
     });
 
     it('should resume a conversation', async () => {
-      const conversation: Content[] = [
+      const conversation: GeminiContent[] = [
         { role: 'user', parts: [{ text: 'hello gemini' }] },
         { role: 'model', parts: [{ text: 'hello world' }] },
       ];

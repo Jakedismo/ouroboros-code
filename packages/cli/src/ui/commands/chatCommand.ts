@@ -18,6 +18,7 @@ import { CommandKind } from './types.js';
 import { decodeTagName } from '@ouroboros/ouroboros-code-core';
 import path from 'node:path';
 import type { HistoryItemWithoutId } from '../types.js';
+import type { GeminiContent } from '../types/geminiCompat.js';
 import { MessageType } from '../types.js';
 
 interface ChatDetail {
@@ -145,7 +146,7 @@ const saveCommand: SlashCommand = {
       };
     }
 
-    const history = chat.getHistory();
+    const history: GeminiContent[] = chat.getHistory() as GeminiContent[];
     if (history.length > 2) {
       await logger.saveCheckpoint(history, tag);
       return {
