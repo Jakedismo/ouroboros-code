@@ -28,6 +28,7 @@ import type { GeminiChat } from './geminiChat.js';
 import type { Config } from '../config/config.js';
 import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
 import type { UnifiedAgentMessage, UnifiedAgentToolCall } from '../runtime/types.js';
+import type { ToolResponseParts } from '../types/toolResponses.js';
 
 // Define a structure for tools passed to the server
 export interface ServerTool {
@@ -81,7 +82,7 @@ export interface ToolCallRequestInfo {
 
 export interface ToolCallResponseInfo {
   callId: string;
-  responseParts: Part[];
+  responseParts: ToolResponseParts;
   resultDisplay: ToolResultDisplay | undefined;
   error: Error | undefined;
   errorType: ToolErrorType | undefined;

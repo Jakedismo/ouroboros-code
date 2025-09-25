@@ -12,7 +12,12 @@ import {
   useReactToolScheduler,
   mapToDisplay,
 } from './useReactToolScheduler.js';
-import type { PartUnion, FunctionResponse } from '@google/genai';
+import type { AgentContentFragment } from '../types/agentContent.js';
+type MockFunctionResponse = {
+  id?: string;
+  name: string;
+  response: Record<string, unknown>;
+};
 import type {
   Config,
   ToolCallRequestInfo,
@@ -880,8 +885,8 @@ describe('mapToDisplay', () => {
           name: 'testTool',
           id: 'testCallId',
           response: { output: 'Test output' },
-        } as FunctionResponse,
-      } as PartUnion,
+        } as MockFunctionResponse,
+      } as AgentContentFragment,
     ],
     resultDisplay: 'Test display output',
     error: undefined,

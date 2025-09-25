@@ -5,15 +5,6 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type {
-  CountTokensParameters,
-  CountTokensResponse,
-  EmbedContentParameters,
-  EmbedContentResponse,
-  GenerateContentParameters,
-  GenerateContentResponse,
-} from '@google/genai';
-import type { ContentGenerator } from '../core/contentGenerator.js';
 import { MultiAgentExecutor } from './multiAgentExecutor.js';
 import type { Config } from '../config/config.js';
 import type {
@@ -22,96 +13,7 @@ import type {
 } from '../runtime/types.js';
 import { getAgentById } from './personas.js';
 
-class FakeContentGenerator implements ContentGenerator {
-  async generateContent(
-    request: GenerateContentParameters,
-    userPromptId: string,
-  ): Promise<GenerateContentResponse> {
-    if (userPromptId === 'multi-agent-systems-architect') {
-      return this.buildJsonResponse({
-        analysis: 'Assessed architecture bottlenecks.',
-        solution: 'Introduce service boundaries and async messaging.',
-        confidence: 0.85,
-        handoff: ['code-quality-analyst'],
-      });
-    }
-
-    if (userPromptId === 'multi-agent-code-quality-analyst') {
-      return this.buildJsonResponse({
-        analysis: 'Evaluated unit test gaps.',
-        solution: 'Add regression tests and static analysis gating.',
-        confidence: 0.78,
-        handoff: [],
-      });
-    }
-
-    if (userPromptId === 'multi-agent-synthesis') {
-      return this.buildTextResponse(
-        'Final consolidated plan:\n\n- Apply service decomposition\n- Harden testing pipeline\n\n---\n\nReasoning: Combined architecture and QA insights to craft rollout.',
-      );
-    }
-
-    return this.buildJsonResponse({
-      analysis: 'No opinion.',
-      solution: '',
-      confidence: 0,
-      handoff: [],
-    });
-  }
-
-  async generateContentStream(): Promise<
-    AsyncGenerator<GenerateContentResponse>
-  > {
-    async function* empty() {}
-    return empty();
-  }
-
-  async countTokens(
-    _request: CountTokensParameters,
-  ): Promise<CountTokensResponse> {
-    return {
-      totalTokens: 0,
-      totalBillableCharacters: 0,
-    } as CountTokensResponse;
-  }
-
-  async embedContent(
-    _request: EmbedContentParameters,
-  ): Promise<EmbedContentResponse> {
-    throw new Error('Not implemented in fake generator');
-  }
-
-  private buildJsonResponse(
-    obj: Record<string, unknown>,
-  ): GenerateContentResponse {
-    return {
-      candidates: [
-        {
-          content: {
-            role: 'model',
-            parts: [{ text: JSON.stringify(obj) }],
-          },
-        },
-      ],
-    } as GenerateContentResponse;
-  }
-
-  private buildTextResponse(text: string): GenerateContentResponse {
-    return {
-      candidates: [
-        {
-          content: {
-            role: 'model',
-            parts: [{ text }],
-          },
-        },
-      ],
-    } as GenerateContentResponse;
-  }
-}
-
 describe('MultiAgentExecutor', () => {
-  const fakeGenerator = new FakeContentGenerator();
   const fakeConfig = {
     getProvider: () => 'openai',
   } as unknown as Config;
@@ -150,6 +52,22 @@ describe('MultiAgentExecutor', () => {
         this.promptsByAgent.set(agentId, existing);
       }
 
+      const isOrchestrator =
+        agentId === 'orchestrator' || prompt.includes('SPECIALIST RESPONSES');
+
+      if (isOrchestrator) {
+        const finalText =
+          'Final consolidated plan:\n\n- Apply service decomposition\n- Harden testing pipeline\n\n---\n\nReasoning: Combined architecture and QA insights to craft rollout.';
+        yield {
+          type: 'final',
+          message: {
+            role: 'assistant',
+            content: finalText,
+          },
+        } as UnifiedAgentsStreamEvent;
+        return;
+      }
+
       let finalJson = JSON.stringify({
         analysis: 'Generic analysis',
         solution: 'Generic solution',
@@ -186,14 +104,10 @@ describe('MultiAgentExecutor', () => {
   function createExecutor() {
     const client = new FakeUnifiedClient();
     return {
-      executor: new MultiAgentExecutor(
-        fakeGenerator as unknown as ContentGenerator,
-        fakeConfig,
-        {
-          defaultModel: 'test-model',
-          client: client as any,
-        },
-      ),
+      executor: new MultiAgentExecutor(fakeConfig, {
+        defaultModel: 'test-model',
+        client: client as any,
+      }),
       client,
     };
   }

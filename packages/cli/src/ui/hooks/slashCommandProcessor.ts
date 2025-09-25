@@ -5,7 +5,6 @@
  */
 
 import { useCallback, useMemo, useEffect, useState } from 'react';
-import { type PartListUnion } from '@google/genai';
 import process from 'node:process';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 import type { Config } from '@ouroboros/ouroboros-code-core';
@@ -33,6 +32,7 @@ import { CommandService } from '../../services/CommandService.js';
 import { BuiltinCommandLoader } from '../../services/BuiltinCommandLoader.js';
 import { FileCommandLoader } from '../../services/FileCommandLoader.js';
 import { McpPromptLoader } from '../../services/McpPromptLoader.js';
+import type { AgentContent } from '../types/agentContent.js';
 
 /**
  * Hook to define and process slash commands (e.g., /help, /clear).
@@ -251,7 +251,7 @@ export const useSlashCommandProcessor = (
 
   const handleSlashCommand = useCallback(
     async (
-      rawQuery: PartListUnion,
+      rawQuery: AgentContent,
       oneTimeShellAllowlist?: Set<string>,
       overwriteConfirmed?: boolean,
     ): Promise<SlashCommandProcessorResult | false> => {

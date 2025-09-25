@@ -9,7 +9,7 @@ import type {
   ToolCallConfirmationDetails,
   ToolResultDisplay,
 } from '@ouroboros/ouroboros-code-core';
-import type { PartListUnion } from '@google/genai';
+import type { AgentContent } from './types/agentContent.js';
 
 // Only defining the state enum needed by the UI
 export enum StreamingState {
@@ -300,7 +300,7 @@ export interface ConsoleMessageItem {
  */
 export interface SubmitPromptResult {
   type: 'submit_prompt';
-  content: PartListUnion;
+  content: AgentContent;
 }
 
 /**

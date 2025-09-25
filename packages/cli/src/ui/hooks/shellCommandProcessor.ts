@@ -16,7 +16,7 @@ import type {
   ShellExecutionResult,
 } from '@ouroboros/ouroboros-code-core';
 import { isBinary, ShellExecutionService } from '@ouroboros/ouroboros-code-core';
-import { type PartListUnion } from '@google/genai';
+import type { AgentContent } from '../types/agentContent.js';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 import { SHELL_COMMAND_NAME } from '../constants.js';
 import { formatMemoryUsage } from '../utils/formatters.js';
@@ -71,7 +71,7 @@ export const useShellCommandProcessor = (
   geminiClient: GeminiClient,
 ) => {
   const handleShellCommand = useCallback(
-    (rawQuery: PartListUnion, abortSignal: AbortSignal): boolean => {
+    (rawQuery: AgentContent, abortSignal: AbortSignal): boolean => {
       if (typeof rawQuery !== 'string' || rawQuery.trim() === '') {
         return false;
       }

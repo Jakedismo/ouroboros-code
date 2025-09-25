@@ -27,7 +27,6 @@ import {
   Kind,
   ApprovalMode,
 } from '../index.js';
-import type { Part, PartListUnion } from '@google/genai';
 import { MockModifiableTool, MockTool } from '../test-utils/tools.js';
 import * as telemetryLoggers from '../telemetry/loggers.js';
 
@@ -330,8 +329,8 @@ describe('convertToFunctionResponse', () => {
     ]);
   });
 
-  it('should handle llmContent as a single Part with text', () => {
-    const llmContent: Part = { text: 'Text from Part object' };
+  it('should handle llmContent as a single object with text', () => {
+    const llmContent = { text: 'Text from Part object' };
     const result = convertToFunctionResponse(toolName, callId, llmContent);
     expect(result).toEqual([
       {
@@ -344,8 +343,8 @@ describe('convertToFunctionResponse', () => {
     ]);
   });
 
-  it('should handle llmContent as a PartListUnion array with a single text Part', () => {
-    const llmContent: PartListUnion = [{ text: 'Text from array' }];
+  it('should handle llmContent as an array with a single text entry', () => {
+    const llmContent = [{ text: 'Text from array' }];
     const result = convertToFunctionResponse(toolName, callId, llmContent);
     expect(result).toEqual([
       {
@@ -359,7 +358,7 @@ describe('convertToFunctionResponse', () => {
   });
 
   it('should handle llmContent with inlineData', () => {
-    const llmContent: Part = {
+    const llmContent = {
       inlineData: { mimeType: 'image/png', data: 'base64...' },
     };
     const result = convertToFunctionResponse(toolName, callId, llmContent);
@@ -378,7 +377,7 @@ describe('convertToFunctionResponse', () => {
   });
 
   it('should handle llmContent with fileData', () => {
-    const llmContent: Part = {
+    const llmContent = {
       fileData: { mimeType: 'application/pdf', fileUri: 'gs://...' },
     };
     const result = convertToFunctionResponse(toolName, callId, llmContent);
@@ -396,8 +395,8 @@ describe('convertToFunctionResponse', () => {
     ]);
   });
 
-  it('should handle llmContent as an array of multiple Parts (text and inlineData)', () => {
-    const llmContent: PartListUnion = [
+  it('should handle llmContent as an array of multiple entries (text and inlineData)', () => {
+    const llmContent = [
       { text: 'Some textual description' },
       { inlineData: { mimeType: 'image/jpeg', data: 'base64data...' } },
       { text: 'Another text part' },
@@ -415,8 +414,8 @@ describe('convertToFunctionResponse', () => {
     ]);
   });
 
-  it('should handle llmContent as an array with a single inlineData Part', () => {
-    const llmContent: PartListUnion = [
+  it('should handle llmContent as an array with a single inlineData entry', () => {
+    const llmContent = [
       { inlineData: { mimeType: 'image/gif', data: 'gifdata...' } },
     ];
     const result = convertToFunctionResponse(toolName, callId, llmContent);
@@ -434,15 +433,17 @@ describe('convertToFunctionResponse', () => {
     ]);
   });
 
-  it('should handle llmContent as a generic Part (not text, inlineData, or fileData)', () => {
-    const llmContent: Part = { functionCall: { name: 'test', args: {} } };
+  it('should handle llmContent as a generic object (not text, inlineData, or fileData)', () => {
+    const llmContent = { functionCall: { name: 'test', args: {} } };
     const result = convertToFunctionResponse(toolName, callId, llmContent);
     expect(result).toEqual([
       {
         functionResponse: {
           name: toolName,
           id: callId,
-          response: { output: 'Tool execution succeeded.' },
+          response: {
+            output: '{"functionCall":{"name":"test","args":{}}}',
+          },
         },
       },
     ]);
@@ -463,7 +464,7 @@ describe('convertToFunctionResponse', () => {
   });
 
   it('should handle llmContent as an empty array', () => {
-    const llmContent: PartListUnion = [];
+    const llmContent: unknown[] = [];
     const result = convertToFunctionResponse(toolName, callId, llmContent);
     expect(result).toEqual([
       {
@@ -476,15 +477,15 @@ describe('convertToFunctionResponse', () => {
     ]);
   });
 
-  it('should handle llmContent as a Part with undefined inlineData/fileData/text', () => {
-    const llmContent: Part = {}; // An empty part object
+  it('should handle llmContent as an object with undefined inlineData/fileData/text', () => {
+    const llmContent = {}; // An empty part object
     const result = convertToFunctionResponse(toolName, callId, llmContent);
     expect(result).toEqual([
       {
         functionResponse: {
           name: toolName,
           id: callId,
-          response: { output: 'Tool execution succeeded.' },
+          response: { output: '{}' },
         },
       },
     ]);

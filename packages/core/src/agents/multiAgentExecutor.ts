@@ -4,12 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type {
-  GenerateContentParameters,
-  GenerateContentResponse,
-  Part,
-} from '@google/genai';
-import type { ContentGenerator } from '../core/contentGenerator.js';
 import type { Config } from '../config/config.js';
 import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
 import type {
@@ -20,6 +14,7 @@ import type { AgentPersona } from './personas.js';
 import { getAgentById } from './personas.js';
 import { injectToolExamples } from './toolInjector.js';
 import type { ToolResultDisplay } from '../tools/tools.js';
+import { toolResponsePartsToString } from '../utils/toolResponseStringifier.js';
 
 interface MultiAgentExecutorOptions {
   defaultModel?: string;
@@ -87,7 +82,6 @@ export class MultiAgentExecutor {
   private readonly providedClient?: UnifiedAgentsClient;
 
   constructor(
-    private readonly contentGenerator: ContentGenerator,
     private readonly config: Config,
     options: MultiAgentExecutorOptions = {},
   ) {
@@ -116,7 +110,7 @@ export class MultiAgentExecutor {
             callId: request.callId,
             toolName: request.name,
             arguments: request.args,
-            outputText: this.formatResponseParts(response.responseParts),
+            outputText: toolResponsePartsToString(response.responseParts),
             resultDisplay: response.resultDisplay,
             timestamp: Date.now(),
           };
@@ -196,6 +190,7 @@ export class MultiAgentExecutor {
     const { finalResponse, aggregateReasoning } = await this.synthesize(
       userPrompt,
       agentResults,
+      unifiedClient,
     );
 
     return {
@@ -439,6 +434,7 @@ export class MultiAgentExecutor {
   private async synthesize(
     userPrompt: string,
     agentResults: AgentRunResult[],
+    unifiedClient: UnifiedAgentsClient,
   ): Promise<{ finalResponse: string; aggregateReasoning: string }> {
     if (agentResults.length === 0) {
       return {
@@ -468,35 +464,52 @@ export class MultiAgentExecutor {
       `- Use Markdown where appropriate\n` +
       `- Close with a short reasoning summary on its own line in the format "---\n\nReasoning: ..."`;
 
-    const response = await this.contentGenerator.generateContent(
+    const session = await unifiedClient.createSession({
+      providerId: this.config.getProvider(),
+      model: this.defaultModel,
+      systemPrompt:
+        'You are the Ouroboros master orchestrator. Combine specialist insights into a single, coherent response.',
+      metadata: {
+        agentId: 'orchestrator',
+        agentName: 'Master Orchestrator',
+      },
+    });
+
+    const streamOptions: UnifiedAgentStreamOptions = {
+      temperature: 0.4,
+    };
+
+    if (this.config.getProvider() !== 'openai') {
+      streamOptions.maxOutputTokens = 4096;
+    }
+
+    const messages: UnifiedAgentMessage[] = [
       {
-        model: this.defaultModel,
-        contents: [{ role: 'user', parts: [{ text: synthesisPrompt }] }],
-        config: { temperature: 0.4, maxOutputTokens: 4096 },
-      } as GenerateContentParameters,
-      'multi-agent-synthesis',
+        role: 'user',
+        content: synthesisPrompt,
+      },
+    ];
+
+    let accumulated = '';
+
+    for await (const event of unifiedClient.streamResponse(
+      session,
+      messages,
+      streamOptions,
+    )) {
+      if (event.type === 'text-delta' && event.delta) {
+        accumulated += event.delta;
+      }
+      if (event.type === 'final') {
+        accumulated = event.message.content ?? accumulated;
+      }
+    }
+
+    const [finalResponse, aggregateReasoning] = this.splitFinalResponse(
+      accumulated.trim(),
     );
 
-    const text = this.extractResponseText(response);
-
-    const [finalResponse, aggregateReasoning] = this.splitFinalResponse(text);
-
     return { finalResponse, aggregateReasoning };
-  }
-
-  private extractResponseText(response: GenerateContentResponse): string {
-    const parts = response.candidates?.[0]?.content?.parts ?? [];
-    const text = parts
-      .map((part: unknown) => {
-        if (typeof part === 'string') return part;
-        if (part && typeof part === 'object' && 'text' in part) {
-          const maybe = (part as { text?: string }).text;
-          return typeof maybe === 'string' ? maybe : '';
-        }
-        return '';
-      })
-      .join('');
-    return text.trim();
   }
 
   private splitFinalResponse(text: string): [string, string] {
@@ -509,18 +522,4 @@ export class MultiAgentExecutor {
     return [answer.trim(), reasoning.trim()];
   }
 
-  private formatResponseParts(parts: Part[] | undefined): string {
-    if (!Array.isArray(parts)) return '';
-    return parts
-      .map((part) => {
-        if (part && typeof part === 'object' && 'text' in part) {
-          const value = (part as { text?: string }).text;
-          return typeof value === 'string' ? value : '';
-        }
-        return '';
-      })
-      .filter(Boolean)
-      .join('\n')
-      .trim();
-  }
 }

@@ -1,5 +1,4 @@
 import path from 'node:path';
-import type { PartListUnion } from '@google/genai';
 import {
   tool as createAgentsTool,
   type Tool as AgentsTool,
@@ -12,6 +11,7 @@ import type {
 } from '../index.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { AnyDeclarativeTool, ToolResultDisplay } from '../tools/tools.js';
+import { toolResponsePartsToString } from '../utils/toolResponseStringifier.js';
 
 export interface ToolAdapterContext {
   registry: ToolRegistry;
@@ -102,9 +102,7 @@ function createAdaptedTool(
 
         context.onToolExecuted?.({ request: callRequest, response });
 
-        const responseText = partListToString(
-          response.responseParts as unknown as PartListUnion,
-        );
+        const responseText = toolResponsePartsToString(response.responseParts);
         if (responseText) {
           return responseText;
         }
@@ -752,60 +750,6 @@ function coerceBoolean(value: unknown): boolean | undefined {
     if (value === 0) return false;
   }
   return undefined;
-}
-
-function partListToString(content: PartListUnion): string {
-  if (typeof content === 'string') {
-    return content;
-  }
-
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => {
-        if (typeof part === 'string') {
-          return part;
-        }
-        if (part && typeof part === 'object') {
-          const text = (part as Record<string, unknown>)['text'];
-          if (typeof text === 'string') {
-            return text;
-          }
-          const functionResponse = (part as Record<string, unknown>)[
-            'functionResponse'
-          ];
-          if (functionResponse) {
-            try {
-              return JSON.stringify(functionResponse);
-            } catch {
-              return '[functionResponse]';
-            }
-          }
-          try {
-            return JSON.stringify(part);
-          } catch {
-            return '';
-          }
-        }
-        return '';
-      })
-      .filter(Boolean)
-      .join('\n')
-      .trim();
-  }
-
-  if (content && typeof content === 'object') {
-    const text = (content as Record<string, unknown>)['text'];
-    if (typeof text === 'string') {
-      return text;
-    }
-    try {
-      return JSON.stringify(content);
-    } catch {
-      return '';
-    }
-  }
-
-  return String(content ?? '');
 }
 
 function toolResultDisplayToString(display: ToolResultDisplay): string {

@@ -6,7 +6,10 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { PartListUnion, PartUnion } from '@google/genai';
+import type {
+  AgentContent,
+  AgentContentFragment,
+} from '../types/agentContent.js';
 import type { AnyToolInvocation, Config } from '@ouroboros/ouroboros-code-core';
 import {
   getErrorMessage,
@@ -27,7 +30,7 @@ interface HandleAtCommandParams {
 }
 
 interface HandleAtCommandResult {
-  processedQuery: PartListUnion | null;
+  processedQuery: AgentContent | null;
   shouldProceed: boolean;
 }
 
@@ -393,7 +396,7 @@ export async function handleAtCommand({
     };
   }
 
-  const processedQueryParts: PartUnion[] = [{ text: initialQueryText }];
+  const processedQueryParts: AgentContentFragment[] = [{ text: initialQueryText }];
 
   const toolArgs = {
     paths: pathSpecsToRead,

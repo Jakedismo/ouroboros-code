@@ -5,7 +5,7 @@
  */
 
 import { type ReactNode } from 'react';
-import type { Content, PartListUnion } from '@google/genai';
+import type { AgentContent, AgentMessage } from '../types/agentContent.js';
 import type { HistoryItemWithoutId, HistoryItem } from '../types.js';
 import type { Config, GitService, Logger } from '@ouroboros/ouroboros-code-core';
 import type { LoadedSettings } from '../../config/settings.js';
@@ -113,7 +113,7 @@ export interface OpenDialogActionReturn {
 export interface LoadHistoryActionReturn {
   type: 'load_history';
   history: HistoryItemWithoutId[];
-  clientHistory: Content[]; // The history for the generative client
+  clientHistory: AgentMessage[]; // The history for the generative client
 }
 
 /**
@@ -122,7 +122,7 @@ export interface LoadHistoryActionReturn {
  */
 export interface SubmitPromptActionReturn {
   type: 'submit_prompt';
-  content: PartListUnion;
+  content: AgentContent;
 }
 
 /**
