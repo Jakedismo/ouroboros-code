@@ -50,6 +50,10 @@ export async function checkForUpdates(): Promise<UpdateObject | null> {
       return null;
     }
 
+    if (packageJson.private || packageJson.name.startsWith('@ouroboros/')) {
+      return null;
+    }
+
     const { name, version: currentVersion } = packageJson;
     const isNightly = currentVersion.includes('nightly');
     const createNotifier = (distTag: 'latest' | 'nightly') =>
