@@ -69,36 +69,56 @@ const CORE_TOOL_INSTRUCTIONS = `
 
 ## Core Tools Cheat Sheet (arguments shown in JSON)
 - \`${LS_TOOL_NAME}\` – List directory entries.
+  - Required keys: path (string, absolute directory that stays inside the workspace)
+  - Optional keys: ignore (string[]), file_filtering_options (respect_git_ignore/respect_gemini_ignore)
   - Example: { "path": "/absolute/dir", "ignore": ["node_modules"] }
   - Use to confirm file names or discover modules before editing.
 - \`${GLOB_TOOL_NAME}\` – Locate files by pattern.
-  - Example: { "pattern": "src/**/*.ts", "path": "/absolute/base" }
-  - 'path' scopes the search; omit it to search the workspace root.
+  - Required keys: pattern (string)
+  - Optional keys: path (string, workspace-relative search root), case_sensitive (boolean)
+  - Example: { "pattern": "src/**/*.ts", "path": "apps/api" }
+  - Use to narrow the set of files before deeper inspection.
 - \`${GREP_TOOL_NAME}\` – Search within files (regex supported).
-  - Example: { "pattern": "function foo", "path": "/absolute/dir", "case_sensitive": false }
+  - Required keys: pattern (string)
+  - Optional keys: path (string, workspace-relative), include (glob string)
+  - Example: { "pattern": "function foo", "path": "packages/service", "case_sensitive": false }
   - Combine with glob results to focus on relevant files.
 - \`${READ_FILE_TOOL_NAME}\` – Inspect a file or excerpt.
+  - Required keys: absolute_path (string)
+  - Optional keys: offset (number), limit (number)
   - Example: { "absolute_path": "/absolute/file", "offset": 0, "limit": 200 }
   - Provide 'offset'/'limit' when the file is large to avoid repeated full reads.
 - \`${READ_MANY_FILES_TOOL_NAME}\` – Read multiple files/snippets.
+  - Required keys: paths (string[])
+  - Optional keys: include (string[]), exclude (string[]), file_filtering_options
   - Example: { "paths": ["src", "package.json"], "include": ["**/*.md"], "exclude": ["dist/**"] }
-  - 'paths' are relative to the workspace root; use this for broad surveys.
+  - 'paths' are workspace-relative and can include glob patterns.
 - \`${EDIT_TOOL_NAME}\` – Replace an exact region in an existing file.
+  - Required keys: file_path (string, absolute), old_string (string), new_string (string)
+  - Optional keys: expected_replacements (number)
   - Example: { "file_path": "/absolute/file", "old_string": "current text", "new_string": "replacement", "expected_replacements": 1 }
   - 'old_string' must include surrounding context so the match is unique; do not escape newline characters.
 - \`${WRITE_FILE_TOOL_NAME}\` – Create or fully rewrite a file.
+  - Required keys: file_path (string, absolute), content (string)
   - Example: { "file_path": "/absolute/new-file", "content": "full file contents" }
   - Prefer this for brand-new files or complete rewrites; use \`${EDIT_TOOL_NAME}\` for surgical edits.
 - \`${SHELL_TOOL_NAME}\` – Run project commands.
+  - Required keys: command (string)
+  - Optional keys: description (string), directory (string)
   - Example: { "command": "npm test", "description": "Run unit tests", "directory": "packages/api" }
   - Supply a concise description explaining the command and keep commands non-interactive.
 - \`${MEMORY_TOOL_NAME}\` – Persist user-specific preferences, but only when the user asks you to remember something.
+  - Required keys: fact (string)
   - Example: { "fact": "My favorite editor is VS Code" }
 - \`${RIPGREP_TOOL_NAME}\` – High-volume code search using ripgrep semantics.
+  - Required keys: pattern (string)
+  - Optional keys: path (string), include (string)
   - Example: { "pattern": "createSlice", "path": "packages", "include": "**/*.ts" }
 - \`${WEB_FETCH_TOOL_NAME}\` – Fetch documentation from specific URLs when external network access is allowed.
+  - Required keys: prompt (string)
   - Example: { "prompt": "Fetch https://example.com/docs/config and summarise installation steps" }
 - \`${WEB_SEARCH_TOOL_NAME}\` – Perform a Google web search via Gemini to gather recent information.
+  - Required keys: query (string)
   - Example: { "query": "latest Node.js LTS release" }
 
 ## Execution Tips
