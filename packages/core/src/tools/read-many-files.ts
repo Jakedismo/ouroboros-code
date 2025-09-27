@@ -17,7 +17,7 @@ import {
   DEFAULT_ENCODING,
   getSpecificMimeType,
 } from '../utils/fileUtils.js';
-import type { PartListUnion } from '@google/genai';
+import type { AgentContentFragment, Part } from '../runtime/agentsTypes.js';
 import type { Config } from '../config/config.js';
 import { DEFAULT_FILE_FILTERING_OPTIONS } from '../config/config.js';
 import { FileOperation } from '../telemetry/metrics.js';
@@ -190,7 +190,7 @@ ${finalExclusionPatternsForDescription
     const filesToConsider = new Set<string>();
     const skippedFiles: Array<{ path: string; reason: string }> = [];
     const processedFilesRelativePaths: string[] = [];
-    const contentParts: PartListUnion = [];
+    const contentParts: AgentContentFragment[] = [];
 
     const effectiveExcludes = useDefaultExcludes
       ? [...getDefaultExcludes(this.config), ...exclude]
@@ -505,8 +505,30 @@ ${finalExclusionPatternsForDescription
         'No files matching the criteria were found or all were skipped.',
       );
     }
+
+    const hasNonStringFragments = contentParts.some(
+      (fragment) => typeof fragment !== 'string',
+    );
+
+    let llmContent: AgentContentFragment;
+    if (hasNonStringFragments) {
+      const aggregatedParts: Part[] = [];
+      for (const fragment of contentParts) {
+        if (typeof fragment === 'string') {
+          aggregatedParts.push({ text: fragment });
+        } else if (Array.isArray(fragment)) {
+          aggregatedParts.push(...fragment);
+        } else if (fragment && typeof fragment === 'object') {
+          aggregatedParts.push(fragment as Part);
+        }
+      }
+      llmContent = aggregatedParts;
+    } else {
+      llmContent = (contentParts as string[]).join('');
+    }
+
     return {
-      llmContent: contentParts,
+      llmContent,
       returnDisplay: displayMessage.trim(),
     };
   }

@@ -25,8 +25,8 @@ import type {
   ThinkingConfig,
   ToolListUnion,
   ToolConfig,
-} from '@google/genai';
-import { GenerateContentResponse } from '@google/genai';
+} from '../runtime/genaiCompat.js';
+import type { GenerateContentResponse } from '../runtime/genaiCompat.js';
 
 export interface CAGenerateContentRequest {
   model: string;
@@ -120,8 +120,9 @@ export function toGenerateContentRequest(
   project?: string,
   sessionId?: string,
 ): CAGenerateContentRequest {
+  const model = req.model ?? '';
   return {
-    model: req.model,
+    model,
     project,
     user_prompt_id: userPromptId,
     request: toVertexGenerateContentRequest(req, sessionId),
@@ -132,12 +133,12 @@ export function fromGenerateContentResponse(
   res: CaGenerateContentResponse,
 ): GenerateContentResponse {
   const inres = res.response;
-  const out = new GenerateContentResponse();
-  out.candidates = inres.candidates;
-  out.automaticFunctionCallingHistory = inres.automaticFunctionCallingHistory;
-  out.promptFeedback = inres.promptFeedback;
-  out.usageMetadata = inres.usageMetadata;
-  return out;
+  return {
+    candidates: inres.candidates,
+    automaticFunctionCallingHistory: inres.automaticFunctionCallingHistory,
+    promptFeedback: inres.promptFeedback,
+    usageMetadata: inres.usageMetadata,
+  } as GenerateContentResponse;
 }
 
 function toVertexGenerateContentRequest(
@@ -193,7 +194,7 @@ function toContent(content: ContentUnion): Content {
     return {
       ...content,
       parts: content.parts
-        ? toParts(content.parts.filter((p) => p != null))
+        ? toParts((content.parts as (Part | null | undefined)[]).filter((p): p is Part => p != null))
         : [],
     };
   }

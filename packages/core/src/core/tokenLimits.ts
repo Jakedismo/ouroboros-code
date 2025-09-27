@@ -44,11 +44,7 @@ export function tokenLimit(model: Model): TokenCount {
   }
 
   // OpenAI GPT-5 family (multimodal + coding variants share the same 282k window)
-  if (
-    normalized.startsWith('gpt-5') ||
-    normalized.startsWith('gpt5') ||
-    normalized.startsWith('o5')
-  ) {
+  if (normalized.startsWith('gpt-5') || normalized.startsWith('gpt-5-codex')) {
     return OPENAI_GPT5_LIMIT;
   }
 

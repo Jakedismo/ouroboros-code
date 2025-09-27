@@ -1,23 +1,20 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The workspace follows npm workspaces with all first-party code in `packages/**`. Key areas: `packages/core` (runtime, tool adapters, prompts), `packages/cli` (Ink UI, slash commands, transport), `packages/extensions` (IDE integrations), and `packages/test-utils` (shared fixtures). Integration smoke tests live under `integration-tests/`, scripts and release tooling under `scripts/`, and design docs in `docs/` plus `ouroboros/`. Build products are written to each package’s `dist/` and the root `bundle/` directory.
+The monorepo is managed through npm workspaces. `packages/core` hosts the shared runtime, agent orchestration logic, and tool adapters. `packages/cli` contains the Ink-based terminal UI, slash-command processor, and prompt pipelines. `packages/a2a-server` and `packages/vscode-ide-companion` expose the same runtime for automation and IDE integrations. Shared build utilities and release scripts live under `scripts/`, while root-level configuration files (`package.json`, `.eslintrc`, `tsconfig.*`) define repository-wide tooling.
 
 ## Build, Test, and Development Commands
-- `npm install` — bootstrap all workspaces; rerun after dependency changes.
-- `npm run build` — TypeScript + bundler pass for every package, regenerates `bundle/`.
-- `npm run test` — Vitest suites across the monorepo; append `--runInBand` when debugging flaky cases.
-- `npm run lint` / `npm run format` — ESLint + Prettier; use `npm run lint:fix` for quick cleanup.
-- `npm run preflight` — CI-equivalent chain (clean, build, lint, typecheck, tests). Run before publishing or requesting review.
+Install dependencies once at the root, then use npm scripts to drive the workspace:
+- `npm run build` compiles every package via `scripts/build.js`.
+- `npm run test --workspaces --if-present` executes Vitest suites across packages; run targeted suites (for example `npx vitest run packages/core/src/agents/multiAgentExecutor.test.ts`) before committing agent changes.
+- `npm run lint` and `npm run typecheck` enforce ESLint rules and strict TypeScript settings.
+- `npm run format` applies the repository Prettier configuration.
 
 ## Coding Style & Naming Conventions
-Code is TypeScript-first with ES modules (`.ts` / `.tsx`). Honor the Apache 2.0 header at the top of source files. Follow Prettier defaults (two-space indent, trailing commas, single quotes) and keep imports sorted via ESLint. Use `camelCase` for variables/functions, `PascalCase` for classes and React components, and descriptive file names such as `multiAgentExecutor.ts` or `historyItemDisplay.tsx`. Avoid bypassing lint rules; prefer targeted refactors if a rule feels noisy.
+All source is TypeScript with ES modules. Use two-space indentation, descriptive camelCase identifiers, and prefer provider-neutral types surfaced in `packages/core/src/runtime`. Keep comments purposeful—add them only when behaviour is non-obvious. Shared utilities should be tree-shakeable and avoid hard dependencies on legacy `@google/genai` types; wire new functionality through `UnifiedAgentsClient` and the prompt/tool adapters.
 
 ## Testing Guidelines
-Unit specs sit beside implementation (`*.test.ts`), while broader flows are under `integration-tests/`. When a change affects the CLI transcript renderer, add coverage in `packages/cli/src/ui/components/*.test.tsx`. Respect environment toggles: set `GEMINI_SANDBOX=false` for headless runs, and document new fixtures in `TEST_SUMMARY.md`. Target meaningful assertions and prefer table-driven tests when validating prompt permutations.
+Unit tests mirror source layout (`src/**/*.test.ts`) and rely on Vitest with Jest-compatible assertions. When touching multi-agent flows, extend `packages/core/src/agents` tests to capture timeline/events, and run `npm run build` afterwards to verify type compatibility. For CLI behaviour, pair component updates with corresponding snapshots or interaction tests under `packages/cli/src/ui`. Prefer fast, focused suites over monolithic end-to-end runs.
 
 ## Commit & Pull Request Guidelines
-Adopt Conventional Commits (`fix(core): normalize tool arguments`). Keep commits focused, include manual verification steps, and link PRs to issues (`Fixes #123`). Update the relevant docs (`OUROBOROS.md`, `docs/architecture/*`) when behavior changes or new flags are introduced. Before requesting review, run `npm run preflight`, note any skipped steps, and attach terminal screenshots for notable CLI output changes.
-
-## Operational Notes
-Secret material never belongs in the repo; rely on `.env` or platform vaults. When editing telemetry, auth, or sandbox code paths, flag reviewers from the governance team and capture configuration updates in `docs/configuration.md`. Use `npm run build:all` to rebuild the sandbox container before exercising auto-sandbox flows.
+Follow conventional commits (`refactor: adjust tool injector`, `feat: stream multi-agent deltas`, etc.) so release tooling can auto-generate changelogs. Each PR should summarise behaviour, list verification steps (build/tests), and call out risks or follow-ups. When updating agents or tooling, include instructions for manual validation (e.g., `/agents on` smoke test) in the PR description to help reviewers reproduce the change.

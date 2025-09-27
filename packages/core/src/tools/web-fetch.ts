@@ -103,7 +103,7 @@ class WebFetchToolInvocation extends BaseToolInvocation<
         ],
       }).substring(0, MAX_CONTENT_LENGTH);
 
-      const geminiClient = this.config.getGeminiClient();
+      const agentsClient = this.config.getConversationClient();
       const fallbackPrompt = `The user requested the following: "${this.params.prompt}".
 
 I was unable to access the URL directly. Instead, I have fetched the raw content of the page. Please use the following content to answer the request. Do not attempt to access the URL again.
@@ -112,7 +112,7 @@ I was unable to access the URL directly. Instead, I have fetched the raw content
 ${textContent}
 ---
 `;
-      const result = await geminiClient.generateContent(
+      const result = await agentsClient.generateContent(
         [{ role: 'user', parts: [{ text: fallbackPrompt }] }],
         {},
         signal,
@@ -186,12 +186,12 @@ ${textContent}
       return this.executeFallback(signal);
     }
 
-    const geminiClient = this.config.getGeminiClient();
+    const agentsClient = this.config.getConversationClient();
 
     try {
-      const response = await geminiClient.generateContent(
+      const response = await agentsClient.generateContent(
         [{ role: 'user', parts: [{ text: userPrompt }] }],
-        { tools: [{ urlContext: {} }] },
+        { tools: [{ functionDeclarations: [], urlContext: {} }] },
         signal, // Pass signal
       );
 
@@ -204,29 +204,33 @@ ${textContent}
       );
 
       let responseText = getResponseText(response) || '';
-      const urlContextMeta = response.candidates?.[0]?.urlContextMetadata;
-      const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
-      const sources = groundingMetadata?.groundingChunks as
-        | GroundingChunkItem[]
+      const candidateRecord = (response.candidates?.[0] ?? {}) as Record<string, unknown>;
+      const urlContextMeta = candidateRecord['urlContextMetadata'] as
+        | { urlMetadata?: Array<{ urlRetrievalStatus?: string }> }
         | undefined;
-      const groundingSupports = groundingMetadata?.groundingSupports as
-        | GroundingSupportItem[]
+      const groundingMetadata = candidateRecord['groundingMetadata'] as
+        | {
+            groundingChunks?: GroundingChunkItem[];
+            groundingSupports?: GroundingSupportItem[];
+          }
         | undefined;
+      const sources = groundingMetadata?.groundingChunks ?? [];
+      const groundingSupports = groundingMetadata?.groundingSupports ?? [];
 
       // Error Handling
       let processingError = false;
 
-      if (
-        urlContextMeta?.urlMetadata &&
-        urlContextMeta.urlMetadata.length > 0
-      ) {
-        const allStatuses = urlContextMeta.urlMetadata.map(
-          (m) => m.urlRetrievalStatus,
+      const urlMetadataEntries = Array.isArray(urlContextMeta?.urlMetadata)
+        ? (urlContextMeta.urlMetadata as Array<{ urlRetrievalStatus?: string }>)
+        : [];
+      if (urlMetadataEntries.length > 0) {
+        const allStatuses = urlMetadataEntries.map(
+          (metadata) => metadata.urlRetrievalStatus,
         );
-        if (allStatuses.every((s) => s !== 'URL_RETRIEVAL_STATUS_SUCCESS')) {
+        if (allStatuses.every((status) => status !== 'URL_RETRIEVAL_STATUS_SUCCESS')) {
           processingError = true;
         }
-      } else if (!responseText.trim() && !sources?.length) {
+      } else if (!responseText.trim() && sources.length === 0) {
         // No URL metadata and no content/sources
         processingError = true;
       }
@@ -234,7 +238,7 @@ ${textContent}
       if (
         !processingError &&
         !responseText.trim() &&
-        (!sources || sources.length === 0)
+        sources.length === 0
       ) {
         // Successfully retrieved some URL (or no specific error from urlContextMeta), but no usable text or grounding data.
         processingError = true;
@@ -245,14 +249,14 @@ ${textContent}
       }
 
       const sourceListFormatted: string[] = [];
-      if (sources && sources.length > 0) {
+      if (sources.length > 0) {
         sources.forEach((source: GroundingChunkItem, index: number) => {
           const title = source.web?.title || 'Untitled';
           const uri = source.web?.uri || 'Unknown URI'; // Fallback if URI is missing
           sourceListFormatted.push(`[${index + 1}] ${title} (${uri})`);
         });
 
-        if (groundingSupports && groundingSupports.length > 0) {
+        if (groundingSupports.length > 0) {
           const insertions: Array<{ index: number; marker: string }> = [];
           groundingSupports.forEach((support: GroundingSupportItem) => {
             if (support.segment && support.groundingChunkIndices) {

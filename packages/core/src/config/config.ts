@@ -25,7 +25,7 @@ import { WebFetchTool } from '../tools/web-fetch.js';
 import { ReadManyFilesTool } from '../tools/read-many-files.js';
 import { MemoryTool, setGeminiMdFilename } from '../tools/memoryTool.js';
 import { WebSearchTool } from '../tools/web-search.js';
-import { GeminiClient } from '../core/client.js';
+import { AgentsClient } from '../core/agentsClient.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { GitService } from '../services/gitService.js';
 import type { TelemetryTarget } from '../telemetry/index.js';
@@ -42,7 +42,7 @@ import {
 import { shouldAttemptBrowserLaunch } from '../utils/browser.js';
 import type { MCPOAuthConfig } from '../mcp/oauth-provider.js';
 import { IdeClient } from '../ide/ide-client.js';
-import type { Content } from '@google/genai';
+import type { Content } from '../runtime/genaiCompat.js';
 import type { FileSystemService } from '../services/fileSystemService.js';
 import { StandardFileSystemService } from '../services/fileSystemService.js';
 import type {
@@ -260,7 +260,7 @@ export class Config {
   private readonly accessibility: AccessibilitySettings;
   private readonly telemetrySettings: TelemetrySettings;
   private readonly usageStatisticsEnabled: boolean;
-  private geminiClient!: GeminiClient;
+  private agentsClient!: AgentsClient;
   private readonly fileFiltering: {
     respectGitIgnore: boolean;
     respectGeminiIgnore: boolean;
@@ -441,10 +441,12 @@ export class Config {
       }
     }
 
-    // Save the current conversation history before creating a new client
+    // Save the current conversation history and system prompt before creating a new client
     let existingHistory: Content[] = [];
-    if (this.geminiClient && this.geminiClient.isInitialized()) {
-      existingHistory = this.geminiClient.getHistory();
+    let previousSystemInstruction: string | undefined;
+    if (this.agentsClient?.isInitialized()) {
+      existingHistory = this.agentsClient.getHistory();
+      previousSystemInstruction = this.agentsClient.getSystemInstruction();
     }
 
     // Create new content generator config (provider-aware logic is now in createContentGenerator)
@@ -455,26 +457,27 @@ export class Config {
     );
     console.log(`[Config.refreshAuth] Content generator config created`);
 
-    // Create and initialize new client in local variable first
-    console.log(`[Config.refreshAuth] Creating new GeminiClient`);
-    const newGeminiClient = new GeminiClient(this);
-    console.log(`[Config.refreshAuth] About to initialize GeminiClient`);
-    await newGeminiClient.initialize(newContentGeneratorConfig);
-    console.log(`[Config.refreshAuth] GeminiClient initialized`);
+    const newAgentsClient = new AgentsClient(this);
+    console.log(`[Config.refreshAuth] Initializing AgentsClient`);
+    await newAgentsClient.initialize(newContentGeneratorConfig);
+    console.log(`[Config.refreshAuth] AgentsClient initialized`);
 
     // Vertex and Genai have incompatible encryption and sending history with
-    // throughtSignature from Genai to Vertex will fail, we need to strip them
+    // thoughtSignature from Genai to Vertex will fail, we need to strip them
     const fromGenaiToVertex =
       this.contentGeneratorConfig?.authType === AuthType.USE_GEMINI &&
       authMethod === AuthType.LOGIN_WITH_GOOGLE;
 
     // Only assign to instance properties after successful initialization
     this.contentGeneratorConfig = newContentGeneratorConfig;
-    this.geminiClient = newGeminiClient;
+    this.agentsClient = newAgentsClient;
 
-    // Restore the conversation history to the new client
+    if (previousSystemInstruction) {
+      newAgentsClient.setSystemInstruction(previousSystemInstruction);
+    }
+
     if (existingHistory.length > 0) {
-      this.geminiClient.setHistory(existingHistory, {
+      newAgentsClient.setHistory(existingHistory, {
         stripThoughts: fromGenaiToVertex,
       });
     }
@@ -566,7 +569,7 @@ export class Config {
       }
     }
 
-    // Recreate the GeminiClient with the new provider
+    // Reinitialize the AgentsClient with the new provider
     await this.refreshAuth(authType);
   }
 
@@ -587,18 +590,10 @@ export class Config {
     // Instead, update the system instruction in the EXISTING chat if one exists
     // This preserves all conversation context for long-running multi-agent tasks
     
-    // If there's an active GeminiClient with a current chat, update its system instruction
-    if (this.geminiClient && typeof this.geminiClient.getChat === 'function') {
-      try {
-        const currentChat = this.geminiClient.getChat();
-        if (currentChat && typeof currentChat.setSystemInstruction === 'function') {
-          currentChat.setSystemInstruction(prompt);
-          console.log('[Config] Updated system instruction in existing chat - conversation history preserved');
-        }
-      } catch (e) {
-        // Chat might not be initialized yet, that's okay
-        console.log('[Config] No active chat to update system instruction');
-      }
+    // Update the active AgentsClient so the new system instruction is applied on subsequent turns
+    if (this.agentsClient) {
+      this.agentsClient.setSystemInstruction(prompt);
+      console.log('[Config] Updated system instruction for AgentsClient - conversation history preserved');
     }
   }
 
@@ -615,18 +610,9 @@ export class Config {
     // If there's an active chat, clear its custom system instruction
     // Note: We can't easily get the base system prompt here without complex logic,
     // so we'll let it be applied naturally on the next turn
-    if (this.geminiClient && typeof this.geminiClient.getChat === 'function') {
-      try {
-        const currentChat = this.geminiClient.getChat();
-        if (currentChat && typeof currentChat.setSystemInstruction === 'function') {
-          // Clear by setting empty string - the base prompt will be used on next turn
-          currentChat.setSystemInstruction('');
-          console.log('[Config] Cleared agent system instruction - base prompt will be restored on next turn');
-        }
-      } catch (e) {
-        // Chat might not be initialized yet, that's okay
-        console.log('[Config] No active chat to clear system instruction');
-      }
+    if (this.agentsClient) {
+      this.agentsClient.clearSystemInstruction();
+      console.log('[Config] Cleared agent system instruction - base prompt will be restored on next turn');
     }
   }
 
@@ -802,8 +788,12 @@ export class Config {
     return this.telemetrySettings.outfile;
   }
 
-  getGeminiClient(): GeminiClient {
-    return this.geminiClient;
+  getConversationClient(): AgentsClient {
+    return this.agentsClient;
+  }
+
+  getAgentsClient(): AgentsClient {
+    return this.getConversationClient();
   }
 
   getEnableRecursiveFileSearch(): boolean {

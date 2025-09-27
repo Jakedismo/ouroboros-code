@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { FunctionDeclaration } from '@google/genai';
+import type { ToolFunctionDeclaration, JsonSchema } from '../runtime/agentsTypes.js';
 import type {
   AnyDeclarativeTool,
   ToolResult,
@@ -128,7 +128,7 @@ export class DiscoveredTool extends BaseDeclarativeTool<
     private readonly config: Config,
     name: string,
     override readonly description: string,
-    override readonly parameterSchema: Record<string, unknown>,
+    override readonly parameterSchema: JsonSchema | undefined,
   ) {
     const discoveryCmd = config.getToolDiscoveryCommand()!;
     const callCommand = config.getToolCallCommand()!;
@@ -363,7 +363,7 @@ export class ToolRegistry {
       });
 
       // execute discovery command and extract function declarations (w/ or w/o "tool" wrappers)
-      const functions: FunctionDeclaration[] = [];
+      const functions: ToolFunctionDeclaration[] = [];
       const discoveredItems = JSON.parse(stdout.trim());
 
       if (!discoveredItems || !Array.isArray(discoveredItems)) {
@@ -379,7 +379,7 @@ export class ToolRegistry {
           } else if (Array.isArray(tool['functionDeclarations'])) {
             functions.push(...tool['functionDeclarations']);
           } else if (tool['name']) {
-            functions.push(tool as FunctionDeclaration);
+            functions.push(tool as ToolFunctionDeclaration);
           }
         }
       }
@@ -411,13 +411,13 @@ export class ToolRegistry {
   }
 
   /**
-   * Retrieves the list of tool schemas (FunctionDeclaration array).
+   * Retrieves the list of tool schemas (ToolFunctionDeclaration array).
    * Extracts the declarations from the ToolListUnion structure.
    * Includes discovered (vs registered) tools if configured.
-   * @returns An array of FunctionDeclarations.
+   * @returns An array of ToolFunctionDeclarations.
    */
-  getFunctionDeclarations(): FunctionDeclaration[] {
-    const declarations: FunctionDeclaration[] = [];
+  getFunctionDeclarations(): ToolFunctionDeclaration[] {
+    const declarations: ToolFunctionDeclaration[] = [];
     this.tools.forEach((tool) => {
       declarations.push(tool.schema);
     });
@@ -427,10 +427,10 @@ export class ToolRegistry {
   /**
    * Retrieves a filtered list of tool schemas based on a list of tool names.
    * @param toolNames - An array of tool names to include.
-   * @returns An array of FunctionDeclarations for the specified tools.
+   * @returns An array of ToolFunctionDeclarations for the specified tools.
    */
-  getFunctionDeclarationsFiltered(toolNames: string[]): FunctionDeclaration[] {
-    const declarations: FunctionDeclaration[] = [];
+  getFunctionDeclarationsFiltered(toolNames: string[]): ToolFunctionDeclaration[] {
+    const declarations: ToolFunctionDeclaration[] = [];
     for (const name of toolNames) {
       const tool = this.tools.get(name);
       if (tool) {

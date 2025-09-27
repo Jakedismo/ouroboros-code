@@ -46,36 +46,6 @@ const WEB_SEARCH_TOOL_NAME = nameOf(
   'google_web_search',
 );
 
-/**
- * Map of tool placeholders to actual tool names for injection
- */
-const LS_PLACEHOLDER = '${LSTool.Name}';
-const EDIT_PLACEHOLDER = '${EditTool.Name}';
-const GLOB_PLACEHOLDER = '${GlobTool.Name}';
-const GREP_PLACEHOLDER = '${GrepTool.Name}';
-const READ_FILE_PLACEHOLDER = '${ReadFileTool.Name}';
-const READ_MANY_FILES_PLACEHOLDER = '${ReadManyFilesTool.Name}';
-const SHELL_PLACEHOLDER = '${ShellTool.Name}';
-const WRITE_FILE_PLACEHOLDER = '${WriteFileTool.Name}';
-const MEMORY_PLACEHOLDER = '${MemoryTool.Name}';
-const WEB_FETCH_PLACEHOLDER = '${WebFetchTool.Name}';
-const WEB_SEARCH_PLACEHOLDER = '${WebSearchTool.Name}';
-const RIPGREP_PLACEHOLDER = '${RipGrepTool.Name}';
-
-const TOOL_NAME_MAP: Record<string, string> = {
-  [LS_PLACEHOLDER]: LS_TOOL_NAME,
-  [EDIT_PLACEHOLDER]: EDIT_TOOL_NAME,
-  [GLOB_PLACEHOLDER]: GLOB_TOOL_NAME,
-  [GREP_PLACEHOLDER]: GREP_TOOL_NAME,
-  [READ_FILE_PLACEHOLDER]: READ_FILE_TOOL_NAME,
-  [READ_MANY_FILES_PLACEHOLDER]: READ_MANY_FILES_TOOL_NAME,
-  [SHELL_PLACEHOLDER]: SHELL_TOOL_NAME,
-  [WRITE_FILE_PLACEHOLDER]: WRITE_FILE_TOOL_NAME,
-  [MEMORY_PLACEHOLDER]: MEMORY_TOOL_NAME,
-  [WEB_FETCH_PLACEHOLDER]: WEB_FETCH_TOOL_NAME,
-  [WEB_SEARCH_PLACEHOLDER]: WEB_SEARCH_TOOL_NAME,
-  [RIPGREP_PLACEHOLDER]: RIPGREP_TOOL_NAME,
-};
 
 /**
  * Core tool usage instructions extracted from the main system prompt
@@ -118,7 +88,7 @@ const CORE_TOOL_INSTRUCTIONS = `
   - 'old_string' must include surrounding context so the match is unique; do not escape newline characters.
 - \`${WRITE_FILE_TOOL_NAME}\` – Create or fully rewrite a file.
   - Example: { "file_path": "/absolute/new-file", "content": "full file contents" }
-  - Prefer this for brand-new files or complete rewrites; use \`${EditTool.Name}\` for surgical edits.
+  - Prefer this for brand-new files or complete rewrites; use \`${EDIT_TOOL_NAME}\` for surgical edits.
 - \`${SHELL_TOOL_NAME}\` – Run project commands.
   - Example: { "command": "npm test", "description": "Run unit tests", "directory": "packages/api" }
   - Supply a concise description explaining the command and keep commands non-interactive.
@@ -134,7 +104,7 @@ const CORE_TOOL_INSTRUCTIONS = `
 ## Execution Tips
 - Build absolute paths by combining the workspace root (visible in directory listings) with the relative path referenced in the prompt or prior tool output.
 - Follow the pattern read → plan → \`${EDIT_TOOL_NAME}\`/\`${WRITE_FILE_TOOL_NAME}\` → read again to confirm → \`${SHELL_TOOL_NAME}\` for verification on every meaningful change.
-- Use \`${ReadManyFilesTool.Name}\` or \`${GrepTool.Name}\` to gather evidence before modifying code and cite that evidence in your reasoning.
+- Use \`${READ_MANY_FILES_TOOL_NAME}\` or \`${GREP_TOOL_NAME}\` to gather evidence before modifying code and cite that evidence in your reasoning.
 - Relay tool output verbatim—especially errors—so the user can follow your steps and see proof of the result.
 - Avoid redundant reads when you already hold the necessary context in conversation memory; refer back to the earlier output instead of reissuing the same call.
 `;
@@ -183,22 +153,15 @@ export function injectToolExamples(agentPrompt: string, agentSpecialties: string
   // Add a transition section
   enhancedPrompt += `\n\n---\n\n# Tool Usage for Implementation\n\nAs an expert agent, you have access to ALL tools to implement your knowledge. Use any tool that helps accomplish the user's goals effectively.\n`;
   
-  // Add the core tool instructions (with placeholders)
-  let coreInstructions = CORE_TOOL_INSTRUCTIONS;
-  
-  // Replace tool name placeholders with actual tool names in core instructions
-  for (const [placeholder, actualName] of Object.entries(TOOL_NAME_MAP)) {
-    coreInstructions = coreInstructions.replace(new RegExp(escapeRegExp(placeholder), 'g'), actualName);
-  }
-  
-  enhancedPrompt += coreInstructions;
+  // Add the core tool instructions
+  enhancedPrompt += CORE_TOOL_INSTRUCTIONS;
   
   // Add slash command examples
   enhancedPrompt += SLASH_COMMAND_EXAMPLES;
   
   // Add a reminder about disciplined execution
   enhancedPrompt += `\n\n## Important Reminders\n\n`;
-  enhancedPrompt += `1. **Validate paths before acting** — confirm locations with \`${LSTool.Name}\` or \`${GlobTool.Name}\` so every file-based call stays inside the workspace.\n`;
+  enhancedPrompt += `1. **Validate paths before acting** — confirm locations with \`${LS_TOOL_NAME}\` or \`${GLOB_TOOL_NAME}\` so every file-based call stays inside the workspace.\n`;
   enhancedPrompt += `2. **Explain impactful actions** — provide a short rationale for edits and shell commands, and capture their output verbatim.\n`;
   enhancedPrompt += `3. **Close the loop** — after edits, run the relevant verification commands and state the result in your final summary.\n\n`;
   enhancedPrompt += `Remember: you are expected to take action, not merely offer advice. Use whichever tools best accomplish the user's goal.`;
@@ -206,17 +169,22 @@ export function injectToolExamples(agentPrompt: string, agentSpecialties: string
   return enhancedPrompt;
 }
 
-
-/**
- * Escape special regex characters in a string
- */
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /**
  * Get available tool names for reference
  */
 export function getAvailableToolNames(): string[] {
-  return Object.values(TOOL_NAME_MAP);
+  return [
+    LS_TOOL_NAME,
+    EDIT_TOOL_NAME,
+    GLOB_TOOL_NAME,
+    GREP_TOOL_NAME,
+    READ_FILE_TOOL_NAME,
+    READ_MANY_FILES_TOOL_NAME,
+    SHELL_TOOL_NAME,
+    WRITE_FILE_TOOL_NAME,
+    MEMORY_TOOL_NAME,
+    WEB_FETCH_TOOL_NAME,
+    WEB_SEARCH_TOOL_NAME,
+    RIPGREP_TOOL_NAME,
+  ];
 }

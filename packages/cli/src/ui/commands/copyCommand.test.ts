@@ -18,35 +18,32 @@ vi.mock('../utils/commandUtils.js', () => ({
 describe('copyCommand', () => {
   let mockContext: CommandContext;
   let mockCopyToClipboard: Mock;
-  let mockGetChat: Mock;
   let mockGetHistory: Mock;
+  let mockAgentsClient: { getHistory: Mock } | undefined;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     mockCopyToClipboard = vi.mocked(copyToClipboard);
-    mockGetChat = vi.fn();
     mockGetHistory = vi.fn();
+    mockAgentsClient = { getHistory: mockGetHistory } as const as { getHistory: Mock };
 
     mockContext = createMockCommandContext({
       services: {
         config: {
-          getGeminiClient: () => ({
-            getChat: mockGetChat,
-          }),
+          getConversationClient: () => mockAgentsClient as unknown,
         },
       },
-    });
-
-    mockGetChat.mockReturnValue({
-      getHistory: mockGetHistory,
     });
   });
 
   it('should return info message when no history is available', async () => {
     if (!copyCommand.action) throw new Error('Command has no action');
 
-    mockGetChat.mockReturnValue(undefined);
+    mockAgentsClient = undefined;
+    mockContext.services.config = {
+      getConversationClient: () => mockAgentsClient as unknown,
+    } as any;
 
     const result = await copyCommand.action(mockContext, '');
 

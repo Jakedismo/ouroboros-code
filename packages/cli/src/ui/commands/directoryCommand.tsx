@@ -125,9 +125,17 @@ export const directoryCommand: SlashCommand = {
         }
 
         if (added.length > 0) {
-          const gemini = config.getGeminiClient();
-          if (gemini) {
-            await gemini.addDirectoryContext();
+          const agentsClient = config.getConversationClient();
+          if (agentsClient) {
+            const directories = config.getWorkspaceContext().getDirectories();
+            const directorySummary = directories.length === 1
+              ? `I'm currently working in the directory: ${directories[0]}`
+              : `I'm currently working in the following directories:
+- ${directories.join('\n- ')}`;
+            await agentsClient.addHistory({
+              role: 'user',
+              parts: [{ text: directorySummary }],
+            });
           }
           addItem(
             {

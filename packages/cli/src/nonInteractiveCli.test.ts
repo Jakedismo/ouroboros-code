@@ -4,22 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type {
-  Config,
-  ToolRegistry,
-  ServerGeminiStreamEvent,
-} from '@ouroboros/ouroboros-code-core';
+import type { Config, ToolRegistry } from '@ouroboros/ouroboros-code-core';
 import {
   executeToolCall,
   ToolErrorType,
   shutdownTelemetry,
-  GeminiEventType,
 } from '@ouroboros/ouroboros-code-core';
 import type { AgentContentFragment } from './ui/types/agentContent.js';
 import { runNonInteractive } from './nonInteractiveCli.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Mock core modules
 vi.mock('./ui/hooks/atCommandProcessor.js');
 vi.mock('@ouroboros/ouroboros-code-core', async (importOriginal) => {
   const original =
@@ -35,16 +29,16 @@ vi.mock('@ouroboros/ouroboros-code-core', async (importOriginal) => {
 describe('runNonInteractive', () => {
   let mockConfig: Config;
   let mockToolRegistry: ToolRegistry;
-  let mockCoreExecuteToolCall: vi.Mock;
+  let mockExecuteToolCall: vi.Mock;
   let mockShutdownTelemetry: vi.Mock;
   let consoleErrorSpy: vi.SpyInstance;
   let processStdoutSpy: vi.SpyInstance;
-  let mockGeminiClient: {
-    sendMessageStream: vi.Mock;
+  let mockAgentsClient: {
+    sendMessage: vi.Mock;
   };
 
   beforeEach(async () => {
-    mockCoreExecuteToolCall = vi.mocked(executeToolCall);
+    mockExecuteToolCall = vi.mocked(executeToolCall);
     mockShutdownTelemetry = vi.mocked(shutdownTelemetry);
 
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -54,16 +48,18 @@ describe('runNonInteractive', () => {
 
     mockToolRegistry = {
       getTool: vi.fn(),
+      registerTool: vi.fn(),
       getFunctionDeclarations: vi.fn().mockReturnValue([]),
+      getFunctionDeclarationsFiltered: vi.fn().mockReturnValue([]),
     } as unknown as ToolRegistry;
 
-    mockGeminiClient = {
-      sendMessageStream: vi.fn(),
+    mockAgentsClient = {
+      sendMessage: vi.fn(),
     };
 
     mockConfig = {
       initialize: vi.fn().mockResolvedValue(undefined),
-      getGeminiClient: vi.fn().mockReturnValue(mockGeminiClient),
+      getConversationClient: vi.fn().mockReturnValue(mockAgentsClient),
       getToolRegistry: vi.fn().mockReturnValue(mockToolRegistry),
       getMaxSessionTurns: vi.fn().mockReturnValue(10),
       getIdeMode: vi.fn().mockReturnValue(false),
@@ -87,174 +83,138 @@ describe('runNonInteractive', () => {
     vi.restoreAllMocks();
   });
 
-  async function* createStreamFromEvents(
-    events: ServerGeminiStreamEvent[],
-  ): AsyncGenerator<ServerGeminiStreamEvent> {
-    for (const event of events) {
-      yield event;
-    }
-  }
+  const createResponse = (
+    parts: Array<Record<string, unknown>>,
+  ): Record<string, unknown> => ({
+    candidates: [
+      {
+        content: {
+          role: 'model',
+          parts,
+        },
+      },
+    ],
+  });
 
   it('should process input and write text output', async () => {
-    const events: ServerGeminiStreamEvent[] = [
-      { type: GeminiEventType.Content, value: 'Hello' },
-      { type: GeminiEventType.Content, value: ' World' },
-    ];
-    mockGeminiClient.sendMessageStream.mockReturnValue(
-      createStreamFromEvents(events),
+    mockAgentsClient.sendMessage.mockResolvedValue(
+      createResponse([{ text: 'Hello World' }]),
     );
 
     await runNonInteractive(mockConfig, 'Test input', 'prompt-id-1');
 
-    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledWith(
-      [{ text: 'Test input' }],
-      expect.any(AbortSignal),
+    expect(mockAgentsClient.sendMessage).toHaveBeenCalledWith(
+      {
+        message: [{ text: 'Test input' }],
+        config: expect.objectContaining({ abortSignal: expect.any(AbortSignal) }),
+      },
       'prompt-id-1',
     );
-    expect(processStdoutSpy).toHaveBeenCalledWith('Hello');
-    expect(processStdoutSpy).toHaveBeenCalledWith(' World');
-    expect(processStdoutSpy).toHaveBeenCalledWith('\n');
+    expect(processStdoutSpy).toHaveBeenCalledWith('Hello World');
+    expect(processStdoutSpy).toHaveBeenCalledWith('
+');
     expect(mockShutdownTelemetry).toHaveBeenCalled();
   });
 
   it('should handle a single tool call and respond', async () => {
-    const toolCallEvent: ServerGeminiStreamEvent = {
-      type: GeminiEventType.ToolCallRequest,
-      value: {
-        callId: 'tool-1',
-        name: 'testTool',
-        args: { arg1: 'value1' },
-        isClientInitiated: false,
-        prompt_id: 'prompt-id-2',
-      },
-    };
+    mockAgentsClient.sendMessage
+      .mockResolvedValueOnce(
+        createResponse([
+          {
+            functionCall: {
+              id: 'tool-1',
+              name: 'testTool',
+              args: { arg1: 'value1' },
+            },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(createResponse([{ text: 'Final answer' }]));
+
     const toolResponse: AgentContentFragment[] = [{ text: 'Tool response' }];
-    mockCoreExecuteToolCall.mockResolvedValue({ responseParts: toolResponse });
-
-    const firstCallEvents: ServerGeminiStreamEvent[] = [toolCallEvent];
-    const secondCallEvents: ServerGeminiStreamEvent[] = [
-      { type: GeminiEventType.Content, value: 'Final answer' },
-    ];
-
-    mockGeminiClient.sendMessageStream
-      .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
-      .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
+    mockExecuteToolCall.mockResolvedValue({ responseParts: toolResponse });
 
     await runNonInteractive(mockConfig, 'Use a tool', 'prompt-id-2');
 
-    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
-    expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
+    expect(mockAgentsClient.sendMessage).toHaveBeenCalledTimes(2);
+    expect(mockExecuteToolCall).toHaveBeenCalledWith(
       mockConfig,
       expect.objectContaining({ name: 'testTool' }),
       expect.any(AbortSignal),
     );
-    expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
-      2,
-      [{ text: 'Tool response' }],
-      expect.any(AbortSignal),
-      'prompt-id-2',
-    );
+    const secondCallArgs = mockAgentsClient.sendMessage.mock.calls[1][0];
+    expect(secondCallArgs.message).toEqual(toolResponse);
     expect(processStdoutSpy).toHaveBeenCalledWith('Final answer');
-    expect(processStdoutSpy).toHaveBeenCalledWith('\n');
+    expect(processStdoutSpy).toHaveBeenCalledWith('
+');
   });
 
-  it('should handle error during tool execution and should send error back to the model', async () => {
-    const toolCallEvent: ServerGeminiStreamEvent = {
-      type: GeminiEventType.ToolCallRequest,
-      value: {
-        callId: 'tool-1',
-        name: 'errorTool',
-        args: {},
-        isClientInitiated: false,
-        prompt_id: 'prompt-id-3',
-      },
-    };
-    mockCoreExecuteToolCall.mockResolvedValue({
-      error: new Error('Execution failed'),
-      errorType: ToolErrorType.EXECUTION_FAILED,
-      responseParts: [
-        {
-          functionResponse: {
-            name: 'errorTool',
-            response: {
-              output: 'Error: Execution failed',
+  it('should handle error during tool execution and send fallback message', async () => {
+    mockAgentsClient.sendMessage
+      .mockResolvedValueOnce(
+        createResponse([
+          {
+            functionCall: {
+              id: 'tool-1',
+              name: 'errorTool',
+              args: {},
             },
           },
-        },
-      ],
+        ]),
+      )
+      .mockResolvedValueOnce(createResponse([{ text: 'Sorry, let me try again.' }]));
+
+    mockExecuteToolCall.mockResolvedValue({
+      error: new Error('Execution failed'),
+      errorType: ToolErrorType.EXECUTION_FAILED,
       resultDisplay: 'Execution failed',
     });
-    const finalResponse: ServerGeminiStreamEvent[] = [
-      {
-        type: GeminiEventType.Content,
-        value: 'Sorry, let me try again.',
-      },
-    ];
-    mockGeminiClient.sendMessageStream
-      .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
-      .mockReturnValueOnce(createStreamFromEvents(finalResponse));
 
     await runNonInteractive(mockConfig, 'Trigger tool error', 'prompt-id-3');
 
-    expect(mockCoreExecuteToolCall).toHaveBeenCalled();
+    expect(mockExecuteToolCall).toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       'Error executing tool errorTool: Execution failed',
     );
-    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
-    expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
-      2,
-      [
-        {
-          functionResponse: {
-            name: 'errorTool',
-            response: {
-              output: 'Error: Execution failed',
-            },
-          },
-        },
-      ],
-      expect.any(AbortSignal),
-      'prompt-id-3',
-    );
+    const secondCallArgs = mockAgentsClient.sendMessage.mock.calls[1][0];
+    expect(secondCallArgs.message).toEqual([
+      {
+        text: 'All tool calls failed. Please analyze the errors and try an alternative approach.',
+      },
+    ]);
     expect(processStdoutSpy).toHaveBeenCalledWith('Sorry, let me try again.');
   });
 
-  it('should exit with error if sendMessageStream throws initially', async () => {
+  it('should exit with error if sendMessage throws initially', async () => {
     const apiError = new Error('API connection failed');
-    mockGeminiClient.sendMessageStream.mockImplementation(() => {
-      throw apiError;
-    });
+    mockAgentsClient.sendMessage.mockRejectedValueOnce(apiError);
 
     await expect(
       runNonInteractive(mockConfig, 'Initial fail', 'prompt-id-4'),
     ).rejects.toThrow(apiError);
   });
 
-  it('should not exit if a tool is not found, and should send error back to model', async () => {
-    const toolCallEvent: ServerGeminiStreamEvent = {
-      type: GeminiEventType.ToolCallRequest,
-      value: {
-        callId: 'tool-1',
-        name: 'nonexistentTool',
-        args: {},
-        isClientInitiated: false,
-        prompt_id: 'prompt-id-5',
-      },
-    };
-    mockCoreExecuteToolCall.mockResolvedValue({
+  it('should not exit if a tool is not found and should report the error', async () => {
+    mockAgentsClient.sendMessage
+      .mockResolvedValueOnce(
+        createResponse([
+          {
+            functionCall: {
+              id: 'tool-1',
+              name: 'nonexistentTool',
+              args: {},
+            },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        createResponse([{ text: "Sorry, I can't find that tool." }]),
+      );
+
+    mockExecuteToolCall.mockResolvedValue({
       error: new Error('Tool "nonexistentTool" not found in registry.'),
       resultDisplay: 'Tool "nonexistentTool" not found in registry.',
     });
-    const finalResponse: ServerGeminiStreamEvent[] = [
-      {
-        type: GeminiEventType.Content,
-        value: "Sorry, I can't find that tool.",
-      },
-    ];
-
-    mockGeminiClient.sendMessageStream
-      .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
-      .mockReturnValueOnce(createStreamFromEvents(finalResponse));
 
     await runNonInteractive(
       mockConfig,
@@ -262,11 +222,15 @@ describe('runNonInteractive', () => {
       'prompt-id-5',
     );
 
-    expect(mockCoreExecuteToolCall).toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       'Error executing tool nonexistentTool: Tool "nonexistentTool" not found in registry.',
     );
-    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
+    const secondCallArgs = mockAgentsClient.sendMessage.mock.calls[1][0];
+    expect(secondCallArgs.message).toEqual([
+      {
+        text: 'All tool calls failed. Please analyze the errors and try an alternative approach.',
+      },
+    ]);
     expect(processStdoutSpy).toHaveBeenCalledWith(
       "Sorry, I can't find that tool.",
     );
@@ -282,46 +246,40 @@ describe('runNonInteractive', () => {
   });
 
   it('should preprocess @include commands before sending to the model', async () => {
-    // 1. Mock the imported atCommandProcessor
     const { handleAtCommand } = await import(
       './ui/hooks/atCommandProcessor.js'
     );
     const mockHandleAtCommand = vi.mocked(handleAtCommand);
 
-    // 2. Define the raw input and the expected processed output
     const rawInput = 'Summarize @file.txt';
     const processedParts: AgentContentFragment[] = [
       { text: 'Summarize @file.txt' },
-      { text: '\n--- Content from referenced files ---\n' },
+      { text: '
+--- Content from referenced files ---
+' },
       { text: 'This is the content of the file.' },
-      { text: '\n--- End of content ---' },
+      { text: '
+--- End of content ---' },
     ];
 
-    // 3. Setup the mock to return the processed parts
     mockHandleAtCommand.mockResolvedValue({
       processedQuery: processedParts,
       shouldProceed: true,
     });
 
-    // Mock a simple stream response from the Gemini client
-    const events: ServerGeminiStreamEvent[] = [
-      { type: GeminiEventType.Content, value: 'Summary complete.' },
-    ];
-    mockGeminiClient.sendMessageStream.mockReturnValue(
-      createStreamFromEvents(events),
+    mockAgentsClient.sendMessage.mockResolvedValue(
+      createResponse([{ text: 'Summary complete.' }]),
     );
 
-    // 4. Run the non-interactive mode with the raw input
     await runNonInteractive(mockConfig, rawInput, 'prompt-id-7');
 
-    // 5. Assert that sendMessageStream was called with the PROCESSED parts, not the raw input
-    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledWith(
-      processedParts,
-      expect.any(AbortSignal),
+    expect(mockAgentsClient.sendMessage).toHaveBeenCalledWith(
+      {
+        message: processedParts,
+        config: expect.objectContaining({ abortSignal: expect.any(AbortSignal) }),
+      },
       'prompt-id-7',
     );
-
-    // 6. Assert the final output is correct
     expect(processStdoutSpy).toHaveBeenCalledWith('Summary complete.');
   });
 });

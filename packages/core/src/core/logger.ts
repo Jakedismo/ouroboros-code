@@ -6,7 +6,6 @@
 
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
-import type { Content } from '@google/genai';
 import type { Storage } from '../config/storage.js';
 
 const LOG_FILE_NAME = 'logs.json';
@@ -312,7 +311,7 @@ export class Logger {
     return newPath;
   }
 
-  async saveCheckpoint(conversation: Content[], tag: string): Promise<void> {
+  async saveCheckpoint(conversation: unknown[], tag: string): Promise<void> {
     if (!this.initialized) {
       console.error(
         'Logger not initialized or checkpoint file path not set. Cannot save a checkpoint.',
@@ -328,7 +327,7 @@ export class Logger {
     }
   }
 
-  async loadCheckpoint(tag: string): Promise<Content[]> {
+  async loadCheckpoint(tag: string): Promise<unknown[]> {
     if (!this.initialized) {
       console.error(
         'Logger not initialized or checkpoint file path not set. Cannot load checkpoint.',
@@ -346,7 +345,7 @@ export class Logger {
         );
         return [];
       }
-      return parsedContent as Content[];
+      return parsedContent as unknown[];
     } catch (error) {
       const nodeError = error as NodeJS.ErrnoException;
       if (nodeError.code === 'ENOENT') {

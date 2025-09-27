@@ -11,14 +11,14 @@ import type {
   Content,
   Tool,
   GenerateContentResponse,
-} from '@google/genai';
+} from '../runtime/genaiCompat.js';
 import {
   getDirectoryContextString,
   getEnvironmentContext,
 } from '../utils/environmentContext.js';
 import type { ServerGeminiStreamEvent, ChatCompressionInfo } from './turn.js';
 import { CompressionStatus } from './turn.js';
-import { Turn, GeminiEventType } from './turn.js';
+import { Turn, ConversationEventType } from './turn.js';
 import type { Config } from '../config/config.js';
 import type { UserTierId } from '../code_assist/types.js';
 import { getCoreSystemPrompt, getCompressionPrompt } from './prompts.js';
@@ -34,7 +34,7 @@ import type {
   ContentGenerator,
   ContentGeneratorConfig,
 } from './contentGenerator.js';
-import { AuthType, createContentGenerator } from './contentGenerator.js';
+import { AuthType } from './contentGenerator.js';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
 import { LoopDetectionService } from '../services/loopDetectionService.js';
@@ -173,9 +173,8 @@ const COMPRESSION_TOKEN_THRESHOLD = 0.7;
  */
 const COMPRESSION_PRESERVE_THRESHOLD = 0.3;
 
-export class GeminiClient {
+export class ConversationClient {
   private chat?: GeminiChat;
-  private contentGenerator?: ContentGenerator;
   private readonly embeddingModel: string;
   private readonly generateContentConfig: GenerateContentConfig = {
     temperature: 0,
@@ -205,23 +204,16 @@ export class GeminiClient {
   }
 
   async initialize(contentGeneratorConfig: ContentGeneratorConfig) {
-    this.contentGenerator = await createContentGenerator(
-      contentGeneratorConfig,
-      this.config,
-      this.config.getSessionId(),
-    );
+    await this.config.getConversationClient().initialize(contentGeneratorConfig);
     this.chat = await this.startChat();
   }
 
   getContentGenerator(): ContentGenerator {
-    if (!this.contentGenerator) {
-      throw new Error('Content generator not initialized');
-    }
-    return this.contentGenerator;
+    return this.config.getConversationClient().getContentGenerator();
   }
 
   getUserTier(): UserTierId | undefined {
-    return this.contentGenerator?.userTier;
+    return this.config.getConversationClient().getContentGenerator().userTier;
   }
 
   async addHistory(content: Content) {
@@ -236,7 +228,7 @@ export class GeminiClient {
   }
 
   isInitialized(): boolean {
-    return this.chat !== undefined && this.contentGenerator !== undefined;
+    return this.chat !== undefined && this.config.getConversationClient().isInitialized();
   }
 
   getHistory(): Content[] {
@@ -332,15 +324,21 @@ export class GeminiClient {
             thinkingConfig: getThinkingConfig(currentProvider, optimizeForStreaming),
           }
         : this.generateContentConfig;
+
+      const agentsClient = this.config.getConversationClient();
+      await agentsClient.resetChat();
+      await agentsClient.setTools(tools);
+      agentsClient.setHistory(history);
+      agentsClient.setSystemInstruction(systemInstruction);
+
       return new GeminiChat(
         this.config,
-        this.getContentGenerator(),
+        agentsClient,
         {
           systemInstruction,
           ...generateContentConfigWithThinking,
           tools,
         },
-        history,
       );
     } catch (error) {
       await reportError(
@@ -528,14 +526,6 @@ export class GeminiClient {
     turns: number = MAX_TURNS,
     originalModel?: string,
   ): AsyncGenerator<ServerGeminiStreamEvent, Turn> {
-    console.log('[Client.sendMessageStream] Called with request type:', typeof request);
-    if (Array.isArray(request)) {
-      console.log(`[Client.sendMessageStream] Request array with ${request.length} parts`);
-      if (request.length > 0 && request[0]) {
-        console.log('[Client.sendMessageStream] First part keys:', Object.keys(request[0]));
-      }
-    }
-    
     if (this.lastPromptId !== prompt_id) {
       this.loopDetector.reset(prompt_id);
       this.lastPromptId = prompt_id;
@@ -545,13 +535,13 @@ export class GeminiClient {
       this.config.getMaxSessionTurns() > 0 &&
       this.sessionTurnCount > this.config.getMaxSessionTurns()
     ) {
-      yield { type: GeminiEventType.MaxSessionTurns };
-      return new Turn(this.getChat(), prompt_id, this.config);
+      yield { type: ConversationEventType.MaxSessionTurns };
+      return new Turn(this.config.getConversationClient(), prompt_id, this.config);
     }
     // Ensure turns never exceeds MAX_TURNS to prevent infinite loops
     const boundedTurns = Math.min(turns, MAX_TURNS);
     if (!boundedTurns) {
-      return new Turn(this.getChat(), prompt_id, this.config);
+      return new Turn(this.config.getConversationClient(), prompt_id, this.config);
     }
 
     // Track the original model from the first call to detect model switching
@@ -565,20 +555,17 @@ export class GeminiClient {
     
     let compressed: ChatCompressionInfo;
     if (isToolResponseContinuation) {
-      console.log('[Client.sendMessageStream] Skipping compression for tool response continuation');
       compressed = {
         originalTokenCount: 0,
         newTokenCount: 0,
         compressionStatus: CompressionStatus.NOOP,
       };
     } else {
-      console.log('[Client.sendMessageStream] About to try compression...');
       compressed = await this.tryCompressChat(prompt_id);
-      console.log('[Client.sendMessageStream] Compression complete, status:', compressed.compressionStatus);
     }
 
     if (compressed.compressionStatus === CompressionStatus.COMPRESSED) {
-      yield { type: GeminiEventType.ChatCompressed, value: compressed };
+      yield { type: ConversationEventType.ChatCompressed, value: compressed };
     }
 
     // Prevent context updates from being sent while a tool call is
@@ -586,21 +573,11 @@ export class GeminiClient {
     // part from the user immediately follows a functionCall part from the model
     // in the conversation history . The IDE context is not discarded; it will
     // be included in the next regular message sent to the model.
-    console.log('[Client.sendMessageStream] Getting history...');
     const history = this.getHistory();
-    console.log('[Client.sendMessageStream] History length:', history.length);
-    const lastMessage =
-      history.length > 0 ? history[history.length - 1] : undefined;
-    if (lastMessage) {
-      console.log('[Client.sendMessageStream] Last message role:', lastMessage.role);
-      console.log('[Client.sendMessageStream] Last message parts:', lastMessage.parts?.map(p => Object.keys(p)));
-    }
     const hasPendingToolCall =
-      !!lastMessage &&
-      lastMessage.role === 'model' &&
-      (lastMessage.parts?.some((p) => 'functionCall' in p) || false);
-    console.log('[Client.sendMessageStream] Has pending tool call:', hasPendingToolCall);
-
+      history.length > 0 &&
+      history[history.length - 1]?.role === 'model' &&
+      !!history[history.length - 1]?.parts?.some((p) => 'functionCall' in p);
     if (this.config.getIdeMode() && !hasPendingToolCall) {
       const { contextParts, newIdeContext } = this.getIdeContextParts(
         this.forceFullIdeContext || history.length === 0,
@@ -615,31 +592,23 @@ export class GeminiClient {
       this.forceFullIdeContext = false;
     }
 
-    const turn = new Turn(this.getChat(), prompt_id, this.config);
+    const turn = new Turn(this.config.getConversationClient(), prompt_id, this.config);
     
     // Debug: Log when Turn is created for continuation
-    const currentProvider = this.config.getProvider();
-    console.log(`[Client] Created Turn for provider: ${currentProvider}, request type:`, typeof request);
-    if (Array.isArray(request) && request.length > 0) {
-      console.log(`[Client] Request is array with ${request.length} parts, first part keys:`, 
-        request[0] ? Object.keys(request[0]) : 'empty');
-    }
-
     const loopDetected = await this.loopDetector.turnStarted(signal);
     if (loopDetected) {
-      yield { type: GeminiEventType.LoopDetected };
+      yield { type: ConversationEventType.LoopDetected };
       return turn;
     }
 
-    console.log(`[Client] Calling turn.run() for provider: ${currentProvider}`);
     const resultStream = turn.run(request, signal);
     for await (const event of resultStream) {
       if (this.loopDetector.addAndCheck(event)) {
-        yield { type: GeminiEventType.LoopDetected };
+        yield { type: ConversationEventType.LoopDetected };
         return turn;
       }
       yield event;
-      if (event.type === GeminiEventType.Error) {
+      if (event.type === ConversationEventType.Error) {
         return turn;
       }
     }
@@ -656,9 +625,9 @@ export class GeminiClient {
         return turn;
       }
 
+      const agentsClient = this.config.getConversationClient();
       const nextSpeakerCheck = await checkNextSpeaker(
-        this.getChat(),
-        this,
+        agentsClient,
         signal,
         this.config,
       );
@@ -832,6 +801,11 @@ export class GeminiClient {
           await this.handleFlashFallback(authType, error),
         authType: this.config.getContentGeneratorConfig()?.authType,
       });
+
+      const outputContent = result.candidates?.[0]?.content;
+      if (outputContent) {
+        await this.config.getConversationClient().addHistory(outputContent as Content);
+      }
       return result;
     } catch (error: unknown) {
       if (abortSignal.aborted) {
@@ -859,7 +833,7 @@ export class GeminiClient {
     }
     const embedModelParams: EmbedContentParameters = {
       model: this.embeddingModel,
-      contents: texts,
+      content: texts.map((text) => ({ role: 'user', parts: [{ text }] })),
     };
 
     const embedContentResponse =
@@ -958,7 +932,7 @@ export class GeminiClient {
 
     this.getChat().setHistory(historyToCompress);
 
-    const { text: summary } = await this.getChat().sendMessage(
+    const summaryResponse = await this.getChat().sendMessage(
       {
         message: {
           text: 'First, reason in your scratchpad. Then, generate the <state_snapshot>.',
@@ -970,6 +944,7 @@ export class GeminiClient {
       },
       prompt_id,
     );
+    const summary = getResponseText(summaryResponse) ?? '';
     const chat = await this.startChat([
       {
         role: 'user',
@@ -1080,3 +1055,4 @@ export const TEST_ONLY = {
   COMPRESSION_PRESERVE_THRESHOLD,
   COMPRESSION_TOKEN_THRESHOLD,
 };
+

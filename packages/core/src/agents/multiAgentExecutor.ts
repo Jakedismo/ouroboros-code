@@ -13,7 +13,7 @@ import type {
 import type { AgentPersona } from './personas.js';
 import { getAgentById } from './personas.js';
 import { injectToolExamples } from './toolInjector.js';
-import type { ToolResultDisplay } from '../tools/tools.js';
+import type { ToolResultDisplay, ToolErrorType } from '../tools/tools.js';
 import { toolResponsePartsToString } from '../utils/toolResponseStringifier.js';
 
 interface MultiAgentExecutorOptions {
@@ -39,6 +39,12 @@ export interface MultiAgentExecutionHooks {
     agent: AgentPersona;
     event: AgentToolEvent;
   }) => void | Promise<void>;
+  onAgentThinking?: (payload: {
+    agent: AgentPersona;
+    wave: number;
+    delta: string;
+    accumulated: string;
+  }) => void | Promise<void>;
 }
 
 interface AgentRunResult {
@@ -55,8 +61,10 @@ interface AgentToolEvent {
   callId: string;
   toolName: string;
   arguments: Record<string, unknown>;
-  outputText: string;
+  outputText?: string;
   resultDisplay: ToolResultDisplay | undefined;
+  errorMessage?: string;
+  errorType?: ToolErrorType;
   timestamp: number;
 }
 
@@ -112,6 +120,8 @@ export class MultiAgentExecutor {
             arguments: request.args,
             outputText: toolResponsePartsToString(response.responseParts),
             resultDisplay: response.resultDisplay,
+            errorMessage: response.error?.message,
+            errorType: response.errorType,
             timestamp: Date.now(),
           };
           list.push(event);
@@ -158,6 +168,8 @@ export class MultiAgentExecutor {
         unifiedClient,
         toolEventLog,
         Array.from(executed.values()),
+        passes,
+        hooks,
       );
 
       if (!result) {
@@ -209,6 +221,8 @@ export class MultiAgentExecutor {
     unifiedClient: UnifiedAgentsClient,
     toolEventLog: Map<string, AgentToolEvent[]>,
     previousResults: AgentRunResult[],
+    wave: number,
+    hooks?: MultiAgentExecutionHooks,
   ): Promise<AgentRunResult | null> {
     try {
       const { rawText, parsed } = await this.executeAgentSession(
@@ -216,6 +230,8 @@ export class MultiAgentExecutor {
         userPrompt,
         unifiedClient,
         previousResults,
+        wave,
+        hooks,
       );
       const agentToolEvents = toolEventLog.get(agent.id) ?? [];
 
@@ -253,6 +269,8 @@ export class MultiAgentExecutor {
     userPrompt: string,
     unifiedClient: UnifiedAgentsClient,
     previousResults: AgentRunResult[],
+    wave: number,
+    hooks?: MultiAgentExecutionHooks,
   ): Promise<{ rawText: string; parsed: any }> {
     const session = await unifiedClient.createSession({
       providerId: this.config.getProvider(),
@@ -281,6 +299,7 @@ export class MultiAgentExecutor {
     );
 
     let accumulated = '';
+    let emittedFinalThinking = false;
 
     for await (const event of unifiedClient.streamResponse(
       session,
@@ -289,10 +308,37 @@ export class MultiAgentExecutor {
     )) {
       if (event.type === 'text-delta' && event.delta) {
         accumulated += event.delta;
+        emittedFinalThinking = false;
+        if (hooks?.onAgentThinking) {
+          await hooks.onAgentThinking({
+            agent,
+            wave,
+            delta: event.delta,
+            accumulated,
+          });
+        }
       }
       if (event.type === 'final') {
         accumulated = event.message.content ?? accumulated;
+        emittedFinalThinking = true;
+        if (hooks?.onAgentThinking) {
+          await hooks.onAgentThinking({
+            agent,
+            wave,
+            delta: '',
+            accumulated,
+          });
+        }
       }
+    }
+
+    if (!emittedFinalThinking && hooks?.onAgentThinking) {
+      await hooks.onAgentThinking({
+        agent,
+        wave,
+        delta: '',
+        accumulated,
+      });
     }
 
     const parsed = this.safeParse(accumulated);

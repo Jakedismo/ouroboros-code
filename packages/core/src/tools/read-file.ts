@@ -9,7 +9,7 @@ import { makeRelative, shortenPath } from '../utils/paths.js';
 import type { ToolInvocation, ToolLocation, ToolResult } from './tools.js';
 import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
 
-import type { PartUnion } from '@google/genai';
+import type { AgentContentFragment } from '../runtime/agentsTypes.js';
 import {
   processSingleFileContent,
   getSpecificMimeType,
@@ -83,7 +83,7 @@ class ReadFileToolInvocation extends BaseToolInvocation<
       };
     }
 
-    let llmContent: PartUnion;
+    let llmContent: AgentContentFragment;
     if (result.isTruncated) {
       const [start, end] = result.linesShown!;
       const total = result.originalLineCount!;

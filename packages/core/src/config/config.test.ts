@@ -19,7 +19,7 @@ import {
   AuthType,
   createContentGeneratorConfig,
 } from '../core/contentGenerator.js';
-import { GeminiClient } from '../core/client.js';
+import { AgentsClient } from '../core/agentsClient.js';
 import { GitService } from '../services/gitService.js';
 import { ClearcutLogger } from '../telemetry/clearcut-logger/clearcut-logger.js';
 
@@ -80,11 +80,18 @@ vi.mock('../core/contentGenerator.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../core/client.js', () => ({
-  GeminiClient: vi.fn().mockImplementation(() => ({
+vi.mock('../core/agentsClient.js', () => ({
+  AgentsClient: vi.fn().mockImplementation(() => ({
     initialize: vi.fn().mockResolvedValue(undefined),
+    isInitialized: vi.fn().mockReturnValue(true),
+    getHistory: vi.fn().mockReturnValue([]),
+    setHistory: vi.fn(),
+    setSystemInstruction: vi.fn(),
+    clearSystemInstruction: vi.fn(),
+    getSystemInstruction: vi.fn(),
   })),
 }));
+
 
 vi.mock('../telemetry/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../telemetry/index.js')>();
@@ -212,7 +219,7 @@ describe('Server Config (config.ts)', () => {
       expect(config.getContentGeneratorConfig()).toEqual(mockContentConfig);
       expect(config.getContentGeneratorConfig().model).toBe(newModel);
       expect(config.getModel()).toBe(newModel); // getModel() should return the updated model
-      expect(GeminiClient).toHaveBeenCalledWith(config);
+      expect(AgentsClient).toHaveBeenCalledWith(config);
       // Verify that fallback mode is reset
       expect(config.isInFallbackMode()).toBe(false);
     });
@@ -250,7 +257,7 @@ describe('Server Config (config.ts)', () => {
       (
         config as unknown as { geminiClient: typeof mockExistingClient }
       ).geminiClient = mockExistingClient;
-      (GeminiClient as Mock).mockImplementation(() => mockNewClient);
+      (AgentsClient as Mock).mockImplementation(() => mockNewClient);
 
       await config.refreshAuth(authType);
 
@@ -258,7 +265,7 @@ describe('Server Config (config.ts)', () => {
       expect(mockExistingClient.getHistory).toHaveBeenCalled();
 
       // Verify that new client was created and initialized
-      expect(GeminiClient).toHaveBeenCalledWith(config);
+      expect(AgentsClient).toHaveBeenCalledWith(config);
       expect(mockNewClient.initialize).toHaveBeenCalledWith(mockContentConfig);
 
       // Verify that history was restored to the new client
@@ -287,12 +294,12 @@ describe('Server Config (config.ts)', () => {
 
       // No existing client
       (config as unknown as { geminiClient: null }).geminiClient = null;
-      (GeminiClient as Mock).mockImplementation(() => mockNewClient);
+      (AgentsClient as Mock).mockImplementation(() => mockNewClient);
 
       await config.refreshAuth(authType);
 
       // Verify that new client was created and initialized
-      expect(GeminiClient).toHaveBeenCalledWith(config);
+      expect(AgentsClient).toHaveBeenCalledWith(config);
       expect(mockNewClient.initialize).toHaveBeenCalledWith(mockContentConfig);
 
       // Verify that setHistory was not called since there was no existing history
@@ -332,7 +339,7 @@ describe('Server Config (config.ts)', () => {
       (
         config as unknown as { geminiClient: typeof mockExistingClient }
       ).geminiClient = mockExistingClient;
-      (GeminiClient as Mock).mockImplementation(() => mockNewClient);
+      (AgentsClient as Mock).mockImplementation(() => mockNewClient);
 
       await config.refreshAuth(AuthType.LOGIN_WITH_GOOGLE);
 
@@ -375,7 +382,7 @@ describe('Server Config (config.ts)', () => {
       (
         config as unknown as { geminiClient: typeof mockExistingClient }
       ).geminiClient = mockExistingClient;
-      (GeminiClient as Mock).mockImplementation(() => mockNewClient);
+      (AgentsClient as Mock).mockImplementation(() => mockNewClient);
 
       await config.refreshAuth(AuthType.USE_GEMINI);
 

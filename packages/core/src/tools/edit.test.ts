@@ -16,12 +16,6 @@ vi.mock('../utils/editCorrector.js', () => ({
   ensureCorrectEdit: mockEnsureCorrectEdit,
 }));
 
-vi.mock('../core/client.js', () => ({
-  GeminiClient: vi.fn().mockImplementation(() => ({
-    generateJson: mockGenerateJson,
-  })),
-}));
-
 vi.mock('../utils/editor.js', () => ({
   openDiff: mockOpenDiff,
 }));
@@ -42,16 +36,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import type { Config } from '../config/config.js';
 import { ApprovalMode } from '../config/config.js';
-import type { Content, Part, SchemaUnion } from '@google/genai';
+import type { Content, Part, SchemaUnion } from '../runtime/genaiCompat.js';
 import { createMockWorkspaceContext } from '../test-utils/mockWorkspaceContext.js';
 import { StandardFileSystemService } from '../services/fileSystemService.js';
+import type { EditingClient } from '../utils/editCorrector.js';
 
 describe('EditTool', () => {
   let tool: EditTool;
   let tempDir: string;
   let rootDir: string;
   let mockConfig: Config;
-  let geminiClient: any;
+  let agentsClient: EditingClient;
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -59,12 +54,13 @@ describe('EditTool', () => {
     rootDir = path.join(tempDir, 'root');
     fs.mkdirSync(rootDir);
 
-    geminiClient = {
+    agentsClient = {
       generateJson: mockGenerateJson, // mockGenerateJson is already defined and hoisted
-    };
+      getHistory: vi.fn(() => []),
+    } as unknown as EditingClient;
 
     mockConfig = {
-      getGeminiClient: vi.fn().mockReturnValue(geminiClient),
+      getConversationClient: vi.fn().mockReturnValue(agentsClient),
       getTargetDir: () => rootDir,
       getApprovalMode: vi.fn(),
       setApprovalMode: vi.fn(),
@@ -343,7 +339,7 @@ describe('EditTool', () => {
           mockCalled = true;
           expect(content).toBe(originalContent);
           expect(p).toBe(params);
-          expect(client).toBe(geminiClient);
+          expect(client).toBe(agentsClient);
           return {
             params: {
               file_path: filePath,

@@ -124,13 +124,11 @@ function createAdaptedTool(
 function extractSchema(
   tool: AnyDeclarativeTool,
 ): Record<string, unknown> | undefined {
-  const schema = tool.schema as Record<string, unknown>;
-  const jsonSchema = (schema['parametersJsonSchema'] ??
-    schema['parameters']) as Record<string, unknown> | undefined;
-  if (!jsonSchema) {
+  const jsonSchema = tool.schema.parametersJsonSchema ?? tool.schema.parameters;
+  if (!jsonSchema || typeof jsonSchema !== 'object') {
     return undefined;
   }
-  return jsonSchema;
+  return jsonSchema as Record<string, unknown>;
 }
 
 type JsonSchema = Record<string, unknown>;

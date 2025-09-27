@@ -13,6 +13,7 @@ import type {
   MultiAgentInteractiveState,
   MultiAgentToolEventDisplay,
 } from '../../types.js';
+import { ToolCallStatus } from '../../types.js';
 
 interface MultiAgentStatusMessageProps {
   selection: MultiAgentSelectionDisplay;
@@ -55,6 +56,8 @@ interface AgentCardData {
   handoffNames: string[];
   specialties: string[];
   tools: MultiAgentToolEventDisplay[];
+  liveThought?: string;
+  status?: 'pending' | 'planning' | 'running' | 'complete';
 }
 
 const buildAgentCards = (selection: MultiAgentSelectionDisplay): AgentCardData[] => {
@@ -73,6 +76,8 @@ const buildAgentCards = (selection: MultiAgentSelectionDisplay): AgentCardData[]
       handoffNames: [],
       specialties: persona.specialties ?? [],
       tools: [],
+      liveThought: undefined,
+      status: selection.status,
     }));
   }
 
@@ -100,6 +105,8 @@ const buildAgentCards = (selection: MultiAgentSelectionDisplay): AgentCardData[]
       specialties:
         personaLookup.get(result.agent.id)?.specialties ?? result.agent.specialties ?? [],
       tools: result.tools ?? [],
+      liveThought: result.liveThought,
+      status: result.status,
     };
   });
 };
@@ -110,17 +117,26 @@ const renderToolList = (tools: MultiAgentToolEventDisplay[], isExpanded: boolean
   return (
     <Box flexDirection="column" marginTop={0}>
       <Text wrap="wrap" color={Colors.Comment}>{`   🛠 Tools (${tools.length}):`}</Text>
-      {visibleTools.map((tool, index) => (
-        <Text key={`${tool.name}-${index}`} wrap="wrap" color={Colors.Comment}>
-          {`      • ${tool.name}(${truncateText(tool.args, 80)})${
-            tool.output ? ` → ${truncateText(tool.output, 160)}` : ''
-          }`}
-        </Text>
-      ))}
+      {visibleTools.map((tool, index) => {
+        const statusIcon = tool.status === ToolCallStatus.Error ? '⚠' : '•';
+        const description = `${statusIcon} ${tool.name}(${truncateText(tool.args, 80)})`;
+        const suffix = tool.output
+          ? ` → ${truncateText(tool.output, 160)}`
+          : tool.error
+          ? ` → ${truncateText(tool.error, 160)}`
+          : '';
+        return (
+          <Text
+            key={`${tool.name}-${index}`}
+            wrap="wrap"
+            color={tool.status === ToolCallStatus.Error ? Colors.AccentRed : Colors.Comment}
+          >
+            {`      ${description}${suffix}`}
+          </Text>
+        );
+      })}
       {!isExpanded && tools.length > 1 && (
-        <Text wrap="wrap" color={Colors.Comment}>         … {tools.length - 1} more tool{
-          tools.length - 1 === 1 ? '' : 's'
-        }</Text>
+        <Text wrap="wrap" color={Colors.Comment}>         … {tools.length - 1} more tool{tools.length - 1 === 1 ? '' : 's'}</Text>
       )}
     </Box>
   );
@@ -139,6 +155,11 @@ const AgentCard: React.FC<{
       ? 'Press Enter to collapse'
       : 'Press Enter for tools'
     : undefined;
+  const status = card.status ?? (interactive ? 'running' : 'complete');
+  const trimmedAnalysis = card.analysis?.trim();
+  const trimmedSolution = card.solution?.trim();
+  const trimmedThought = card.liveThought?.trim();
+  const showThinking = trimmedThought && (status !== 'complete' || !trimmedAnalysis);
 
   return (
     <Box
@@ -152,11 +173,17 @@ const AgentCard: React.FC<{
       <Text wrap="wrap" color={headerColor}>
         {`${card.emoji} ${card.name}`} ({formatConfidence(card.confidence)})
       </Text>
-      {card.analysis && (
-        <Text wrap="wrap">{`   🧠 ${truncateText(card.analysis, 200)}`}</Text>
+      {status !== 'complete' && (
+        <Text wrap="wrap" color={Colors.Comment}>{`   Status: ${status}`}</Text>
       )}
-      {card.solution && (
-        <Text wrap="wrap">{`   ✓ ${truncateText(card.solution, 200)}`}</Text>
+      {trimmedAnalysis && (
+        <Text wrap="wrap">{`   🧠 ${truncateText(trimmedAnalysis, 200)}`}</Text>
+      )}
+      {showThinking && trimmedThought && (
+        <Text wrap="wrap" color={Colors.Comment}>{`   🌀 ${truncateText(trimmedThought, 200)}`}</Text>
+      )}
+      {trimmedSolution && (
+        <Text wrap="wrap">{`   ✓ ${truncateText(trimmedSolution, 200)}`}</Text>
       )}
       {card.specialties.length > 0 && (
         <Text wrap="wrap" color={Colors.Comment}>

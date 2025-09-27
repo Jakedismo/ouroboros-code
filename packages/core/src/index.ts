@@ -10,9 +10,14 @@ export * from './config/config.js';
 // Export agents
 export * from './agents/index.js';
 
+// Shared agent runtime types
+export * from './runtime/agentsTypes.js';
+export * from './runtime/agentsStreamAdapter.js';
+
 // Export Core Logic
 export * from './core/client.js';
 export * from './core/contentGenerator.js';
+export * from './core/agentsClient.js';
 export * from './core/loggingContentGenerator.js';
 export * from './core/geminiChat.js';
 export * from './core/logger.js';

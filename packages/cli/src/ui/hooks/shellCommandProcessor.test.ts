@@ -32,7 +32,7 @@ import {
 } from './shellCommandProcessor.js';
 import {
   type Config,
-  type GeminiClient,
+  type AgentsClient,
   type ShellExecutionResult,
   type ShellOutputEvent,
 } from '@ouroboros/ouroboros-code-core';
@@ -48,7 +48,7 @@ describe('useShellCommandProcessor', () => {
   let onExecMock: Mock;
   let onDebugMessageMock: Mock;
   let mockConfig: Config;
-  let mockGeminiClient: GeminiClient;
+  let mockAgentsClient: AgentsClient;
 
   let mockShellOutputCallback: (event: ShellOutputEvent) => void;
   let resolveExecutionPromise: (result: ShellExecutionResult) => void;
@@ -64,7 +64,7 @@ describe('useShellCommandProcessor', () => {
       getTargetDir: () => '/test/dir',
       getShouldUseNodePtyShell: () => false,
     } as Config;
-    mockGeminiClient = { addHistory: vi.fn() } as unknown as GeminiClient;
+    mockAgentsClient = { addHistory: vi.fn().mockResolvedValue(undefined) } as unknown as AgentsClient;
 
     vi.mocked(os.platform).mockReturnValue('linux');
     vi.mocked(os.tmpdir).mockReturnValue('/tmp');
@@ -93,7 +93,7 @@ describe('useShellCommandProcessor', () => {
         onExecMock,
         onDebugMessageMock,
         mockConfig,
-        mockGeminiClient,
+        mockAgentsClient,
       ),
     );
 
@@ -171,7 +171,7 @@ describe('useShellCommandProcessor', () => {
         ],
       }),
     );
-    expect(mockGeminiClient.addHistory).toHaveBeenCalled();
+    expect(mockAgentsClient.addHistory).toHaveBeenCalled();
   });
 
   it('should handle command failure and display error status', async () => {

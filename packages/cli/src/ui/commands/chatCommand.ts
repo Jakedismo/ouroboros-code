@@ -19,6 +19,7 @@ import { decodeTagName } from '@ouroboros/ouroboros-code-core';
 import path from 'node:path';
 import type { HistoryItemWithoutId } from '../types.js';
 import type { GeminiContent } from '../types/geminiCompat.js';
+import type { AgentMessage, AgentContentFragment } from '../types/agentContent.js';
 import { MessageType } from '../types.js';
 
 interface ChatDetail {
@@ -137,8 +138,8 @@ const saveCommand: SlashCommand = {
       }
     }
 
-    const chat = await config?.getGeminiClient()?.getChat();
-    if (!chat) {
+    const agentsClient = config?.getConversationClient();
+    if (!agentsClient) {
       return {
         type: 'message',
         messageType: 'error',
@@ -146,7 +147,11 @@ const saveCommand: SlashCommand = {
       };
     }
 
-    const history: GeminiContent[] = chat.getHistory() as GeminiContent[];
+    const rawHistory = agentsClient.getHistory();
+    const history = rawHistory.map((item) => ({
+      role: item.role ?? 'model',
+      parts: (item.parts ?? []) as AgentContentFragment[],
+    })) as GeminiContent[];
     if (history.length > 2) {
       await logger.saveCheckpoint(history, tag);
       return {
@@ -182,7 +187,11 @@ const resumeCommand: SlashCommand = {
 
     const { logger } = context.services;
     await logger.initialize();
-    const conversation = await logger.loadCheckpoint(tag);
+    const conversation = (await logger.loadCheckpoint(tag)) as GeminiContent[];
+    const agentMessages: AgentMessage[] = conversation.map((item) => ({
+      role: item.role ?? 'model',
+      parts: (item.parts ?? []).map((part) => part as AgentContentFragment),
+    }));
 
     if (conversation.length === 0) {
       return {
@@ -201,13 +210,17 @@ const resumeCommand: SlashCommand = {
     let hasSystemPrompt = false;
     let i = 0;
 
-    for (const item of conversation) {
-      i += 1;
-      const text =
-        item.parts
-          ?.filter((m) => !!m.text)
-          .map((m) => m.text)
-          .join('') || '';
+    for (const [index, item] of agentMessages.entries()) {
+      i = index + 1;
+      const text = item.parts
+        .map((part) => {
+          if (typeof part === 'string') {
+            return part;
+          }
+          return (part as { text?: string }).text ?? '';
+        })
+        .filter(Boolean)
+        .join('');
       if (!text) {
         continue;
       }
@@ -216,7 +229,9 @@ const resumeCommand: SlashCommand = {
       }
       if (i > 2 || !hasSystemPrompt) {
         uiHistory.push({
-          type: (item.role && rolemap[item.role]) || MessageType.GEMINI,
+          type:
+            (conversation[index].role && rolemap[conversation[index].role]) ||
+            MessageType.GEMINI,
           text,
         } as HistoryItemWithoutId);
       }
@@ -224,7 +239,7 @@ const resumeCommand: SlashCommand = {
     return {
       type: 'load_history',
       history: uiHistory,
-      clientHistory: conversation,
+      clientHistory: agentMessages,
     };
   },
   completion: async (context, partialArg) => {

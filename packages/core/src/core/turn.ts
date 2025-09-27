@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { ToolFunctionDeclaration } from '../runtime/agentsTypes.js';
 import type {
   Part,
   PartListUnion,
   GenerateContentResponse,
-  FunctionDeclaration,
   FinishReason,
   Content,
-} from '@google/genai';
+} from '../runtime/genaiCompat.js';
 import type {
   ToolCallConfirmationDetails,
   ToolResult,
@@ -24,16 +24,17 @@ import {
   UnauthorizedError,
   toFriendlyError,
 } from '../utils/errors.js';
-import type { GeminiChat } from './geminiChat.js';
 import type { Config } from '../config/config.js';
+import type { AgentsClient } from './agentsClient.js';
 import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
+import { hasCycleInSchema } from '../tools/tools.js';
 import type { UnifiedAgentMessage, UnifiedAgentToolCall } from '../runtime/types.js';
 import type { ToolResponseParts } from '../types/toolResponses.js';
 
 // Define a structure for tools passed to the server
 export interface ServerTool {
   name: string;
-  schema: FunctionDeclaration;
+  schema: ToolFunctionDeclaration;
   // The execute method signature might differ slightly or be wrapped
   execute(
     params: Record<string, unknown>,
@@ -45,7 +46,7 @@ export interface ServerTool {
   ): Promise<ToolCallConfirmationDetails | false>;
 }
 
-export enum GeminiEventType {
+export enum ConversationEventType {
   Content = 'content',
   ToolCallRequest = 'tool_call_request',
   ToolCallResponse = 'tool_call_response',
@@ -60,6 +61,8 @@ export enum GeminiEventType {
   Citation = 'citation',
 }
 
+export { ConversationEventType as GeminiEventType };
+
 export interface StructuredError {
   message: string;
   status?: number;
@@ -68,6 +71,81 @@ export interface StructuredError {
 export interface GeminiErrorEventValue {
   error: StructuredError;
 }
+
+const SCHEMA_DEPTH_MARKERS = ['schema_depth', 'schema depth', 'Schema depth'];
+
+function isSchemaDepthMessage(message: string): boolean {
+  return SCHEMA_DEPTH_MARKERS.some((marker) =>
+    message.toLowerCase().includes(marker.toLowerCase()),
+  );
+}
+
+function isInvalidArgumentMessage(message: string): boolean {
+  return message.toLowerCase().includes('invalid argument');
+}
+
+export function maybeAnnotateSchemaDepthContext(
+  config: Config,
+  error: StructuredError,
+): void {
+  const message = error?.message ?? '';
+  if (!message) {
+    return;
+  }
+
+  if (!isSchemaDepthMessage(message) && !isInvalidArgumentMessage(message)) {
+    return;
+  }
+
+  const registry = config.getToolRegistry?.();
+  const tools =
+    registry && typeof registry.getAllTools === 'function'
+      ? registry.getAllTools()
+      : [];
+
+  if (!Array.isArray(tools) || tools.length === 0) {
+    return;
+  }
+
+  const cyclicSchemaTools: string[] = [];
+  for (const tool of tools) {
+    if (!tool || typeof tool !== 'object' || !tool.schema) {
+      continue;
+    }
+    const schema = tool.schema as {
+      parametersJsonSchema?: unknown;
+      parameters?: unknown;
+      name?: string;
+    };
+    const hasCyclicParameters =
+      (schema.parametersJsonSchema && hasCycleInSchema(schema.parametersJsonSchema)) ||
+      (schema.parameters && hasCycleInSchema(schema.parameters));
+    if (hasCyclicParameters) {
+      if (typeof tool.displayName === 'string' && tool.displayName.length > 0) {
+        cyclicSchemaTools.push(tool.displayName);
+      } else if (typeof schema.name === 'string' && schema.name.length > 0) {
+        cyclicSchemaTools.push(schema.name);
+      }
+    }
+  }
+
+  if (cyclicSchemaTools.length === 0) {
+    return;
+  }
+
+  const extraDetails =
+    `
+
+This error was probably caused by cyclic schema references in one of the following tools, try disabling them with excludeTools:
+
+ - ` +
+    cyclicSchemaTools.join(`
+ - `) +
+    `
+`;
+  error.message += extraDetails;
+}
+
 
 export interface ToolCallRequestInfo {
   callId: string;
@@ -99,36 +177,36 @@ export type ThoughtSummary = {
 };
 
 export type ServerGeminiContentEvent = {
-  type: GeminiEventType.Content;
+  type: ConversationEventType.Content;
   value: string;
 };
 
 export type ServerGeminiThoughtEvent = {
-  type: GeminiEventType.Thought;
+  type: ConversationEventType.Thought;
   value: ThoughtSummary;
 };
 
 export type ServerGeminiToolCallRequestEvent = {
-  type: GeminiEventType.ToolCallRequest;
+  type: ConversationEventType.ToolCallRequest;
   value: ToolCallRequestInfo;
 };
 
 export type ServerGeminiToolCallResponseEvent = {
-  type: GeminiEventType.ToolCallResponse;
+  type: ConversationEventType.ToolCallResponse;
   value: ToolCallResponseInfo;
 };
 
 export type ServerGeminiToolCallConfirmationEvent = {
-  type: GeminiEventType.ToolCallConfirmation;
+  type: ConversationEventType.ToolCallConfirmation;
   value: ServerToolCallConfirmationDetails;
 };
 
 export type ServerGeminiUserCancelledEvent = {
-  type: GeminiEventType.UserCancelled;
+  type: ConversationEventType.UserCancelled;
 };
 
 export type ServerGeminiErrorEvent = {
-  type: GeminiEventType.Error;
+  type: ConversationEventType.Error;
   value: GeminiErrorEventValue;
 };
 
@@ -153,25 +231,25 @@ export interface ChatCompressionInfo {
 }
 
 export type ServerGeminiChatCompressedEvent = {
-  type: GeminiEventType.ChatCompressed;
+  type: ConversationEventType.ChatCompressed;
   value: ChatCompressionInfo | null;
 };
 
 export type ServerGeminiMaxSessionTurnsEvent = {
-  type: GeminiEventType.MaxSessionTurns;
+  type: ConversationEventType.MaxSessionTurns;
 };
 
 export type ServerGeminiFinishedEvent = {
-  type: GeminiEventType.Finished;
+  type: ConversationEventType.Finished;
   value: FinishReason;
 };
 
 export type ServerGeminiLoopDetectedEvent = {
-  type: GeminiEventType.LoopDetected;
+  type: ConversationEventType.LoopDetected;
 };
 
 export type ServerGeminiCitationEvent = {
-  type: GeminiEventType.Citation;
+  type: ConversationEventType.Citation;
   value: string;
 };
 
@@ -196,23 +274,32 @@ export class Turn {
   private debugResponses: GenerateContentResponse[] = [];
   finishReason: FinishReason | undefined = undefined;
   private unifiedAgentsClient?: UnifiedAgentsClient;
+  private readonly agentsClient: AgentsClient;
+  private readonly promptId: string;
+  private readonly config: Config;
 
-  constructor(
-    private readonly chat: GeminiChat,
-    private readonly prompt_id: string,
-    private readonly config?: Config,
-  ) {}
+  constructor(agentsClient: AgentsClient, promptId: string, config?: Config) {
+    if (!config) {
+      throw new Error('Turn requires configuration context');
+    }
+    if (!agentsClient) {
+      throw new Error('Turn requires an initialized AgentsClient');
+    }
+    this.agentsClient = agentsClient;
+    this.promptId = promptId;
+    this.config = config;
+  }
   // The run method yields simpler events suitable for server logic
   async *run(
     req: PartListUnion,
     signal: AbortSignal,
   ): AsyncGenerator<ServerGeminiStreamEvent> {
     try {
-      const providerId = this.config?.getProvider?.() || 'gemini';
+      const providerId = this.config.getProvider() || 'gemini';
       yield* this.runWithUnifiedAgents(req, signal, providerId);
     } catch (e) {
       if (signal.aborted) {
-        yield { type: GeminiEventType.UserCancelled };
+        yield { type: ConversationEventType.UserCancelled };
         // Regular cancellation error, fail gracefully.
         return;
       }
@@ -228,13 +315,13 @@ export class Turn {
         : Array.isArray(req)
         ? { role: 'user', parts: req }
         : req;
-      const contextForReport = [...this.chat.getHistory(/*curated*/ true), wrappedReq];
+      const contextForReport = [...this.agentsClient.getCuratedHistory(), wrappedReq];
       // Get the current provider name from the chat's config
-      const providerName = (this.chat as any).config?.getProvider?.() || 'Gemini';
+      const providerName = this.config.getProvider() || 'gemini';
       const providerDisplayName = providerName.charAt(0).toUpperCase() + providerName.slice(1);
       console.log(`[Turn] Debug - providerName: ${providerName}, providerDisplayName: ${providerDisplayName}`);
-      console.log(`[Turn] Debug - chat has config:`, !!(this.chat as any).config);
-      console.log(`[Turn] Debug - config has getProvider:`, typeof (this.chat as any).config?.getProvider);
+      console.log(`[Turn] Debug - chat has config:`, !!this.config);
+      console.log(`[Turn] Debug - config has getProvider:`, typeof this.config.getProvider);
       await reportError(
         error,
         `Error when talking to ${providerDisplayName} API`,
@@ -252,16 +339,13 @@ export class Turn {
         message: getErrorMessage(error),
         status,
       };
-      await this.chat.maybeIncludeSchemaDepthContext(structuredError);
-      yield { type: GeminiEventType.Error, value: { error: structuredError } };
+      maybeAnnotateSchemaDepthContext(this.config, structuredError);
+      yield { type: ConversationEventType.Error, value: { error: structuredError } };
       return;
     }
   }
 
   private getUnifiedAgentsClient(): UnifiedAgentsClient {
-    if (!this.config) {
-      throw new Error('Unified agents runtime requires configuration context');
-    }
     if (!this.unifiedAgentsClient) {
       this.unifiedAgentsClient = new UnifiedAgentsClient(this.config);
     }
@@ -275,11 +359,12 @@ export class Turn {
   ): AsyncGenerator<ServerGeminiStreamEvent> {
     try {
       const client = this.getUnifiedAgentsClient();
+      const agentsClient = this.agentsClient;
       const wrappedReq = this.normalizeRequestParts(req);
       const isFunctionResponse = wrappedReq.some(part => 'functionResponse' in part);
 
       const historyRole = isFunctionResponse ? ('function' as const) : ('user' as const);
-      this.chat.addHistory({
+      await agentsClient.addHistory({
         role: historyRole,
         parts: wrappedReq,
       });
@@ -287,13 +372,13 @@ export class Turn {
       const messages = this.buildUnifiedAgentMessages();
       const session = await client.createSession({
         providerId: provider,
-        model: this.config?.getModel() || 'gpt-5',
-        systemPrompt: this.config?.getSystemPrompt() || undefined,
+        model: this.config.getModel() || 'gpt-5',
+        systemPrompt: this.config.getSystemPrompt() || undefined,
       });
 
       for await (const event of client.streamResponse(session, messages)) {
         if (signal.aborted) {
-          yield { type: GeminiEventType.UserCancelled };
+          yield { type: ConversationEventType.UserCancelled };
           return;
         }
 
@@ -301,16 +386,19 @@ export class Turn {
           case 'final': {
             const content = event.message.content ?? '';
             if (content.length > 0) {
-              yield { type: GeminiEventType.Content, value: content };
-              this.chat.addHistory({ role: 'model', parts: [{ text: content }] });
+              yield { type: ConversationEventType.Content, value: content };
+              await agentsClient.addHistory({
+                role: 'model',
+                parts: [{ text: content }],
+              });
             }
             this.finishReason = 'STOP' as FinishReason;
-            yield { type: GeminiEventType.Finished, value: 'STOP' as FinishReason };
+            yield { type: ConversationEventType.Finished, value: 'STOP' as FinishReason };
             break;
           }
           case 'error': {
             yield {
-              type: GeminiEventType.Error,
+              type: ConversationEventType.Error,
               value: {
                 error: {
                   message: event.error?.message || 'Unified runtime error',
@@ -321,7 +409,7 @@ export class Turn {
           }
           case 'text-delta': {
             if (event.delta) {
-              yield { type: GeminiEventType.Content, value: event.delta };
+              yield { type: ConversationEventType.Content, value: event.delta };
             }
             break;
           }
@@ -330,7 +418,7 @@ export class Turn {
             if (request) {
               this.pendingToolCalls.push(request);
               yield {
-                type: GeminiEventType.ToolCallRequest,
+                type: ConversationEventType.ToolCallRequest,
                 value: request,
               };
             }
@@ -342,14 +430,14 @@ export class Turn {
       }
     } catch (error) {
       yield {
-        type: GeminiEventType.Error,
+        type: ConversationEventType.Error,
         value: { error: { message: getErrorMessage(error) } },
       };
     }
   }
 
   private buildUnifiedAgentMessages(): UnifiedAgentMessage[] {
-    const history = this.chat.getHistory();
+    const history = this.agentsClient.getHistory();
     const messages: UnifiedAgentMessage[] = [];
     for (const entry of history) {
       const unified = this.convertContentToUnifiedMessage(entry);
@@ -436,7 +524,7 @@ export class Turn {
       name: toolCall.name,
       args,
       isClientInitiated: false,
-      prompt_id: this.prompt_id,
+      prompt_id: this.promptId,
     } satisfies ToolCallRequestInfo;
   }
 

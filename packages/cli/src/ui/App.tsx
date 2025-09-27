@@ -48,7 +48,6 @@ import { RadioButtonSelect } from './components/shared/RadioButtonSelect.js';
 import { Colors } from './colors.js';
 import { loadHierarchicalGeminiMemory } from '../config/config.js';
 import type { LoadedSettings } from '../config/settings.js';
-import type { GeminiClient } from '@ouroboros/ouroboros-code-core';
 import { SettingScope } from '../config/settings.js';
 import { Tips } from './components/Tips.js';
 import { ConsolePatcher } from './utils/ConsolePatcher.js';
@@ -221,9 +220,6 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const [showErrorDetails, setShowErrorDetails] = useState<boolean>(false);
   const [showToolDescriptions, setShowToolDescriptions] =
     useState<boolean>(false);
-  // Handle case where GeminiClient may not be initialized yet in interactive mode
-  const [geminiClient, setGeminiClient] = useState<GeminiClient | null>(null);
-
   const [ctrlCPressedOnce, setCtrlCPressedOnce] = useState(false);
   const [quittingMessages, setQuittingMessages] = useState<
     HistoryItem[] | null
@@ -347,6 +343,16 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     cancelAuthentication,
   } = useAuthCommand(settings, setAuthError, config);
 
+  const agentsClient = config.getConversationClient();
+  const agentsClientReady = useMemo(() => {
+    try {
+      agentsClient.getContentGenerator();
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }, [agentsClient, isAuthenticating]);
+
   useEffect(() => {
     if (
       settings.merged.security?.auth?.selectedType &&
@@ -384,11 +390,15 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
 
   // Sync user tier from config when authentication changes
   useEffect(() => {
-    // Only sync when not currently authenticating and client is available
-    if (!isAuthenticating && geminiClient) {
-      setUserTier(geminiClient.getUserTier());
+    if (!isAuthenticating && agentsClientReady) {
+      try {
+        const tier = agentsClient.getContentGenerator().userTier;
+        setUserTier(tier);
+      } catch (error) {
+        // ignore readiness errors
+      }
     }
-  }, [config, isAuthenticating, geminiClient]);
+  }, [agentsClient, agentsClientReady, isAuthenticating]);
 
   const {
     isEditorDialogOpen,
@@ -679,15 +689,6 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   // Stable reference for cancel handler to avoid circular dependency
   const cancelHandlerRef = useRef<() => void>(() => {});
 
-  // Create a placeholder GeminiClient if not ready yet to satisfy hook requirements
-  // The actual client will be set once authentication completes
-  const clientForHook = geminiClient || {
-    // Minimal mock to prevent crashes - these won't be called while loading
-    sendMessageStream: () => { throw new Error('GeminiClient not initialized'); },
-    getUserTier: () => undefined,
-    setHistory: () => {},
-  } as any;
-
   const {
     streamingState,
     submitQuery,
@@ -696,7 +697,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     thought,
     cancelOngoingRequest,
   } = useGeminiStream(
-    clientForHook,
+    agentsClient,
     history,
     addItem,
     config,
@@ -1026,22 +1027,6 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
 
   const initialPrompt = useMemo(() => config.getQuestion(), [config]);
   useEffect(() => {
-    // Try to get GeminiClient when auth completes
-    if (!geminiClient && !isAuthenticating) {
-      try {
-        const client = config.getGeminiClient();
-        if (client) {
-          console.log('[App] Setting GeminiClient after auth completed');
-          setGeminiClient(client);
-        }
-      } catch (error) {
-        // Client not ready yet, will be set when auth completes
-        // The useAuthCommand hook will handle the auth flow
-      }
-    }
-  }, [config, geminiClient, isAuthenticating]);
-
-  useEffect(() => {
     if (
       initialPrompt &&
       !initialPromptSubmitted.current &&
@@ -1050,7 +1035,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
       !isThemeDialogOpen &&
       !isEditorDialogOpen &&
       !showPrivacyNotice &&
-      geminiClient?.isInitialized?.()
+      agentsClientReady
     ) {
       submitQuery(initialPrompt);
       initialPromptSubmitted.current = true;
@@ -1063,7 +1048,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     isThemeDialogOpen,
     isEditorDialogOpen,
     showPrivacyNotice,
-    geminiClient,
+    agentsClientReady,
   ]);
 
   if (quittingMessages) {
@@ -1102,7 +1087,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   return (
     <StreamingContext.Provider value={streamingState}>
       <Box flexDirection="column" width="90%">
-        {!geminiClient ? (
+        {!agentsClientReady ? (
           <Box paddingTop={1}>
             <Text color="yellow">Initializing {config.getProvider()} provider...</Text>
           </Box>

@@ -163,9 +163,12 @@ class CoderAgentExecutor implements AgentExecutor {
       eventBus,
     );
     runtimeTask.taskState = persistedState._taskState;
-    await runtimeTask.geminiClient.initialize(
-      runtimeTask.config.getContentGeneratorConfig(),
-    );
+    const agentsClient = runtimeTask.config.getConversationClient();
+    if (!agentsClient.isInitialized()) {
+      await agentsClient.initialize(
+        runtimeTask.config.getContentGeneratorConfig(),
+      );
+    }
 
     const wrapper = new TaskWrapper(runtimeTask, agentSettings);
     this.tasks.set(sdkTask.id, wrapper);
@@ -182,9 +185,12 @@ class CoderAgentExecutor implements AgentExecutor {
     const agentSettings = agentSettingsInput || ({} as AgentSettings);
     const config = await this.getConfig(agentSettings, taskId);
     const runtimeTask = await Task.create(taskId, contextId, config, eventBus);
-    await runtimeTask.geminiClient.initialize(
-      runtimeTask.config.getContentGeneratorConfig(),
-    );
+    const agentsClient = runtimeTask.config.getConversationClient();
+    if (!agentsClient.isInitialized()) {
+      await agentsClient.initialize(
+        runtimeTask.config.getContentGeneratorConfig(),
+      );
+    }
 
     const wrapper = new TaskWrapper(runtimeTask, agentSettings);
     this.tasks.set(taskId, wrapper);

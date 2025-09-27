@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Content, GenerateContentConfig } from '@google/genai';
-import type { GeminiClient } from '../core/client.js';
+import type { Content, GenerateContentConfig } from '../runtime/genaiCompat.js';
 import type { EditToolParams } from '../tools/edit.js';
 import { EditTool } from '../tools/edit.js';
 import { WriteFileTool } from '../tools/write-file.js';
@@ -19,6 +18,20 @@ import {
   isFunctionCall,
 } from '../utils/messageInspectors.js';
 import * as fs from 'node:fs';
+
+
+type MaybePromise<T> = T | Promise<T>;
+
+export interface EditingClient {
+  getHistory(): MaybePromise<Content[]>;
+  generateJson(
+    contents: Content[],
+    schema: Record<string, unknown>,
+    abortSignal: AbortSignal,
+    model?: string,
+    config?: GenerateContentConfig,
+  ): Promise<Record<string, unknown>>;
+}
 
 const EditModel = DEFAULT_GEMINI_FLASH_LITE_MODEL;
 const EditConfig: GenerateContentConfig = {
@@ -80,7 +93,7 @@ function getTimestampFromFunctionId(fcnId: string): number {
  */
 async function findLastEditTimestamp(
   filePath: string,
-  client: GeminiClient,
+  client: EditingClient,
 ): Promise<number> {
   const history = (await client.getHistory()) ?? [];
 
@@ -117,10 +130,16 @@ async function findLastEditTimestamp(
         part.functionResponse?.name &&
         toolsInResp.has(part.functionResponse.name)
       ) {
-        const { response } = part.functionResponse;
-        if (response && !('error' in response) && 'output' in response) {
-          id = part.functionResponse.id;
-          content = response['output'];
+        const response = part.functionResponse?.response;
+        if (response && typeof response === 'object' && !Array.isArray(response)) {
+          const responseRecord = response as Record<string, unknown>;
+          if (!('error' in responseRecord) && 'output' in responseRecord) {
+            const responseId = (part.functionResponse as Record<string, unknown>)['id'];
+            if (typeof responseId === 'string') {
+              id = responseId;
+            }
+            content = responseRecord['output'];
+          }
         }
       }
 
@@ -151,7 +170,7 @@ async function findLastEditTimestamp(
  *
  * @param currentContent The current content of the file.
  * @param originalParams The original EditToolParams
- * @param client The GeminiClient for LLM calls.
+ * @param client The EditingClient for LLM calls.
  * @returns A promise resolving to an object containing the (potentially corrected)
  *          EditToolParams (as CorrectedEditParams) and the final occurrences count.
  */
@@ -159,7 +178,7 @@ export async function ensureCorrectEdit(
   filePath: string,
   currentContent: string,
   originalParams: EditToolParams, // This is the EditToolParams from edit.ts, without \'corrected\'
-  client: GeminiClient,
+  client: EditingClient,
   abortSignal: AbortSignal,
 ): Promise<CorrectedEditResult> {
   const cacheKey = `${currentContent}---${originalParams.old_string}---${originalParams.new_string}`;
@@ -335,7 +354,7 @@ export async function ensureCorrectEdit(
 
 export async function ensureCorrectFileContent(
   content: string,
-  client: GeminiClient,
+  client: EditingClient,
   abortSignal: AbortSignal,
 ): Promise<string> {
   const cachedResult = fileContentCorrectionCache.get(content);
@@ -373,7 +392,7 @@ const OLD_STRING_CORRECTION_SCHEMA: Record<string, unknown> = {
 };
 
 export async function correctOldStringMismatch(
-  geminiClient: GeminiClient,
+  geminiClient: EditingClient,
   fileContent: string,
   problematicSnippet: string,
   abortSignal: AbortSignal,
@@ -450,7 +469,7 @@ const NEW_STRING_CORRECTION_SCHEMA: Record<string, unknown> = {
  * Adjusts the new_string to align with a corrected old_string, maintaining the original intent.
  */
 export async function correctNewString(
-  geminiClient: GeminiClient,
+  geminiClient: EditingClient,
   originalOldString: string,
   correctedOldString: string,
   originalNewString: string,
@@ -530,7 +549,7 @@ const CORRECT_NEW_STRING_ESCAPING_SCHEMA: Record<string, unknown> = {
 };
 
 export async function correctNewStringEscaping(
-  geminiClient: GeminiClient,
+  geminiClient: EditingClient,
   oldString: string,
   potentiallyProblematicNewString: string,
   abortSignal: AbortSignal,
@@ -603,7 +622,7 @@ const CORRECT_STRING_ESCAPING_SCHEMA: Record<string, unknown> = {
 
 export async function correctStringEscaping(
   potentiallyProblematicString: string,
-  client: GeminiClient,
+  client: EditingClient,
   abortSignal: AbortSignal,
 ): Promise<string> {
   const prompt = `

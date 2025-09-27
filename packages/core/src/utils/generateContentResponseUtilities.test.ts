@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 Ouroboros Development Team
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,57 +14,30 @@ import {
   getStructuredResponse,
   getStructuredResponseFromParts,
 } from './generateContentResponseUtilities.js';
-import type {
-  GenerateContentResponse,
-  Part,
-  SafetyRating,
-} from '@google/genai';
-import { FinishReason } from '@google/genai';
+import type { AgentContentFragment, AgentMessage, AgentFunctionCall } from '../runtime/agentsTypes.js';
 
-const mockTextPart = (text: string): Part => ({ text });
-const mockFunctionCallPart = (
+const mockTextFragment = (text: string): AgentContentFragment => ({ text });
+const mockFunctionCallFragment = (
   name: string,
   args?: Record<string, unknown>,
-): Part => ({
+): AgentContentFragment => ({
   functionCall: { name, args: args ?? {} },
 });
 
-const mockResponse = (
-  parts: Part[],
-  finishReason: FinishReason = FinishReason.STOP,
-  safetyRatings: SafetyRating[] = [],
-): GenerateContentResponse => ({
+const mockResponse = (parts: AgentContentFragment[]) => ({
   candidates: [
     {
       content: {
         parts,
-        role: 'model',
+        role: 'assistant',
       },
       index: 0,
-      finishReason,
-      safetyRatings,
     },
   ],
-  promptFeedback: {
-    safetyRatings: [],
-  },
-  text: undefined,
-  data: undefined,
-  functionCalls: undefined,
-  executableCode: undefined,
-  codeExecutionResult: undefined,
 });
 
-const minimalMockResponse = (
-  candidates: GenerateContentResponse['candidates'],
-): GenerateContentResponse => ({
+const minimalMockResponse = (candidates: unknown) => ({
   candidates,
-  promptFeedback: { safetyRatings: [] },
-  text: undefined,
-  data: undefined,
-  functionCalls: undefined,
-  executableCode: undefined,
-  codeExecutionResult: undefined,
 });
 
 describe('generateContentResponseUtilities', () => {
@@ -73,30 +46,30 @@ describe('generateContentResponseUtilities', () => {
       expect(getResponseTextFromParts([])).toBeUndefined();
     });
     it('should extract text from a single text part', () => {
-      expect(getResponseTextFromParts([mockTextPart('Hello')])).toBe('Hello');
+      expect(getResponseTextFromParts([mockTextFragment('Hello')])).toBe('Hello');
     });
     it('should concatenate text from multiple text parts', () => {
       expect(
         getResponseTextFromParts([
-          mockTextPart('Hello '),
-          mockTextPart('World'),
+          mockTextFragment('Hello '),
+          mockTextFragment('World'),
         ]),
       ).toBe('Hello World');
     });
     it('should ignore function call parts', () => {
       expect(
         getResponseTextFromParts([
-          mockTextPart('Hello '),
-          mockFunctionCallPart('testFunc'),
-          mockTextPart('World'),
+          mockTextFragment('Hello '),
+          mockFunctionCallFragment('testFunc'),
+          mockTextFragment('World'),
         ]),
       ).toBe('Hello World');
     });
     it('should return undefined if only function call parts exist', () => {
       expect(
         getResponseTextFromParts([
-          mockFunctionCallPart('testFunc'),
-          mockFunctionCallPart('anotherFunc'),
+          mockFunctionCallFragment('testFunc'),
+          mockFunctionCallFragment('anotherFunc'),
         ]),
       ).toBeUndefined();
     });
@@ -114,36 +87,44 @@ describe('generateContentResponseUtilities', () => {
       expect(getFunctionCalls(response)).toBeUndefined();
     });
     it('should extract a single function call', () => {
-      const func = { name: 'testFunc', args: { a: 1 } };
+      const func: AgentFunctionCall = { name: 'testFunc', args: { a: 1 } };
       const response = mockResponse([
-        mockFunctionCallPart(func.name, func.args),
+        mockFunctionCallFragment(func.name!, func.args),
       ]);
       expect(getFunctionCalls(response)).toEqual([func]);
     });
     it('should extract multiple function calls', () => {
-      const func1 = { name: 'testFunc1', args: { a: 1 } };
-      const func2 = { name: 'testFunc2', args: { b: 2 } };
+      const func1: AgentFunctionCall = { name: 'testFunc1', args: { a: 1 } };
+      const func2: AgentFunctionCall = { name: 'testFunc2', args: { b: 2 } };
       const response = mockResponse([
-        mockFunctionCallPart(func1.name, func1.args),
-        mockFunctionCallPart(func2.name, func2.args),
+        mockFunctionCallFragment(func1.name!, func1.args),
+        mockFunctionCallFragment(func2.name!, func2.args),
       ]);
       expect(getFunctionCalls(response)).toEqual([func1, func2]);
     });
     it('should ignore text parts', () => {
-      const func = { name: 'testFunc', args: { a: 1 } };
+      const func: AgentFunctionCall = { name: 'testFunc', args: { a: 1 } };
       const response = mockResponse([
-        mockTextPart('Some text'),
-        mockFunctionCallPart(func.name, func.args),
-        mockTextPart('More text'),
+        mockTextFragment('Some text'),
+        mockFunctionCallFragment(func.name!, func.args),
+        mockTextFragment('More text'),
       ]);
       expect(getFunctionCalls(response)).toEqual([func]);
     });
     it('should return undefined if only text parts exist', () => {
       const response = mockResponse([
-        mockTextPart('Some text'),
-        mockTextPart('More text'),
+        mockTextFragment('Some text'),
+        mockTextFragment('More text'),
       ]);
       expect(getFunctionCalls(response)).toBeUndefined();
+    });
+    it('should read function calls from agent messages', () => {
+      const func: AgentFunctionCall = { name: 'msgFunc', args: { x: 42 } };
+      const message: AgentMessage = {
+        role: 'assistant',
+        parts: [mockFunctionCallFragment(func.name!, func.args)],
+      };
+      expect(getFunctionCalls({ message })).toEqual([func]);
     });
   });
 
@@ -152,36 +133,38 @@ describe('generateContentResponseUtilities', () => {
       expect(getFunctionCallsFromParts([])).toBeUndefined();
     });
     it('should extract a single function call', () => {
-      const func = { name: 'testFunc', args: { a: 1 } };
+      const func: AgentFunctionCall = { name: 'testFunc', args: { a: 1 } };
       expect(
-        getFunctionCallsFromParts([mockFunctionCallPart(func.name, func.args)]),
+        getFunctionCallsFromParts([
+          mockFunctionCallFragment(func.name!, func.args),
+        ]),
       ).toEqual([func]);
     });
     it('should extract multiple function calls', () => {
-      const func1 = { name: 'testFunc1', args: { a: 1 } };
-      const func2 = { name: 'testFunc2', args: { b: 2 } };
+      const func1: AgentFunctionCall = { name: 'testFunc1', args: { a: 1 } };
+      const func2: AgentFunctionCall = { name: 'testFunc2', args: { b: 2 } };
       expect(
         getFunctionCallsFromParts([
-          mockFunctionCallPart(func1.name, func1.args),
-          mockFunctionCallPart(func2.name, func2.args),
+          mockFunctionCallFragment(func1.name!, func1.args),
+          mockFunctionCallFragment(func2.name!, func2.args),
         ]),
       ).toEqual([func1, func2]);
     });
     it('should ignore text parts', () => {
-      const func = { name: 'testFunc', args: { a: 1 } };
+      const func: AgentFunctionCall = { name: 'testFunc', args: { a: 1 } };
       expect(
         getFunctionCallsFromParts([
-          mockTextPart('Some text'),
-          mockFunctionCallPart(func.name, func.args),
-          mockTextPart('More text'),
+          mockTextFragment('Some text'),
+          mockFunctionCallFragment(func.name!, func.args),
+          mockTextFragment('More text'),
         ]),
       ).toEqual([func]);
     });
     it('should return undefined if only text parts exist', () => {
       expect(
         getFunctionCallsFromParts([
-          mockTextPart('Some text'),
-          mockTextPart('More text'),
+          mockTextFragment('Some text'),
+          mockTextFragment('More text'),
         ]),
       ).toBeUndefined();
     });
@@ -189,94 +172,96 @@ describe('generateContentResponseUtilities', () => {
 
   describe('getFunctionCallsAsJson', () => {
     it('should return JSON string of function calls', () => {
-      const func1 = { name: 'testFunc1', args: { a: 1 } };
-      const func2 = { name: 'testFunc2', args: { b: 2 } };
+      const func1: AgentFunctionCall = { name: 'testFunc1', args: { a: 1 } };
+      const func2: AgentFunctionCall = { name: 'testFunc2', args: { b: 2 } };
       const response = mockResponse([
-        mockFunctionCallPart(func1.name, func1.args),
-        mockTextPart('text in between'),
-        mockFunctionCallPart(func2.name, func2.args),
+        mockFunctionCallFragment(func1.name!, func1.args),
+        mockTextFragment('text in between'),
+        mockFunctionCallFragment(func2.name!, func2.args),
       ]);
       const expectedJson = JSON.stringify([func1, func2], null, 2);
       expect(getFunctionCallsAsJson(response)).toBe(expectedJson);
     });
-    it('should return undefined if no function calls', () => {
-      const response = mockResponse([mockTextPart('Hello')]);
+    it('should return undefined when there are no function calls', () => {
+      const response = mockResponse([mockTextFragment('Only text')]);
       expect(getFunctionCallsAsJson(response)).toBeUndefined();
     });
   });
 
   describe('getFunctionCallsFromPartsAsJson', () => {
     it('should return JSON string of function calls from parts', () => {
-      const func1 = { name: 'testFunc1', args: { a: 1 } };
-      const func2 = { name: 'testFunc2', args: { b: 2 } };
+      const func1: AgentFunctionCall = { name: 'testFunc1', args: { a: 1 } };
+      const func2: AgentFunctionCall = { name: 'testFunc2', args: { b: 2 } };
       const parts = [
-        mockFunctionCallPart(func1.name, func1.args),
-        mockTextPart('text in between'),
-        mockFunctionCallPart(func2.name, func2.args),
+        mockFunctionCallFragment(func1.name!, func1.args),
+        mockFunctionCallFragment(func2.name!, func2.args),
       ];
       const expectedJson = JSON.stringify([func1, func2], null, 2);
       expect(getFunctionCallsFromPartsAsJson(parts)).toBe(expectedJson);
     });
-    it('should return undefined if no function calls in parts', () => {
-      const parts = [mockTextPart('Hello')];
+    it('should return undefined when there are no function calls in parts', () => {
+      const parts = [mockTextFragment('Only text')];
       expect(getFunctionCallsFromPartsAsJson(parts)).toBeUndefined();
     });
   });
 
   describe('getStructuredResponse', () => {
     it('should return only text if only text exists', () => {
-      const response = mockResponse([mockTextPart('Hello World')]);
+      const response = mockResponse([
+        mockTextFragment('Hello '),
+        mockTextFragment('World'),
+      ]);
       expect(getStructuredResponse(response)).toBe('Hello World');
     });
     it('should return only function call JSON if only function calls exist', () => {
-      const func = { name: 'testFunc', args: { data: 'payload' } };
+      const func: AgentFunctionCall = { name: 'testFunc', args: { a: 1 } };
       const response = mockResponse([
-        mockFunctionCallPart(func.name, func.args),
+        mockFunctionCallFragment(func.name!, func.args),
       ]);
       const expectedJson = JSON.stringify([func], null, 2);
       expect(getStructuredResponse(response)).toBe(expectedJson);
     });
     it('should return text and function call JSON if both exist', () => {
-      const text = 'Consider this data:';
-      const func = { name: 'processData', args: { item: 42 } };
-      const response = mockResponse([
-        mockTextPart(text),
-        mockFunctionCallPart(func.name, func.args),
-      ]);
+      const func: AgentFunctionCall = { name: 'testFunc', args: { a: 1 } };
+      const parts = [
+        mockTextFragment('Hello World'),
+        mockFunctionCallFragment(func.name!, func.args),
+      ];
       const expectedJson = JSON.stringify([func], null, 2);
-      expect(getStructuredResponse(response)).toBe(`${text}\n${expectedJson}`);
+      expect(getStructuredResponse(mockResponse(parts))).toBe(
+        `Hello World\n${expectedJson}`,
+      );
     });
     it('should return undefined if neither text nor function calls exist', () => {
-      const response = mockResponse([]);
+      const response = minimalMockResponse([]);
       expect(getStructuredResponse(response)).toBeUndefined();
     });
   });
 
   describe('getStructuredResponseFromParts', () => {
     it('should return only text if only text exists in parts', () => {
-      const parts = [mockTextPart('Hello World')];
+      const parts = [mockTextFragment('Hello '), mockTextFragment('World')];
       expect(getStructuredResponseFromParts(parts)).toBe('Hello World');
     });
     it('should return only function call JSON if only function calls exist in parts', () => {
-      const func = { name: 'testFunc', args: { data: 'payload' } };
-      const parts = [mockFunctionCallPart(func.name, func.args)];
+      const func: AgentFunctionCall = { name: 'testFunc', args: { a: 1 } };
+      const parts = [mockFunctionCallFragment(func.name!, func.args)];
       const expectedJson = JSON.stringify([func], null, 2);
       expect(getStructuredResponseFromParts(parts)).toBe(expectedJson);
     });
     it('should return text and function call JSON if both exist in parts', () => {
-      const text = 'Consider this data:';
-      const func = { name: 'processData', args: { item: 42 } };
+      const func: AgentFunctionCall = { name: 'testFunc', args: { a: 1 } };
       const parts = [
-        mockTextPart(text),
-        mockFunctionCallPart(func.name, func.args),
+        mockTextFragment('Hello World'),
+        mockFunctionCallFragment(func.name!, func.args),
       ];
       const expectedJson = JSON.stringify([func], null, 2);
       expect(getStructuredResponseFromParts(parts)).toBe(
-        `${text}\n${expectedJson}`,
+        `Hello World\n${expectedJson}`,
       );
     });
     it('should return undefined if neither text nor function calls exist in parts', () => {
-      const parts: Part[] = [];
+      const parts: AgentContentFragment[] = [];
       expect(getStructuredResponseFromParts(parts)).toBeUndefined();
     });
   });

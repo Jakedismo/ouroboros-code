@@ -85,7 +85,7 @@ export const usePrivacySettings = (config: Config) => {
 };
 
 function getCodeAssistServer(config: Config): CodeAssistServer {
-  let server = config.getGeminiClient().getContentGenerator();
+  let server = config.getConversationClient().getContentGenerator();
 
   // Unwrap LoggingContentGenerator if present
   if (server instanceof LoggingContentGenerator) {

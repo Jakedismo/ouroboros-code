@@ -16,8 +16,6 @@ import {
 } from '@ouroboros/ouroboros-code-core';
 
 import type { MessageActionReturn } from './types.js';
-import type { CallableTool } from '@google/genai';
-import { Type } from '@google/genai';
 
 vi.mock('@ouroboros/ouroboros-code-core', async (importOriginal) => {
   const actual =
@@ -43,6 +41,11 @@ const isMessageAction = (result: unknown): result is MessageActionReturn =>
   'type' in result &&
   result.type === 'message';
 
+type MinimalCallableTool = {
+  callTool: (...args: unknown[]) => unknown;
+  tool: (...args: unknown[]) => unknown;
+};
+
 // Helper function to create a mock DiscoveredMCPTool
 const createMockMCPTool = (
   name: string,
@@ -53,11 +56,11 @@ const createMockMCPTool = (
     {
       callTool: vi.fn(),
       tool: vi.fn(),
-    } as unknown as CallableTool,
+    } as unknown as never,
     serverName,
     name,
     description || `Description for ${name}`,
-    { type: Type.OBJECT, properties: {} },
+    { type: 'object', properties: {} },
     name, // serverToolName same as name for simplicity
   );
 
@@ -483,24 +486,24 @@ describe('mcpCommand', () => {
       mockConfig.getMcpServers = vi.fn().mockReturnValue(mockMcpServers);
 
       // Create tools with parameter schemas
-      const mockCallableTool1: CallableTool = {
+      const mockCallableTool1: MinimalCallableTool = {
         callTool: vi.fn(),
         tool: vi.fn(),
-      } as unknown as CallableTool;
-      const mockCallableTool2: CallableTool = {
+      };
+      const mockCallableTool2: MinimalCallableTool = {
         callTool: vi.fn(),
         tool: vi.fn(),
-      } as unknown as CallableTool;
+      };
 
       const tool1 = new DiscoveredMCPTool(
-        mockCallableTool1,
+        mockCallableTool1 as unknown as never,
         'server1',
         'tool1',
         'This is tool 1 description',
         {
-          type: Type.OBJECT,
+          type: 'object',
           properties: {
-            param1: { type: Type.STRING, description: 'First parameter' },
+            param1: { type: 'string', description: 'First parameter' },
           },
           required: ['param1'],
         },
@@ -508,14 +511,14 @@ describe('mcpCommand', () => {
       );
 
       const tool2 = new DiscoveredMCPTool(
-        mockCallableTool2,
+        mockCallableTool2 as unknown as never,
         'server1',
         'tool2',
         'This is tool 2 description',
         {
-          type: Type.OBJECT,
+          type: 'object',
           properties: {
-            param2: { type: Type.NUMBER, description: 'Second parameter' },
+            param2: { type: 'number', description: 'Second parameter' },
           },
           required: ['param2'],
         },
@@ -548,10 +551,10 @@ describe('mcpCommand', () => {
         expect(message).toContain('This is tool 1 description');
         expect(message).toContain('Parameters:');
         expect(message).toContain('param1');
-        expect(message).toContain('STRING');
+        expect(message).toContain('"type": "string"');
         expect(message).toContain('This is tool 2 description');
         expect(message).toContain('param2');
-        expect(message).toContain('NUMBER');
+        expect(message).toContain('"type": "number"');
       }
     });
 
@@ -867,7 +870,7 @@ describe('mcpCommand', () => {
       const mockToolRegistry = {
         discoverToolsForServer: vi.fn(),
       };
-      const mockGeminiClient = {
+      const mockAgentsClient = {
         setTools: vi.fn(),
       };
 
@@ -881,7 +884,7 @@ describe('mcpCommand', () => {
               },
             }),
             getToolRegistry: vi.fn().mockReturnValue(mockToolRegistry),
-            getGeminiClient: vi.fn().mockReturnValue(mockGeminiClient),
+            getConversationClient: vi.fn().mockReturnValue(mockAgentsClient),
             getPromptRegistry: vi.fn().mockResolvedValue({
               removePromptsByServer: vi.fn(),
             }),
@@ -906,7 +909,7 @@ describe('mcpCommand', () => {
       expect(mockToolRegistry.discoverToolsForServer).toHaveBeenCalledWith(
         'test-server',
       );
-      expect(mockGeminiClient.setTools).toHaveBeenCalled();
+      expect(mockAgentsClient.setTools).toHaveBeenCalled();
       expect(context.ui.reloadCommands).toHaveBeenCalledTimes(1);
 
       expect(isMessageAction(result)).toBe(true);
@@ -976,7 +979,7 @@ describe('mcpCommand', () => {
         restartMcpServers: vi.fn(),
         getAllTools: vi.fn().mockReturnValue([]),
       };
-      const mockGeminiClient = {
+      const mockAgentsClient = {
         setTools: vi.fn(),
       };
 
@@ -986,7 +989,7 @@ describe('mcpCommand', () => {
             getMcpServers: vi.fn().mockReturnValue({ server1: {} }),
             getBlockedMcpServers: vi.fn().mockReturnValue([]),
             getToolRegistry: vi.fn().mockReturnValue(mockToolRegistry),
-            getGeminiClient: vi.fn().mockReturnValue(mockGeminiClient),
+            getConversationClient: vi.fn().mockReturnValue(mockAgentsClient),
             getPromptRegistry: vi.fn().mockResolvedValue({
               getPromptsByServer: vi.fn().mockReturnValue([]),
             }),
@@ -1011,7 +1014,7 @@ describe('mcpCommand', () => {
         expect.any(Number),
       );
       expect(mockToolRegistry.restartMcpServers).toHaveBeenCalled();
-      expect(mockGeminiClient.setTools).toHaveBeenCalled();
+      expect(mockAgentsClient.setTools).toHaveBeenCalled();
       expect(context.ui.reloadCommands).toHaveBeenCalledTimes(1);
 
       expect(isMessageAction(result)).toBe(true);

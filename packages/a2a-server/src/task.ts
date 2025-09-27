@@ -6,7 +6,7 @@
 
 import {
   CoreToolScheduler,
-  GeminiClient,
+  AgentsClient,
   GeminiEventType,
   ToolConfirmationOutcome,
   ApprovalMode,
@@ -14,6 +14,7 @@ import {
   MCPServerStatus,
   isNodeError,
   parseAndFormatApiError,
+  mapAgentsStreamToGeminiEvents,
 } from '@ouroboros/ouroboros-code-core';
 import type {
   ToolConfirmationPayload,
@@ -25,6 +26,8 @@ import type {
   ToolCallConfirmationDetails,
   Config,
   UserTierId,
+  PartUnion,
+  Part as AgentPart,
 } from '@ouroboros/ouroboros-code-core';
 import type { RequestContext } from '@a2a-js/sdk/server';
 import { type ExecutionEventBus } from '@a2a-js/sdk/server';
@@ -50,14 +53,13 @@ import type {
   Thought,
   ThoughtSummary,
 } from './types.js';
-import type { PartUnion, Part as genAiPart } from '@google/genai';
 
 export class Task {
   id: string;
   contextId: string;
   scheduler: CoreToolScheduler;
   config: Config;
-  geminiClient: GeminiClient;
+  agentsClient: AgentsClient;
   pendingToolConfirmationDetails: Map<string, ToolCallConfirmationDetails>;
   taskState: TaskState;
   eventBus?: ExecutionEventBus;
@@ -82,7 +84,7 @@ export class Task {
     this.contextId = contextId;
     this.config = config;
     this.scheduler = this.createScheduler();
-    this.geminiClient = new GeminiClient(this.config);
+    this.agentsClient = this.config.getConversationClient();
     this.pendingToolConfirmationDetails = new Map();
     this.taskState = 'submitted';
     this.eventBus = eventBus;
@@ -227,7 +229,7 @@ export class Task {
     } = {
       coderAgent: coderAgentMessage,
       model: this.config.getModel(),
-      userTier: this.geminiClient.getUserTier(),
+      userTier: this.agentsClient.getUserTier(),
     };
 
     if (metadataError) {
@@ -761,7 +763,7 @@ export class Task {
     );
 
     for (const response of responsesToAdd) {
-      let parts: genAiPart[];
+      let parts: AgentPart[];
       if (Array.isArray(response)) {
         parts = response;
       } else if (typeof response === 'string') {
@@ -769,7 +771,7 @@ export class Task {
       } else {
         parts = [response];
       }
-      this.geminiClient.addHistory({
+      this.agentsClient.addHistory({
         role: 'user',
         parts,
       });
@@ -778,7 +780,7 @@ export class Task {
 
   async *sendCompletedToolsToLlm(
     completedToolCalls: CompletedToolCall[],
-    aborted: AbortSignal,
+    _aborted: AbortSignal,
   ): AsyncGenerator<ServerGeminiStreamEvent> {
     if (completedToolCalls.length === 0) {
       yield* (async function* () {})(); // Yield nothing
@@ -808,16 +810,16 @@ export class Task {
     // Set task state to working as we are about to call LLM
     this.setTaskStateAndPublishUpdate('working', stateChange);
     // TODO: Determine what it mean to have, then add a prompt ID.
-    yield* this.geminiClient.sendMessageStream(
-      llmParts,
-      aborted,
-      /*prompt_id*/ '',
+    const stream = await this.agentsClient.sendMessageStream(
+      { message: llmParts },
+      '',
     );
+    yield* mapAgentsStreamToGeminiEvents(stream, '');
   }
 
   async *acceptUserMessage(
     requestContext: RequestContext,
-    aborted: AbortSignal,
+    _aborted: AbortSignal,
   ): AsyncGenerator<ServerGeminiStreamEvent> {
     const userMessage = requestContext.userMessage;
     const llmParts: PartUnion[] = [];
@@ -848,11 +850,11 @@ export class Task {
       // Set task state to working as we are about to call LLM
       this.setTaskStateAndPublishUpdate('working', stateChange);
       // TODO: Determine what it mean to have, then add a prompt ID.
-      yield* this.geminiClient.sendMessageStream(
-        llmParts,
-        aborted,
-        /*prompt_id*/ '',
+      const stream = await this.agentsClient.sendMessageStream(
+        { message: llmParts },
+        '',
       );
+      yield* mapAgentsStreamToGeminiEvents(stream, '');
     } else if (anyConfirmationHandled) {
       logger.info(
         '[Task] User message only contained tool confirmations. Scheduler is active. No new input for LLM this turn.',

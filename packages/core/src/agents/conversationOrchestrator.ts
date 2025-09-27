@@ -8,14 +8,16 @@ import { AgentSelectorService } from './agentSelectorService.js';
 import type { Config } from '../config/config.js';
 import { getAgentById, type AgentPersona } from './personas.js';
 import type { MultiAgentExecutionResult } from './multiAgentExecutor.js';
-import type { ToolResultDisplay } from '../tools/tools.js';
+import type { ToolResultDisplay, ToolErrorType } from '../tools/tools.js';
 
 type ToolEventSnapshot = {
   callId: string;
   toolName: string;
   arguments: Record<string, unknown>;
-  outputText: string;
-  resultDisplay: ToolResultDisplay | undefined;
+  outputText?: string;
+  resultDisplay?: ToolResultDisplay;
+  errorMessage?: string;
+  errorType?: ToolErrorType;
   timestamp: number;
 };
 
@@ -26,6 +28,8 @@ type AgentProgressSnapshot = {
   confidence: number;
   handoffAgentIds: string[];
   rawText: string;
+  liveThought: string;
+  status: 'pending' | 'running' | 'complete';
   toolEvents: ToolEventSnapshot[];
 };
 
@@ -49,7 +53,7 @@ export class ConversationOrchestrator {
 
   /**
    * Initialize the orchestrator with the same ContentGenerator as regular chat
-   * @param config - The Config instance that contains the GeminiClient with ContentGenerator
+   * @param config - Active configuration (provides the shared AgentsClient/content generator)
    */
   async initialize(config: Config): Promise<void> {
     await this.agentSelectorService.initialize(config);
@@ -69,6 +73,7 @@ export class ConversationOrchestrator {
       reasoning: string;
       confidence: number;
       processingTime: number;
+      status: 'planning' | 'running' | 'complete';
       execution?: {
         totalAgents: number;
         durationMs: number;
@@ -85,14 +90,7 @@ export class ConversationOrchestrator {
           confidence: number;
           handoffAgentIds: string[];
           rawText: string;
-          toolEvents: Array<{
-            callId: string;
-            toolName: string;
-            arguments: Record<string, unknown>;
-            outputText: string;
-            resultDisplay: ToolResultDisplay | undefined;
-            timestamp: number;
-          }>;
+          toolEvents: ToolEventSnapshot[];
         }>;
       };
     };
@@ -101,18 +99,12 @@ export class ConversationOrchestrator {
       reasoning: string;
       confidence: number;
       processingTime: number;
+      status?: 'planning' | 'running' | 'complete';
       execution?: MultiAgentExecutionResult;
     };
     toolEvent?: {
       agent: AgentPersona;
-      event: {
-        callId: string;
-        toolName: string;
-        arguments: Record<string, unknown>;
-        outputText: string;
-        resultDisplay: ToolResultDisplay | undefined;
-        timestamp: number;
-      };
+      event: ToolEventSnapshot;
     };
     previousAgentState?: string[];
     finalResponse?: string;
@@ -143,6 +135,7 @@ export class ConversationOrchestrator {
             reasoning: selectionResult.reasoning,
             confidence: selectionResult.confidence,
             processingTime: selectionResult.processingTime,
+            status: 'planning',
           },
         };
 
@@ -155,6 +148,7 @@ export class ConversationOrchestrator {
             reasoning: string;
             confidence: number;
             processingTime: number;
+            status: 'planning' | 'running' | 'complete';
             execution?: {
               totalAgents: number;
               durationMs: number;
@@ -220,6 +214,8 @@ export class ConversationOrchestrator {
             confidence: 0,
             handoffAgentIds: [] as string[],
             rawText: '',
+            liveThought: '',
+            status: 'pending' as const,
             toolEvents: [] as ToolEventSnapshot[],
           };
           partialExecutionState.agentResults.set(agent.id, created);
@@ -230,11 +226,12 @@ export class ConversationOrchestrator {
           return created;
         };
 
-        const buildSelectionPreview = () => ({
+        const buildSelectionPreview = (status: 'planning' | 'running' | 'complete' = 'running') => ({
           selectedAgents: selectionResult.selectedAgents,
           reasoning: selectionResult.reasoning,
           confidence: selectionResult.confidence,
           processingTime: Date.now() - selectionStartedAt,
+          status,
           execution: {
             totalAgents: partialExecutionState.totalAgents,
             durationMs: partialExecutionState.durationMs,
@@ -251,12 +248,16 @@ export class ConversationOrchestrator {
               confidence: result.confidence,
               handoffAgentIds: [...result.handoffAgentIds],
               rawText: result.rawText,
+              liveThought: result.liveThought,
+              status: result.status,
               toolEvents: result.toolEvents.map((event) => ({
                 callId: event.callId,
                 toolName: event.toolName,
                 arguments: { ...event.arguments },
                 outputText: event.outputText,
                 resultDisplay: event.resultDisplay,
+                errorMessage: event.errorMessage,
+                errorType: event.errorType,
                 timestamp: event.timestamp,
               })),
             })),
@@ -270,10 +271,14 @@ export class ConversationOrchestrator {
             {
               onAgentStart: ({ agent, wave }) => {
                 partialExecutionState.timeline.push({ wave, agents: [agent] });
+                partialExecutionState.durationMs = Date.now() - selectionStartedAt;
+                const entry = ensureAgentEntry(agent);
+                entry.status = 'running';
+                entry.liveThought = entry.liveThought || '';
                 emitProgress({
                   type: 'progress',
                   message: `🤖 ${agent.emoji} ${agent.name} starting (wave ${wave})`,
-                  selectionPreview: buildSelectionPreview(),
+                  selectionPreview: buildSelectionPreview('running'),
                 });
               },
               onAgentComplete: ({ result, wave }) => {
@@ -285,19 +290,45 @@ export class ConversationOrchestrator {
                 entry.confidence = result.confidence;
                 entry.handoffAgentIds = [...result.handoffAgentIds];
                 entry.rawText = result.rawText;
+                entry.liveThought = '';
+                entry.status = 'complete';
                 entry.toolEvents = (result.toolEvents ?? []).map((event) => ({
                   callId: event.callId,
                   toolName: event.toolName,
                   arguments: { ...event.arguments },
                   outputText: event.outputText,
                   resultDisplay: event.resultDisplay,
+                  errorMessage: event.errorMessage,
+                  errorType: event.errorType,
                   timestamp: event.timestamp,
                 }));
                 emitProgress({
                   type: 'progress',
                   message: `✅ ${result.agent.emoji} ${result.agent.name} completed (wave ${wave})`,
-                  selectionPreview: buildSelectionPreview(),
+                  selectionPreview: buildSelectionPreview('running'),
                 });
+              },
+              onAgentThinking: ({ agent, accumulated }) => {
+                partialExecutionState.durationMs =
+                  Date.now() - selectionStartedAt;
+                const entry = ensureAgentEntry(agent);
+                const normalized = accumulated.trim();
+                if (!normalized) {
+                  entry.rawText = accumulated;
+                  return;
+                }
+                const truncated = normalized.length > 1200
+                  ? normalized.slice(-1200)
+                  : normalized;
+                if (truncated !== entry.liveThought) {
+                  entry.liveThought = truncated;
+                  entry.rawText = accumulated;
+                  entry.status = 'running';
+                  emitProgress({
+                    type: 'progress',
+                    selectionPreview: buildSelectionPreview('running'),
+                  });
+                }
               },
               onToolEvent: ({ agent, event: toolEvent }) => {
                 partialExecutionState.durationMs =
@@ -309,13 +340,16 @@ export class ConversationOrchestrator {
                   arguments: { ...toolEvent.arguments },
                   outputText: toolEvent.outputText,
                   resultDisplay: toolEvent.resultDisplay,
+                  errorMessage: toolEvent.errorMessage,
+                  errorType: toolEvent.errorType,
                   timestamp: toolEvent.timestamp,
                 };
+                entry.status = 'running';
                 entry.toolEvents = [...entry.toolEvents, snapshot];
                 emitProgress({
                   type: 'progress',
                   toolEvent: { agent, event: snapshot },
-                  selectionPreview: buildSelectionPreview(),
+                  selectionPreview: buildSelectionPreview('running'),
                 });
               },
             },
@@ -335,12 +369,16 @@ export class ConversationOrchestrator {
                 entry.confidence = agentResult.confidence;
                 entry.handoffAgentIds = [...agentResult.handoffAgentIds];
                 entry.rawText = agentResult.rawText;
+                entry.liveThought = '';
+                entry.status = 'complete';
                 entry.toolEvents = (agentResult.toolEvents ?? []).map((event) => ({
                   callId: event.callId,
                   toolName: event.toolName,
                   arguments: { ...event.arguments },
                   outputText: event.outputText,
                   resultDisplay: event.resultDisplay,
+                  errorMessage: event.errorMessage,
+                  errorType: event.errorType,
                   timestamp: event.timestamp,
                 }));
               }
@@ -377,6 +415,7 @@ export class ConversationOrchestrator {
             shouldProceed: false,
             selectionFeedback: {
               ...selectionResult,
+              status: 'complete',
               execution,
             },
             previousAgentState: undefined,
@@ -389,7 +428,10 @@ export class ConversationOrchestrator {
         yield {
           type: 'complete',
           shouldProceed: false,
-          selectionFeedback: selectionResult,
+          selectionFeedback: {
+            ...selectionResult,
+            status: 'complete',
+          },
           previousAgentState: undefined,
         };
       } else {
@@ -415,6 +457,7 @@ export class ConversationOrchestrator {
       reasoning: string;
       confidence: number;
       processingTime: number;
+      status?: 'planning' | 'running' | 'complete';
       execution?: MultiAgentExecutionResult;
     };
     finalResponse?: string;

@@ -21,7 +21,7 @@ vi.mock('@ouroboros/ouroboros-code-core', async () => {
   };
 });
 
-import type { GeminiClient } from '@ouroboros/ouroboros-code-core';
+import type { AgentsClient } from '@ouroboros/ouroboros-code-core';
 import { uiTelemetryService } from '@ouroboros/ouroboros-code-core';
 
 describe('clearCommand', () => {
@@ -35,10 +35,10 @@ describe('clearCommand', () => {
     mockContext = createMockCommandContext({
       services: {
         config: {
-          getGeminiClient: () =>
+          getConversationClient: () =>
             ({
               resetChat: mockResetChat,
-            }) as unknown as GeminiClient,
+            }) as unknown as AgentsClient,
         },
       },
     });

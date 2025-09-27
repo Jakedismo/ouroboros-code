@@ -17,6 +17,7 @@ Ouroboros Code is an advanced multi-agent AI framework that brings the power of 
 - **🧠 50+ Specialist Agents**: Architecture, AI/ML, Security, Performance, DevOps, Frontend, Backend experts
 - **🔧 Universal Built-in Tools**: 11 tools work identically across all providers (files, web, search, shell)
 - **🔌 Advanced MCP Support**: Enhanced Model Context Protocol integration with webhooks and connection pooling
+- **🧷 Unified Conversation Runtime**: Provider-neutral streaming core powering OpenAI, Anthropic, and Gemini sessions with a single toolchain
 - **💻 Terminal-first**: Designed for developers who live in the command line
 - **🛡️ Open source**: Apache 2.0 licensed
 

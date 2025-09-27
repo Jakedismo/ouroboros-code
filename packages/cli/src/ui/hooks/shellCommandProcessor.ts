@@ -12,7 +12,7 @@ import { ToolCallStatus } from '../types.js';
 import { useCallback } from 'react';
 import type {
   Config,
-  GeminiClient,
+  AgentsClient,
   ShellExecutionResult,
 } from '@ouroboros/ouroboros-code-core';
 import { isBinary, ShellExecutionService } from '@ouroboros/ouroboros-code-core';
@@ -28,8 +28,8 @@ import fs from 'node:fs';
 export const OUTPUT_UPDATE_INTERVAL_MS = 1000;
 const MAX_OUTPUT_LENGTH = 10000;
 
-function addShellCommandToGeminiHistory(
-  geminiClient: GeminiClient,
+async function addShellCommandToAgentsHistory(
+  agentsClient: AgentsClient,
   rawQuery: string,
   resultText: string,
 ) {
@@ -38,7 +38,7 @@ function addShellCommandToGeminiHistory(
       ? resultText.substring(0, MAX_OUTPUT_LENGTH) + '\n... (truncated)'
       : resultText;
 
-  geminiClient.addHistory({
+  await agentsClient.addHistory({
     role: 'user',
     parts: [
       {
@@ -68,7 +68,7 @@ export const useShellCommandProcessor = (
   onExec: (command: Promise<void>) => void,
   onDebugMessage: (message: string) => void,
   config: Config,
-  geminiClient: GeminiClient,
+  agentsClient: AgentsClient,
 ) => {
   const handleShellCommand = useCallback(
     (rawQuery: AgentContent, abortSignal: AbortSignal): boolean => {
@@ -192,7 +192,7 @@ export const useShellCommandProcessor = (
           executionPid = pid;
 
           result
-            .then((result: ShellExecutionResult) => {
+            .then(async (result: ShellExecutionResult) => {
               setPendingHistoryItem(null);
 
               let mainContent: string;
@@ -246,8 +246,8 @@ export const useShellCommandProcessor = (
               );
 
               // Add the same complete, contextual result to the LLM's history.
-              addShellCommandToGeminiHistory(
-                geminiClient,
+              await addShellCommandToAgentsHistory(
+                agentsClient,
                 rawQuery,
                 finalOutput,
               );
@@ -305,7 +305,7 @@ export const useShellCommandProcessor = (
       addItemToHistory,
       setPendingHistoryItem,
       onExec,
-      geminiClient,
+      agentsClient,
     ],
   );
 

@@ -7,7 +7,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { glob } from 'glob';
-import type { PartUnion } from '@google/genai';
+import type { AgentContentFragment } from '../runtime/agentsTypes.js';
 import { processSingleFileContent } from './fileUtils.js';
 import type { Config } from '../config/config.js';
 
@@ -17,13 +17,14 @@ import type { Config } from '../config/config.js';
  *
  * @param pathStr The path to read (can be absolute or relative).
  * @param config The application configuration, providing workspace context and services.
- * @returns A promise that resolves to an array of PartUnion (string | Part).
+ * @returns A promise that resolves to an array of agent content fragments.
+
  * @throws An error if the path is not found or is outside the workspace.
  */
 export async function readPathFromWorkspace(
   pathStr: string,
   config: Config,
-): Promise<PartUnion[]> {
+): Promise<AgentContentFragment[]> {
   const workspace = config.getWorkspaceContext();
   const fileService = config.getFileService();
   let absolutePath: string | null = null;
@@ -56,7 +57,7 @@ export async function readPathFromWorkspace(
 
   const stats = await fs.stat(absolutePath);
   if (stats.isDirectory()) {
-    const allParts: PartUnion[] = [];
+    const allParts: AgentContentFragment[] = [];
     allParts.push({
       text: `--- Start of content for directory: ${pathStr} ---\n`,
     });

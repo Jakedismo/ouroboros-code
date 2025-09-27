@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import type {
   Config,
-  GeminiClient,
+  AgentsClient,
   ContentGenerator,
 } from '@ouroboros/ouroboros-code-core';
 import {
@@ -29,7 +29,7 @@ vi.mock('@ouroboros/ouroboros-code-core', () => {
     setCodeAssistGlobalUserSetting = vi.fn();
 
     constructor(
-      _client?: GeminiClient,
+      _client?: AgentsClient,
       _projectId?: string,
       _httpOptions?: Record<string, unknown>,
       _sessionId?: string,
@@ -50,7 +50,7 @@ vi.mock('@ouroboros/ouroboros-code-core', () => {
     Config: vi.fn(),
     CodeAssistServer: MockCodeAssistServer,
     LoggingContentGenerator: MockLoggingContentGenerator,
-    GeminiClient: vi.fn(),
+    AgentsClient: vi.fn(),
     UserTierId: {
       FREE: 'free-tier',
       LEGACY: 'legacy-tier',
@@ -61,7 +61,7 @@ vi.mock('@ouroboros/ouroboros-code-core', () => {
 
 describe('usePrivacySettings', () => {
   let mockConfig: Config;
-  let mockClient: GeminiClient;
+  let mockClient: AgentsClient;
   let mockCodeAssistServer: CodeAssistServer;
   let mockLoggingContentGenerator: LoggingContentGenerator;
 
@@ -102,14 +102,14 @@ describe('usePrivacySettings', () => {
       mockLoggingContentGenerator.getWrapped as ReturnType<typeof vi.fn>
     ).mockReturnValue(mockCodeAssistServer);
 
-    // Create mock GeminiClient
+    // Create mock AgentsClient
     mockClient = {
       getContentGenerator: vi.fn().mockReturnValue(mockLoggingContentGenerator),
-    } as unknown as GeminiClient;
+    } as unknown as AgentsClient;
 
     // Create mock Config
     mockConfig = {
-      getGeminiClient: vi.fn().mockReturnValue(mockClient),
+      getConversationClient: vi.fn().mockReturnValue(mockClient),
     } as unknown as Config;
   });
 
@@ -151,7 +151,7 @@ describe('usePrivacySettings', () => {
       freeTierDataCollectionOptin: true,
     });
 
-    mockClient.getContentGenerator = vi.fn().mockReturnValue(directServer);
+    (mockClient as AgentsClient).getContentGenerator = vi.fn().mockReturnValue(directServer);
 
     const { result } = renderHook(() => usePrivacySettings(mockConfig));
 

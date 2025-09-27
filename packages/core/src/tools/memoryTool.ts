@@ -11,7 +11,7 @@ import {
   Kind,
   ToolConfirmationOutcome,
 } from './tools.js';
-import type { FunctionDeclaration } from '@google/genai';
+import type { ToolFunctionDeclaration } from '../runtime/agentsTypes.js';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { Storage } from '../config/storage.js';
@@ -24,7 +24,7 @@ import type {
 } from './modifiable-tool.js';
 import { ToolErrorType } from './tool-error.js';
 
-const memoryToolSchemaData: FunctionDeclaration = {
+const memoryToolSchemaData: ToolFunctionDeclaration = {
   name: 'save_memory',
   description:
     'Saves a specific piece of information or fact to your long-term memory. Use this when the user explicitly asks you to remember something, or when they state a clear, concise fact that seems important to retain for future interactions.',

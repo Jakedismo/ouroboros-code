@@ -11,8 +11,10 @@ import type { ConfigParameters } from '../config/config.js';
 import { Config, ApprovalMode } from '../config/config.js';
 import { ToolRegistry, DiscoveredTool } from './tool-registry.js';
 import { DiscoveredMCPTool } from './mcp-tool.js';
-import type { FunctionDeclaration, CallableTool } from '@google/genai';
-import { mcpToTool } from '@google/genai';
+import type { JsonSchema } from '../runtime/agentsTypes.js';
+import type { CallableTool } from '../runtime/genaiCompat.js';
+import type { ToolFunctionDeclaration } from '../runtime/agentsTypes.js';
+import { mcpToTool } from '../runtime/genaiCompat.js';
 import { spawn } from 'node:child_process';
 
 import fs from 'node:fs';
@@ -75,9 +77,9 @@ vi.mock('@modelcontextprotocol/sdk/client/sse.js', () => {
 });
 
 // Mock @google/genai mcpToTool
-vi.mock('@google/genai', async () => {
+vi.mock('../runtime/genaiCompat.js', async () => {
   const actualGenai =
-    await vi.importActual<typeof import('@google/genai')>('@google/genai');
+    await vi.importActual<typeof import('../runtime/genaiCompat.js')>('../runtime/genaiCompat.js');
   return {
     ...actualGenai,
     mcpToTool: vi.fn().mockImplementation(() => ({
@@ -89,7 +91,7 @@ vi.mock('@google/genai', async () => {
 
 // Helper to create a mock CallableTool for specific test needs
 const createMockCallableTool = (
-  toolDeclarations: FunctionDeclaration[],
+  toolDeclarations: ToolFunctionDeclaration[],
 ): Mocked<CallableTool> => ({
   tool: vi.fn().mockResolvedValue({ functionDeclarations: toolDeclarations }),
   callTool: vi.fn(),
@@ -263,7 +265,7 @@ describe('ToolRegistry', () => {
       const discoveryCommand = 'my-discovery-command';
       mockConfigGetToolDiscoveryCommand.mockReturnValue(discoveryCommand);
 
-      const unsanitizedToolDeclaration: FunctionDeclaration = {
+      const unsanitizedToolDeclaration: ToolFunctionDeclaration = {
         name: 'tool-with-bad-format',
         description: 'A tool with an invalid format property',
         parametersJsonSchema: {
@@ -330,7 +332,7 @@ describe('ToolRegistry', () => {
       mockConfigGetToolDiscoveryCommand.mockReturnValue(discoveryCommand);
       vi.spyOn(config, 'getToolCallCommand').mockReturnValue('my-call-command');
 
-      const toolDeclaration: FunctionDeclaration = {
+      const toolDeclaration: ToolFunctionDeclaration = {
         name: 'failing-tool',
         description: 'A tool that fails',
         parametersJsonSchema: {
@@ -424,7 +426,7 @@ describe('ToolRegistry', () => {
 
   describe('DiscoveredToolInvocation', () => {
     it('should return the stringified params from getDescription', () => {
-      const tool = new DiscoveredTool(config, 'test-tool', 'A test tool', {});
+      const tool = new DiscoveredTool(config, 'test-tool', 'A test tool', {} as JsonSchema);
       const params = { param: 'testValue' };
       const invocation = tool.build(params);
       const description = invocation.getDescription();

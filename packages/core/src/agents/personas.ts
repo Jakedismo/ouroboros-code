@@ -6,17 +6,17 @@
 
 /**
  * Agent Personas Configuration
- * 
+ *
  * This file defines all available agent personas with their specialized prompts,
  * capabilities, and behavioral patterns. Each agent is an expert in their domain
  * and provides focused assistance for specific software engineering tasks.
- * 
+ *
  * System prompts are loaded from individual markdown files in the prompts directory.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { LSTool } from '../tools/ls.js';
 import { GlobTool } from '../tools/glob.js';
 import { GrepTool } from '../tools/grep.js';
@@ -80,7 +80,12 @@ export const AGENT_CATEGORIES = {
  */
 function loadSystemPrompt(category: string, agentId: string): string {
   try {
-    const promptPath = path.join(__dirname, 'prompts', category, `${agentId}.md`);
+    const promptPath = path.join(
+      __dirname,
+      'prompts',
+      category,
+      `${agentId}.md`,
+    );
     if (fs.existsSync(promptPath)) {
       return fs.readFileSync(promptPath, 'utf-8');
     } else {
@@ -116,9 +121,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Systems Architect',
     emoji: '🏗️',
     category: AGENT_CATEGORIES.ARCHITECTURE,
-    description: 'Designs large-scale distributed systems with focus on scalability and reliability',
-    specialties: ['Enterprise architecture', 'Distributed systems', 'Scalability patterns', 'High availability'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE], 'systems-architect'),
+    description:
+      'Designs large-scale distributed systems with focus on scalability and reliability',
+    specialties: [
+      'Enterprise architecture',
+      'Distributed systems',
+      'Scalability patterns',
+      'High availability',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE],
+      'systems-architect',
+    ),
     temperature: 0.7,
   },
 
@@ -127,9 +141,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'API Designer',
     emoji: '🔌',
     category: AGENT_CATEGORIES.ARCHITECTURE,
-    description: 'Designs RESTful and GraphQL APIs with exceptional developer experience',
-    specialties: ['REST principles', 'GraphQL schemas', 'API versioning', 'OpenAPI specs'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE], 'api-designer'),
+    description:
+      'Designs RESTful and GraphQL APIs with exceptional developer experience',
+    specialties: [
+      'REST principles',
+      'GraphQL schemas',
+      'API versioning',
+      'OpenAPI specs',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE],
+      'api-designer',
+    ),
     temperature: 0.6,
   },
 
@@ -138,9 +161,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Solution Architect',
     emoji: '🎯',
     category: AGENT_CATEGORIES.ARCHITECTURE,
-    description: 'Creates comprehensive solutions that bridge business and technical requirements',
-    specialties: ['Business alignment', 'End-to-end solutions', 'Integration patterns', 'Technology selection'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE], 'solution-architect'),
+    description:
+      'Creates comprehensive solutions that bridge business and technical requirements',
+    specialties: [
+      'Business alignment',
+      'End-to-end solutions',
+      'Integration patterns',
+      'Technology selection',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE],
+      'solution-architect',
+    ),
     temperature: 0.7,
   },
 
@@ -149,9 +181,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Microservices Architect',
     emoji: '🔀',
     category: AGENT_CATEGORIES.ARCHITECTURE,
-    description: 'Specializes in microservices decomposition and distributed system design',
-    specialties: ['Service decomposition', 'Domain boundaries', 'Distributed patterns', 'Event-driven design'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE], 'microservices-architect'),
+    description:
+      'Specializes in microservices decomposition and distributed system design',
+    specialties: [
+      'Service decomposition',
+      'Domain boundaries',
+      'Distributed patterns',
+      'Event-driven design',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE],
+      'microservices-architect',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -161,9 +202,19 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Cloud Architect',
     emoji: '☁️',
     category: AGENT_CATEGORIES.ARCHITECTURE,
-    description: 'Designs cloud-native architectures and multi-cloud strategies',
-    specialties: ['AWS', 'Azure', 'GCP', 'Multi-cloud', 'Cloud-native patterns'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE], 'cloud-architect'),
+    description:
+      'Designs cloud-native architectures and multi-cloud strategies',
+    specialties: [
+      'AWS',
+      'Azure',
+      'GCP',
+      'Multi-cloud',
+      'Cloud-native patterns',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.ARCHITECTURE],
+      'cloud-architect',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -174,9 +225,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Machine Learning Engineer',
     emoji: '🤖',
     category: AGENT_CATEGORIES.AI_ML,
-    description: 'Implements production ML systems with comprehensive MLOps practices',
-    specialties: ['Model training', 'MLOps', 'Feature engineering', 'Model serving'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.AI_ML], 'ml-engineer'),
+    description:
+      'Implements production ML systems with comprehensive MLOps practices',
+    specialties: [
+      'Model training',
+      'MLOps',
+      'Feature engineering',
+      'Model serving',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.AI_ML],
+      'ml-engineer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -186,9 +246,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Data Scientist',
     emoji: '📊',
     category: AGENT_CATEGORIES.AI_ML,
-    description: 'Transforms business problems into data-driven insights and solutions',
-    specialties: ['Statistical analysis', 'Predictive modeling', 'Data visualization', 'Business insights'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.AI_ML], 'data-scientist'),
+    description:
+      'Transforms business problems into data-driven insights and solutions',
+    specialties: [
+      'Statistical analysis',
+      'Predictive modeling',
+      'Data visualization',
+      'Business insights',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.AI_ML],
+      'data-scientist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -198,9 +267,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Computer Vision Expert',
     emoji: '👁️',
     category: AGENT_CATEGORIES.AI_ML,
-    description: 'Develops advanced computer vision systems using deep learning',
-    specialties: ['Image processing', 'Object detection', 'Deep learning', 'Video analysis'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.AI_ML], 'computer-vision-expert'),
+    description:
+      'Develops advanced computer vision systems using deep learning',
+    specialties: [
+      'Image processing',
+      'Object detection',
+      'Deep learning',
+      'Video analysis',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.AI_ML],
+      'computer-vision-expert',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -210,9 +288,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'NLP Specialist',
     emoji: '🗣️',
     category: AGENT_CATEGORIES.AI_ML,
-    description: 'Creates sophisticated natural language processing and understanding systems',
-    specialties: ['Language models', 'Text processing', 'Sentiment analysis', 'Conversational AI'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.AI_ML], 'nlp-specialist'),
+    description:
+      'Creates sophisticated natural language processing and understanding systems',
+    specialties: [
+      'Language models',
+      'Text processing',
+      'Sentiment analysis',
+      'Conversational AI',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.AI_ML],
+      'nlp-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -222,9 +309,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'LLM Integration Expert',
     emoji: '🧠',
     category: AGENT_CATEGORIES.AI_ML,
-    description: 'Specializes in LLM integration, RAG systems, and AI agent architectures',
-    specialties: ['LLM APIs', 'RAG systems', 'Agent frameworks', 'Prompt engineering'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.AI_ML], 'llm-integration-expert'),
+    description:
+      'Specializes in LLM integration, RAG systems, and AI agent architectures',
+    specialties: [
+      'LLM APIs',
+      'RAG systems',
+      'Agent frameworks',
+      'Prompt engineering',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.AI_ML],
+      'llm-integration-expert',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -235,9 +331,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Security Auditor',
     emoji: '🔒',
     category: AGENT_CATEGORIES.SECURITY,
-    description: 'Conducts comprehensive security audits and vulnerability assessments',
-    specialties: ['Vulnerability assessment', 'Security auditing', 'Threat modeling', 'Risk analysis'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.SECURITY], 'security-auditor'),
+    description:
+      'Conducts comprehensive security audits and vulnerability assessments',
+    specialties: [
+      'Vulnerability assessment',
+      'Security auditing',
+      'Threat modeling',
+      'Risk analysis',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.SECURITY],
+      'security-auditor',
+    ),
     suggestedTools: ['read_file', 'write_file', 'grep', 'web_fetch'],
     temperature: 0.6,
   },
@@ -247,9 +352,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'DevSecOps Engineer',
     emoji: '🛡️',
     category: AGENT_CATEGORIES.SECURITY,
-    description: 'Integrates security into the development lifecycle with automation',
-    specialties: ['Shift-left security', 'Security automation', 'SAST/DAST', 'Container security'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.SECURITY], 'devsecops-engineer'),
+    description:
+      'Integrates security into the development lifecycle with automation',
+    specialties: [
+      'Shift-left security',
+      'Security automation',
+      'SAST/DAST',
+      'Container security',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.SECURITY],
+      'devsecops-engineer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'grep', 'web_fetch'],
     temperature: 0.6,
   },
@@ -260,8 +374,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '🔐',
     category: AGENT_CATEGORIES.SECURITY,
     description: 'Implements privacy-by-design principles and GDPR compliance',
-    specialties: ['Privacy by design', 'GDPR compliance', 'Data protection', 'Consent management'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.SECURITY], 'privacy-engineer'),
+    specialties: [
+      'Privacy by design',
+      'GDPR compliance',
+      'Data protection',
+      'Consent management',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.SECURITY],
+      'privacy-engineer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.5,
   },
@@ -271,9 +393,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Compliance Specialist',
     emoji: '📋',
     category: AGENT_CATEGORIES.SECURITY,
-    description: 'Ensures adherence to regulatory frameworks and industry standards',
-    specialties: ['Regulatory compliance', 'Audit preparation', 'Policy development', 'Risk management'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.SECURITY], 'compliance-specialist'),
+    description:
+      'Ensures adherence to regulatory frameworks and industry standards',
+    specialties: [
+      'Regulatory compliance',
+      'Audit preparation',
+      'Policy development',
+      'Risk management',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.SECURITY],
+      'compliance-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.5,
   },
@@ -284,8 +415,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '🎯',
     category: AGENT_CATEGORIES.SECURITY,
     description: 'Performs ethical hacking and advanced security testing',
-    specialties: ['Ethical hacking', 'Security testing', 'Exploit development', 'Red teaming'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.SECURITY], 'penetration-tester'),
+    specialties: [
+      'Ethical hacking',
+      'Security testing',
+      'Exploit development',
+      'Red teaming',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.SECURITY],
+      'penetration-tester',
+    ),
     suggestedTools: ['read_file', 'write_file', 'grep', 'web_fetch'],
     temperature: 0.7,
   },
@@ -296,9 +435,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Performance Engineer',
     emoji: '⚡',
     category: AGENT_CATEGORIES.PERFORMANCE,
-    description: 'Optimizes system performance through profiling and load testing',
-    specialties: ['Performance profiling', 'Load testing', 'Bottleneck analysis', 'Optimization'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.PERFORMANCE], 'performance-engineer'),
+    description:
+      'Optimizes system performance through profiling and load testing',
+    specialties: [
+      'Performance profiling',
+      'Load testing',
+      'Bottleneck analysis',
+      'Optimization',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.PERFORMANCE],
+      'performance-engineer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'grep', 'web_fetch'],
     temperature: 0.6,
   },
@@ -309,8 +457,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '📈',
     category: AGENT_CATEGORIES.PERFORMANCE,
     description: 'Designs systems for massive scale and high availability',
-    specialties: ['Horizontal scaling', 'Distributed systems', 'Auto-scaling', 'Capacity planning'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.PERFORMANCE], 'scalability-architect'),
+    specialties: [
+      'Horizontal scaling',
+      'Distributed systems',
+      'Auto-scaling',
+      'Capacity planning',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.PERFORMANCE],
+      'scalability-architect',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -320,9 +476,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Database Optimizer',
     emoji: '🗄️',
     category: AGENT_CATEGORIES.PERFORMANCE,
-    description: 'Optimizes database performance through query tuning and indexing',
-    specialties: ['Query optimization', 'Index design', 'Database tuning', 'Performance analysis'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.PERFORMANCE], 'database-optimizer'),
+    description:
+      'Optimizes database performance through query tuning and indexing',
+    specialties: [
+      'Query optimization',
+      'Index design',
+      'Database tuning',
+      'Performance analysis',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.PERFORMANCE],
+      'database-optimizer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'grep', 'web_fetch'],
     temperature: 0.6,
   },
@@ -332,9 +497,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Caching Specialist',
     emoji: '💾',
     category: AGENT_CATEGORIES.PERFORMANCE,
-    description: 'Implements sophisticated caching strategies and invalidation patterns',
-    specialties: ['Cache design', 'Distributed caching', 'Cache invalidation', 'Performance optimization'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.PERFORMANCE], 'caching-specialist'),
+    description:
+      'Implements sophisticated caching strategies and invalidation patterns',
+    specialties: [
+      'Cache design',
+      'Distributed caching',
+      'Cache invalidation',
+      'Performance optimization',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.PERFORMANCE],
+      'caching-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -344,9 +518,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Load Testing Engineer',
     emoji: '🎯',
     category: AGENT_CATEGORIES.PERFORMANCE,
-    description: 'Designs and executes comprehensive performance testing strategies',
-    specialties: ['Load testing', 'Stress testing', 'Performance benchmarking', 'Capacity testing'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.PERFORMANCE], 'load-testing-engineer'),
+    description:
+      'Designs and executes comprehensive performance testing strategies',
+    specialties: [
+      'Load testing',
+      'Stress testing',
+      'Performance benchmarking',
+      'Capacity testing',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.PERFORMANCE],
+      'load-testing-engineer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -357,9 +540,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Database Architect',
     emoji: '🏛️',
     category: AGENT_CATEGORIES.DATABASE,
-    description: 'Designs robust database architectures and data modeling strategies',
-    specialties: ['Data modeling', 'Database design', 'Schema architecture', 'Migration planning'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DATABASE], 'database-architect'),
+    description:
+      'Designs robust database architectures and data modeling strategies',
+    specialties: [
+      'Data modeling',
+      'Database design',
+      'Schema architecture',
+      'Migration planning',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DATABASE],
+      'database-architect',
+    ),
     suggestedTools: ['read_file', 'write_file', 'grep', 'web_fetch'],
     temperature: 0.6,
   },
@@ -370,8 +562,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '🔧',
     category: AGENT_CATEGORIES.DATABASE,
     description: 'Builds scalable data pipelines and ETL/ELT processes',
-    specialties: ['Data pipelines', 'ETL/ELT', 'Stream processing', 'Data infrastructure'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DATABASE], 'data-engineer'),
+    specialties: [
+      'Data pipelines',
+      'ETL/ELT',
+      'Stream processing',
+      'Data infrastructure',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DATABASE],
+      'data-engineer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -381,9 +581,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Data Analyst',
     emoji: '📈',
     category: AGENT_CATEGORIES.DATABASE,
-    description: 'Transforms data into actionable business insights through analysis',
-    specialties: ['Business intelligence', 'Data visualization', 'Statistical analysis', 'Reporting'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DATABASE], 'data-analyst'),
+    description:
+      'Transforms data into actionable business insights through analysis',
+    specialties: [
+      'Business intelligence',
+      'Data visualization',
+      'Statistical analysis',
+      'Reporting',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DATABASE],
+      'data-analyst',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -393,9 +602,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Big Data Specialist',
     emoji: '🌊',
     category: AGENT_CATEGORIES.DATABASE,
-    description: 'Handles massive datasets using distributed computing frameworks',
-    specialties: ['Apache Spark', 'Hadoop ecosystem', 'Distributed computing', 'Real-time processing'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DATABASE], 'big-data-specialist'),
+    description:
+      'Handles massive datasets using distributed computing frameworks',
+    specialties: [
+      'Apache Spark',
+      'Hadoop ecosystem',
+      'Distributed computing',
+      'Real-time processing',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DATABASE],
+      'big-data-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -405,9 +623,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Data Warehouse Architect',
     emoji: '🏭',
     category: AGENT_CATEGORIES.DATABASE,
-    description: 'Designs enterprise data warehousing solutions and dimensional models',
-    specialties: ['Dimensional modeling', 'Data warehousing', 'OLAP systems', 'Analytics architecture'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DATABASE], 'data-warehouse-architect'),
+    description:
+      'Designs enterprise data warehousing solutions and dimensional models',
+    specialties: [
+      'Dimensional modeling',
+      'Data warehousing',
+      'OLAP systems',
+      'Analytics architecture',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DATABASE],
+      'data-warehouse-architect',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -419,9 +646,22 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '🔄',
     category: AGENT_CATEGORIES.DEVOPS,
     description: 'Implements CI/CD pipelines and infrastructure automation',
-    specialties: ['CI/CD', 'Infrastructure as code', 'Automation', 'Configuration management'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DEVOPS], 'devops-engineer'),
-    suggestedTools: ['read_file', 'write_file', 'run_shell_command', 'web_fetch'],
+    specialties: [
+      'CI/CD',
+      'Infrastructure as code',
+      'Automation',
+      'Configuration management',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DEVOPS],
+      'devops-engineer',
+    ),
+    suggestedTools: [
+      'read_file',
+      'write_file',
+      'run_shell_command',
+      'web_fetch',
+    ],
     temperature: 0.6,
   },
 
@@ -431,9 +671,22 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '☸️',
     category: AGENT_CATEGORIES.DEVOPS,
     description: 'Manages container orchestration and cloud-native deployments',
-    specialties: ['Kubernetes', 'Container orchestration', 'Helm charts', 'Cloud-native'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DEVOPS], 'kubernetes-operator'),
-    suggestedTools: ['read_file', 'write_file', 'run_shell_command', 'web_fetch'],
+    specialties: [
+      'Kubernetes',
+      'Container orchestration',
+      'Helm charts',
+      'Cloud-native',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DEVOPS],
+      'kubernetes-operator',
+    ),
+    suggestedTools: [
+      'read_file',
+      'write_file',
+      'run_shell_command',
+      'web_fetch',
+    ],
     temperature: 0.6,
   },
 
@@ -443,8 +696,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '⛅',
     category: AGENT_CATEGORIES.DEVOPS,
     description: 'Manages multi-cloud infrastructure and migration strategies',
-    specialties: ['Cloud platforms', 'Infrastructure automation', 'Migration', 'Cost optimization'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DEVOPS], 'cloud-engineer'),
+    specialties: [
+      'Cloud platforms',
+      'Infrastructure automation',
+      'Migration',
+      'Cost optimization',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DEVOPS],
+      'cloud-engineer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -454,9 +715,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Infrastructure Architect',
     emoji: '🏗️',
     category: AGENT_CATEGORIES.DEVOPS,
-    description: 'Designs enterprise infrastructure and hybrid cloud architectures',
-    specialties: ['Infrastructure design', 'Enterprise architecture', 'Hybrid cloud', 'Network design'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DEVOPS], 'infrastructure-architect'),
+    description:
+      'Designs enterprise infrastructure and hybrid cloud architectures',
+    specialties: [
+      'Infrastructure design',
+      'Enterprise architecture',
+      'Hybrid cloud',
+      'Network design',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DEVOPS],
+      'infrastructure-architect',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -466,9 +736,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Site Reliability Engineer',
     emoji: '🎯',
     category: AGENT_CATEGORIES.DEVOPS,
-    description: 'Ensures system reliability with SLOs, monitoring, and incident response',
-    specialties: ['SRE practices', 'Monitoring', 'Incident response', 'System reliability'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DEVOPS], 'site-reliability-engineer'),
+    description:
+      'Ensures system reliability with SLOs, monitoring, and incident response',
+    specialties: [
+      'SRE practices',
+      'Monitoring',
+      'Incident response',
+      'System reliability',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DEVOPS],
+      'site-reliability-engineer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -480,8 +759,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '⚛️',
     category: AGENT_CATEGORIES.FRONTEND,
     description: 'Expert in modern React development and state management',
-    specialties: ['React', 'Hooks', 'State management', 'Performance optimization'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.FRONTEND], 'react-specialist'),
+    specialties: [
+      'React',
+      'Hooks',
+      'State management',
+      'Performance optimization',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.FRONTEND],
+      'react-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -492,8 +779,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '🏗️',
     category: AGENT_CATEGORIES.FRONTEND,
     description: 'Designs scalable frontend architectures and micro-frontends',
-    specialties: ['Frontend architecture', 'Micro-frontends', 'Performance', 'Scalability'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.FRONTEND], 'frontend-architect'),
+    specialties: [
+      'Frontend architecture',
+      'Micro-frontends',
+      'Performance',
+      'Scalability',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.FRONTEND],
+      'frontend-architect',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -503,9 +798,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'UI/UX Developer',
     emoji: '🎨',
     category: AGENT_CATEGORIES.FRONTEND,
-    description: 'Creates exceptional user interfaces with design system expertise',
-    specialties: ['UI/UX design', 'Design systems', 'Accessibility', 'User experience'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.FRONTEND], 'ui-ux-developer'),
+    description:
+      'Creates exceptional user interfaces with design system expertise',
+    specialties: [
+      'UI/UX design',
+      'Design systems',
+      'Accessibility',
+      'User experience',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.FRONTEND],
+      'ui-ux-developer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -517,7 +821,10 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     category: AGENT_CATEGORIES.FRONTEND,
     description: 'Develops cross-platform mobile applications',
     specialties: ['React Native', 'Flutter', 'Mobile UI', 'Cross-platform'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.FRONTEND], 'mobile-developer'),
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.FRONTEND],
+      'mobile-developer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -528,8 +835,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '⚡',
     category: AGENT_CATEGORIES.FRONTEND,
     description: 'Optimizes web applications for speed and Core Web Vitals',
-    specialties: ['Web performance', 'Core Web Vitals', 'Optimization', 'Frontend performance'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.FRONTEND], 'web-performance-specialist'),
+    specialties: [
+      'Web performance',
+      'Core Web Vitals',
+      'Optimization',
+      'Frontend performance',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.FRONTEND],
+      'web-performance-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -541,8 +856,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '🏗️',
     category: AGENT_CATEGORIES.BACKEND,
     description: 'Designs scalable backend systems and API architectures',
-    specialties: ['Backend architecture', 'API design', 'Scalability', 'System integration'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.BACKEND], 'backend-architect'),
+    specialties: [
+      'Backend architecture',
+      'API design',
+      'Scalability',
+      'System integration',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.BACKEND],
+      'backend-architect',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -552,9 +875,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Node.js Specialist',
     emoji: '🟢',
     category: AGENT_CATEGORIES.BACKEND,
-    description: 'Builds high-performance Node.js applications with event-driven architecture',
-    specialties: ['Node.js', 'Event-driven architecture', 'Async programming', 'Real-time systems'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.BACKEND], 'node-js-specialist'),
+    description:
+      'Builds high-performance Node.js applications with event-driven architecture',
+    specialties: [
+      'Node.js',
+      'Event-driven architecture',
+      'Async programming',
+      'Real-time systems',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.BACKEND],
+      'node-js-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -564,9 +896,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Python Specialist',
     emoji: '🐍',
     category: AGENT_CATEGORIES.BACKEND,
-    description: 'Develops Python web services and data processing applications',
-    specialties: ['Python', 'Web frameworks', 'Data processing', 'API development'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.BACKEND], 'python-specialist'),
+    description:
+      'Develops Python web services and data processing applications',
+    specialties: [
+      'Python',
+      'Web frameworks',
+      'Data processing',
+      'API development',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.BACKEND],
+      'python-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -576,9 +917,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Java Specialist',
     emoji: '☕',
     category: AGENT_CATEGORIES.BACKEND,
-    description: 'Creates enterprise Java applications with Spring ecosystem expertise',
-    specialties: ['Java', 'Spring ecosystem', 'Enterprise applications', 'JVM optimization'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.BACKEND], 'java-specialist'),
+    description:
+      'Creates enterprise Java applications with Spring ecosystem expertise',
+    specialties: [
+      'Java',
+      'Spring ecosystem',
+      'Enterprise applications',
+      'JVM optimization',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.BACKEND],
+      'java-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -589,8 +939,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '🐹',
     category: AGENT_CATEGORIES.BACKEND,
     description: 'Builds concurrent systems and microservices with Go',
-    specialties: ['Go programming', 'Concurrency', 'Microservices', 'System programming'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.BACKEND], 'go-specialist'),
+    specialties: [
+      'Go programming',
+      'Concurrency',
+      'Microservices',
+      'System programming',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.BACKEND],
+      'go-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -603,7 +961,10 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     category: AGENT_CATEGORIES.DOMAIN,
     description: 'Develops smart contracts and decentralized applications',
     specialties: ['Smart contracts', 'DApps', 'Web3', 'Blockchain protocols'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DOMAIN], 'blockchain-developer'),
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DOMAIN],
+      'blockchain-developer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -614,8 +975,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '🌐',
     category: AGENT_CATEGORIES.DOMAIN,
     description: 'Creates connected device ecosystems and sensor networks',
-    specialties: ['IoT architecture', 'Sensor networks', 'Device connectivity', 'Edge computing'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DOMAIN], 'iot-specialist'),
+    specialties: [
+      'IoT architecture',
+      'Sensor networks',
+      'Device connectivity',
+      'Edge computing',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DOMAIN],
+      'iot-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -625,9 +994,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Game Development Specialist',
     emoji: '🎮',
     category: AGENT_CATEGORIES.DOMAIN,
-    description: 'Creates games and interactive experiences with modern engines',
-    specialties: ['Game engines', 'Gameplay programming', 'Graphics programming', 'Game design'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DOMAIN], 'gamedev-specialist'),
+    description:
+      'Creates games and interactive experiences with modern engines',
+    specialties: [
+      'Game engines',
+      'Gameplay programming',
+      'Graphics programming',
+      'Game design',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DOMAIN],
+      'gamedev-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.8,
   },
@@ -637,9 +1015,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'IoT Edge Specialist',
     emoji: '📡',
     category: AGENT_CATEGORIES.DOMAIN,
-    description: 'Develops edge computing solutions for IoT and real-time processing',
-    specialties: ['Edge computing', 'Real-time processing', 'Embedded systems', 'IoT protocols'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DOMAIN], 'iot-edge-specialist'),
+    description:
+      'Develops edge computing solutions for IoT and real-time processing',
+    specialties: [
+      'Edge computing',
+      'Real-time processing',
+      'Embedded systems',
+      'IoT protocols',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DOMAIN],
+      'iot-edge-specialist',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -649,9 +1036,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Embedded Systems Engineer',
     emoji: '🔌',
     category: AGENT_CATEGORIES.DOMAIN,
-    description: 'Programs embedded systems, firmware, and real-time applications',
-    specialties: ['Embedded programming', 'Firmware development', 'Real-time systems', 'Hardware integration'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.DOMAIN], 'embedded-systems-engineer'),
+    description:
+      'Programs embedded systems, firmware, and real-time applications',
+    specialties: [
+      'Embedded programming',
+      'Firmware development',
+      'Real-time systems',
+      'Hardware integration',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.DOMAIN],
+      'embedded-systems-engineer',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -662,9 +1058,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Code Quality Analyst',
     emoji: '📏',
     category: AGENT_CATEGORIES.PROCESS,
-    description: 'Ensures code quality through static analysis and technical debt management',
-    specialties: ['Static analysis', 'Code metrics', 'Technical debt', 'Quality gates'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.PROCESS], 'code-quality-analyst'),
+    description:
+      'Ensures code quality through static analysis and technical debt management',
+    specialties: [
+      'Static analysis',
+      'Code metrics',
+      'Technical debt',
+      'Quality gates',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.PROCESS],
+      'code-quality-analyst',
+    ),
     suggestedTools: ['read_file', 'write_file', 'grep', 'web_fetch'],
     temperature: 0.6,
   },
@@ -674,10 +1079,24 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Test Automation Engineer',
     emoji: '🤖',
     category: AGENT_CATEGORIES.PROCESS,
-    description: 'Implements comprehensive test automation frameworks and strategies',
-    specialties: ['Test automation', 'Testing frameworks', 'CI/CD integration', 'Quality assurance'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.PROCESS], 'test-automation-engineer'),
-    suggestedTools: ['read_file', 'write_file', 'run_shell_command', 'web_fetch'],
+    description:
+      'Implements comprehensive test automation frameworks and strategies',
+    specialties: [
+      'Test automation',
+      'Testing frameworks',
+      'CI/CD integration',
+      'Quality assurance',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.PROCESS],
+      'test-automation-engineer',
+    ),
+    suggestedTools: [
+      'read_file',
+      'write_file',
+      'run_shell_command',
+      'web_fetch',
+    ],
     temperature: 0.6,
   },
 
@@ -687,8 +1106,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '🏃',
     category: AGENT_CATEGORIES.PROCESS,
     description: 'Guides agile transformation and team development practices',
-    specialties: ['Agile methodologies', 'Team coaching', 'Process improvement', 'Scrum/Kanban'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.PROCESS], 'agile-coach'),
+    specialties: [
+      'Agile methodologies',
+      'Team coaching',
+      'Process improvement',
+      'Scrum/Kanban',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.PROCESS],
+      'agile-coach',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.7,
   },
@@ -698,9 +1125,18 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     name: 'Project Manager',
     emoji: '📋',
     category: AGENT_CATEGORIES.PROCESS,
-    description: 'Manages software projects with focus on delivery and stakeholder communication',
-    specialties: ['Project planning', 'Stakeholder management', 'Risk management', 'Delivery coordination'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.PROCESS], 'project-manager'),
+    description:
+      'Manages software projects with focus on delivery and stakeholder communication',
+    specialties: [
+      'Project planning',
+      'Stakeholder management',
+      'Risk management',
+      'Delivery coordination',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.PROCESS],
+      'project-manager',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -711,8 +1147,16 @@ const RAW_AGENT_PERSONAS: AgentPersona[] = [
     emoji: '✅',
     category: AGENT_CATEGORIES.PROCESS,
     description: 'Leads quality assurance strategy and testing team management',
-    specialties: ['QA strategy', 'Testing leadership', 'Quality processes', 'Team management'],
-    systemPrompt: loadSystemPrompt(CATEGORY_DIRS[AGENT_CATEGORIES.PROCESS], 'qa-manager'),
+    specialties: [
+      'QA strategy',
+      'Testing leadership',
+      'Quality processes',
+      'Team management',
+    ],
+    systemPrompt: loadSystemPrompt(
+      CATEGORY_DIRS[AGENT_CATEGORIES.PROCESS],
+      'qa-manager',
+    ),
     suggestedTools: ['read_file', 'write_file', 'web_fetch'],
     temperature: 0.6,
   },
@@ -727,18 +1171,18 @@ export const AGENT_PERSONAS: AgentPersona[] = RAW_AGENT_PERSONAS.map(
 
 // Helper function to get agents by category
 export function getAgentsByCategory(category: string): AgentPersona[] {
-  return AGENT_PERSONAS.filter(agent => agent.category === category);
+  return AGENT_PERSONAS.filter((agent) => agent.category === category);
 }
 
 // Helper function to find agent by ID
 export function getAgentById(id: string): AgentPersona | undefined {
-  return AGENT_PERSONAS.find(agent => agent.id === id);
+  return AGENT_PERSONAS.find((agent) => agent.id === id);
 }
 
 // Helper function to search agents by specialty
 export function searchAgentsBySpecialty(specialty: string): AgentPersona[] {
   const searchTerm = specialty.toLowerCase();
-  return AGENT_PERSONAS.filter(agent => 
-    agent.specialties.some(s => s.toLowerCase().includes(searchTerm))
+  return AGENT_PERSONAS.filter((agent) =>
+    agent.specialties.some((s) => s.toLowerCase().includes(searchTerm)),
   );
 }

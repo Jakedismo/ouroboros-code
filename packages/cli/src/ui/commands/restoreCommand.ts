@@ -89,7 +89,7 @@ async function restoreAction(
     }
 
     if (toolCallData.clientHistory) {
-      await config?.getGeminiClient()?.setHistory(toolCallData.clientHistory);
+      await config?.getConversationClient()?.setHistory(toolCallData.clientHistory as any);
     }
 
     if (toolCallData.commitHash) {

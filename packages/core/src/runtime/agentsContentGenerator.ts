@@ -5,12 +5,17 @@ import type {
   CountTokensResponse,
   EmbedContentParameters,
   EmbedContentResponse,
+  FunctionCall,
   GenerateContentParameters,
   GenerateContentResponse,
-} from '@google/genai';
+  GenerateContentResponseCandidate,
+  GenerateContentResponseUsageMetadata,
+  Part,
+  FinishReason,
+} from './genaiCompat.js';
 import type { Config } from '../config/config.js';
 import type { ContentGenerator } from '../core/contentGenerator.js';
-import type { UnifiedAgentMessage, UnifiedAgentStreamOptions } from './types.js';
+import type { UnifiedAgentMessage, UnifiedAgentStreamOptions, UnifiedAgentToolCall } from './types.js';
 import { UnifiedAgentsClient } from './unifiedAgentsClient.js';
 
 interface AgentsContentGeneratorOptions {
@@ -32,7 +37,15 @@ export class AgentsContentGenerator implements ContentGenerator {
     userPromptId: string,
   ): Promise<GenerateContentResponse> {
     const result = await this.runAgentsRequest(request, userPromptId, false);
-    return this.buildGenerateContentResponse(result.text ?? '');
+    return this.buildResponseChunk({
+      textParts: result.text ? [result.text] : undefined,
+      functionCalls:
+        result.functionCalls && result.functionCalls.length > 0
+          ? result.functionCalls
+          : undefined,
+      finishReason: 'STOP',
+      usage: result.usage,
+    });
   }
 
   async generateContentStream(
@@ -41,7 +54,7 @@ export class AgentsContentGenerator implements ContentGenerator {
   ): Promise<AsyncGenerator<GenerateContentResponse>> {
     const result = await this.runAgentsRequest(request, userPromptId, true);
     if (!result.stream) {
-      async function* empty() {}
+      async function* empty(): AsyncGenerator<GenerateContentResponse> {}
       return empty();
     }
     return result.stream;
@@ -68,6 +81,8 @@ export class AgentsContentGenerator implements ContentGenerator {
   ): Promise<{
     text?: string;
     stream?: AsyncGenerator<GenerateContentResponse>;
+    functionCalls?: FunctionCall[];
+    usage?: GenerateContentResponseUsageMetadata;
   }> {
     const providerId = this.config.getProvider();
     const model = request.model || this.getDefaultModel();
@@ -85,32 +100,104 @@ export class AgentsContentGenerator implements ContentGenerator {
 
     if (!streaming) {
       let finalText = '';
+      const functionCalls: FunctionCall[] = [];
+      let usage: GenerateContentResponseUsageMetadata | undefined;
 
-      for await (const event of this.client.streamResponse(session, messages, streamOptions)) {
+      for await (const event of this.client.streamResponse(
+        session,
+        messages,
+        streamOptions,
+      )) {
+        if (event.type === 'usage') {
+          usage = this.mapUsage(event.usage);
+          continue;
+        }
+
         if (event.type === 'text-delta') {
           finalText += event.delta ?? '';
+          continue;
         }
+
+        if (event.type === 'tool-call') {
+          functionCalls.push(this.normalizeFunctionCall(event.toolCall));
+          continue;
+        }
+
+        if (event.type === 'error') {
+          throw event.error;
+        }
+
         if (event.type === 'final') {
-          finalText = event.message.content ?? finalText;
+          const content = event.message.content;
+          if (typeof content === 'string' && content.length > 0) {
+            finalText = content;
+          }
         }
       }
 
-      return { text: finalText };
+      return { text: finalText, functionCalls, usage };
     }
 
     const self = this;
 
     async function* streamGenerator(): AsyncGenerator<GenerateContentResponse> {
       let accumulatedText = '';
+      let pendingUsage: GenerateContentResponseUsageMetadata | undefined;
 
-      for await (const event of self.client.streamResponse(session, messages, streamOptions)) {
-        if (event.type === 'text-delta' && event.delta) {
-          accumulatedText += event.delta;
-          yield self.buildStreamingResponse(event.delta, false);
+      for await (const event of self.client.streamResponse(
+        session,
+        messages,
+        streamOptions,
+      )) {
+        if (event.type === 'usage') {
+          pendingUsage = self.mapUsage(event.usage);
+          continue;
         }
+
+        if (event.type === 'text-delta') {
+          const delta = event.delta ?? '';
+          if (delta) {
+            accumulatedText += delta;
+            yield self.buildResponseChunk({
+              textParts: [delta],
+              usage: pendingUsage,
+            });
+            pendingUsage = undefined;
+          }
+          continue;
+        }
+
+        if (event.type === 'tool-call') {
+          yield self.buildResponseChunk({
+            functionCalls: [self.normalizeFunctionCall(event.toolCall)],
+            usage: pendingUsage,
+          });
+          pendingUsage = undefined;
+          continue;
+        }
+
+        if (event.type === 'error') {
+          throw event.error;
+        }
+
         if (event.type === 'final') {
-          const content = event.message.content ?? accumulatedText;
-          yield self.buildStreamingResponse(content, true);
+          const finalText = event.message.content ?? '';
+          const remaining = finalText.startsWith(accumulatedText)
+            ? finalText.slice(accumulatedText.length)
+            : finalText;
+          if (remaining) {
+            accumulatedText += remaining;
+            yield self.buildResponseChunk({
+              textParts: [remaining],
+              usage: pendingUsage,
+            });
+            pendingUsage = undefined;
+          }
+          yield self.buildResponseChunk({
+            finishReason: 'STOP' as FinishReason,
+            usage: pendingUsage,
+          });
+          pendingUsage = undefined;
         }
       }
     }
@@ -267,44 +354,105 @@ export class AgentsContentGenerator implements ContentGenerator {
     return (content as string[]).join('\n');
   }
 
-  private buildGenerateContentResponse(text: string): GenerateContentResponse {
-    return {
-      candidates: [
-        {
-          content: {
-            parts: [{ text }],
-            role: 'model',
-          },
-          index: 0,
-          finishReason: 'STOP' as any,
-        },
-      ],
-      usageMetadata: {
-        promptTokenCount: 0,
-        candidatesTokenCount: 0,
-        totalTokenCount: 0,
-      } as any,
-    } as GenerateContentResponse;
+  private buildResponseChunk(options: {
+    textParts?: string[];
+    functionCalls?: FunctionCall[];
+    finishReason?: FinishReason;
+    usage?: GenerateContentResponseUsageMetadata;
+  }): GenerateContentResponse {
+    const parts: Part[] = [];
+
+    for (const text of options.textParts ?? []) {
+      if (typeof text === 'string' && text.length > 0) {
+        parts.push({ text });
+      }
+    }
+
+    const normalizedCalls = (options.functionCalls ?? []).map((call) => ({
+      ...call,
+      args: call.args ?? {},
+    }));
+
+    for (const call of normalizedCalls) {
+      parts.push({ functionCall: call });
+    }
+
+    const candidate: GenerateContentResponseCandidate = {
+      index: 0,
+    };
+
+    if (parts.length > 0) {
+      candidate.content = {
+        role: 'model',
+        parts,
+      };
+    }
+
+    if (normalizedCalls.length > 0) {
+      candidate.functionCalls = normalizedCalls;
+    }
+
+    if (options.finishReason) {
+      candidate.finishReason = options.finishReason;
+    }
+
+    const response: GenerateContentResponse = {
+      candidates: [candidate],
+    };
+
+    if (options.usage) {
+      response.usageMetadata = options.usage;
+    }
+
+    return response;
   }
 
-  private buildStreamingResponse(text: string, done: boolean): GenerateContentResponse {
+  private normalizeFunctionCall(call: UnifiedAgentToolCall): FunctionCall {
     return {
-      candidates: [
-        {
-          content: {
-            parts: [{ text }],
-            role: 'model',
-          },
-          index: 0,
-          finishReason: done ? ('STOP' as any) : undefined,
-        },
-      ],
-      usageMetadata: {
-        promptTokenCount: 0,
-        candidatesTokenCount: 0,
-        totalTokenCount: 0,
-      } as any,
-    } as GenerateContentResponse;
+      id: call.id,
+      name: call.name,
+      args: this.normalizeToolArguments(call.arguments),
+    };
+  }
+
+  private normalizeToolArguments(value: unknown): Record<string, unknown> {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object') {
+          return { ...(parsed as Record<string, unknown>) };
+        }
+        return { value: parsed };
+      } catch {
+        return { value };
+      }
+    }
+
+    if (Array.isArray(value)) {
+      return { value };
+    }
+
+    if (value && typeof value === 'object') {
+      return { ...(value as Record<string, unknown>) };
+    }
+
+    return {};
+  }
+
+  private mapUsage(usage: unknown): GenerateContentResponseUsageMetadata | undefined {
+    if (!usage || typeof usage !== 'object') {
+      return undefined;
+    }
+
+    const numericEntries: GenerateContentResponseUsageMetadata = {};
+
+    for (const [key, value] of Object.entries(usage as Record<string, unknown>)) {
+      if (typeof value === 'number') {
+        numericEntries[key] = value;
+      }
+    }
+
+    return Object.keys(numericEntries).length > 0 ? numericEntries : undefined;
   }
 
   private getDefaultModel(): string {

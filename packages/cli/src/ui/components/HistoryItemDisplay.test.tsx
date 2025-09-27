@@ -8,7 +8,7 @@ import { render } from 'ink-testing-library';
 import { describe, it, expect, vi } from 'vitest';
 import { HistoryItemDisplay } from './HistoryItemDisplay.js';
 import type { HistoryItem } from '../types.js';
-import { MessageType } from '../types.js';
+import { MessageType, ToolCallStatus } from '../types.js';
 import { SessionStatsProvider } from '../contexts/SessionContext.js';
 import type { Config } from '@ouroboros/ouroboros-code-core';
 
@@ -161,6 +161,8 @@ describe('<HistoryItemDisplay />', () => {
                   name: 'write_file',
                   args: '{"path":"docs/ARCH.md"}',
                   output: 'Created architecture overview.',
+                  status: ToolCallStatus.Success,
+                  error: undefined,
                 },
               ],
             },

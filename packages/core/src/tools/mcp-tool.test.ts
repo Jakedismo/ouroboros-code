@@ -11,7 +11,8 @@ import { safeJsonStringify } from '../utils/safeJsonStringify.js';
 import { DiscoveredMCPTool, generateValidName } from './mcp-tool.js'; // Added getStringifiedResultForDisplay
 import type { ToolResult } from './tools.js';
 import { ToolConfirmationOutcome } from './tools.js'; // Added ToolConfirmationOutcome
-import type { CallableTool, Part } from '@google/genai';
+import type { CallableTool, Part } from '../runtime/genaiCompat.js';
+import type { JsonSchema } from '../runtime/agentsTypes.js';
 import { ToolErrorType } from './tool-error.js';
 
 // Mock @google/genai mcpToTool and CallableTool
@@ -63,7 +64,7 @@ describe('DiscoveredMCPTool', () => {
   const serverName = 'mock-mcp-server';
   const serverToolName = 'actual-server-tool-name';
   const baseDescription = 'A test MCP tool.';
-  const inputSchema: Record<string, unknown> = {
+  const inputSchema: JsonSchema = {
     type: 'object' as const,
     properties: { param: { type: 'string' } },
     required: ['param'],

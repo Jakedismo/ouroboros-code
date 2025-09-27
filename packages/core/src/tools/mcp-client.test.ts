@@ -17,7 +17,7 @@ import {
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import * as SdkClientStdioLib from '@modelcontextprotocol/sdk/client/stdio.js';
 import * as ClientLib from '@modelcontextprotocol/sdk/client/index.js';
-import * as GenAiLib from '@google/genai';
+import * as GenAiLib from '../runtime/genaiCompat.js';
 import { GoogleCredentialProvider } from '../mcp/google-auth-provider.js';
 import { AuthProviderType, type Config } from '../config/config.js';
 import type { PromptRegistry } from '../prompts/prompt-registry.js';
@@ -26,7 +26,7 @@ import type { WorkspaceContext } from '../utils/workspaceContext.js';
 
 vi.mock('@modelcontextprotocol/sdk/client/stdio.js');
 vi.mock('@modelcontextprotocol/sdk/client/index.js');
-vi.mock('@google/genai');
+vi.mock('../runtime/genaiCompat.js');
 vi.mock('../mcp/oauth-provider.js');
 vi.mock('../mcp/oauth-token-storage.js');
 

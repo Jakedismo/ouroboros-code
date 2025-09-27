@@ -42,7 +42,7 @@ export const useAuthCommand = (
       try {
         setIsAuthenticating(true);
         
-        // For non-Gemini providers, still need to call refreshAuth to create GeminiClient
+        // For non-Gemini providers, still need to call refreshAuth to create AgentsClient
         if (currentProvider !== 'gemini') {
           console.log(`[useAuthCommand] Using ${currentProvider} provider with API key authentication.`);
           console.log(`[useAuthCommand] About to call refreshAuth for ${currentProvider}`);

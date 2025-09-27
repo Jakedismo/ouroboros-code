@@ -6,21 +6,24 @@
 
 import { reportError } from '../utils/errorReporting.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
+import { isTool } from '../tools/tools.js';
 import type { AnyDeclarativeTool } from '../tools/tools.js';
 import type { Config } from '../config/config.js';
 import type { ToolCallRequestInfo } from './turn.js';
 import { executeToolCall } from './nonInteractiveToolExecutor.js';
-import { createContentGenerator } from './contentGenerator.js';
+import { AgentsClient } from './agentsClient.js';
 import { getEnvironmentContext } from '../utils/environmentContext.js';
 import type {
   Content,
   Part,
   FunctionCall,
   GenerateContentConfig,
-  FunctionDeclaration,
-} from '@google/genai';
-import { Type } from '@google/genai';
-import { GeminiChat } from './geminiChat.js';
+  ToolFunctionDeclaration,
+  PartListUnion,
+  Tool,
+  SendMessageParameters,
+} from '../runtime/agentsTypes.js';
+import { Type } from '../runtime/genaiCompat.js';
 
 /**
  * @fileoverview Defines the configuration interfaces for a subagent.
@@ -95,7 +98,7 @@ export interface ToolConfig {
    * A list of tool names (from the tool registry), full function declarations,
    * or BaseTool instances that the subagent is permitted to use.
    */
-  tools: Array<string | FunctionDeclaration | AnyDeclarativeTool>;
+  tools: Array<string | ToolFunctionDeclaration | AnyDeclarativeTool>;
 }
 
 /**
@@ -247,6 +250,8 @@ export class SubAgentScope {
   private readonly outputConfig?: OutputConfig;
   private readonly onMessage?: (message: string) => void;
   private readonly toolRegistry: ToolRegistry;
+  private baseGenerationConfig: GenerateContentConfig = {};
+
 
   /**
    * Constructs a new SubAgentScope instance.
@@ -302,14 +307,10 @@ export class SubAgentScope {
           const toolFromRegistry = (
             await runtimeContext.getToolRegistry()
           ).getTool(tool);
-          if (toolFromRegistry) {
+          if (toolFromRegistry && isTool(toolFromRegistry)) {
             subagentToolRegistry.registerTool(toolFromRegistry);
           }
-        } else if (
-          typeof tool === 'object' &&
-          'name' in tool &&
-          'build' in tool
-        ) {
+        } else if (isTool(tool)) {
           subagentToolRegistry.registerTool(tool);
         } else {
           // This is a FunctionDeclaration, which we can't add to the registry.
@@ -379,22 +380,20 @@ export class SubAgentScope {
       const abortController = new AbortController();
 
       // Prepare the list of tools available to the subagent.
-      const toolsList: FunctionDeclaration[] = [];
+      const toolsList: ToolFunctionDeclaration[] = [];
       if (this.toolConfig) {
         const toolsToLoad: string[] = [];
         for (const tool of this.toolConfig.tools) {
           if (typeof tool === 'string') {
             toolsToLoad.push(tool);
-          } else if (typeof tool === 'object' && 'schema' in tool) {
-            // This is a tool instance with a schema property
-            toolsList.push(tool.schema);
+          } else if (isTool(tool)) {
+            toolsList.push(tool.schema as ToolFunctionDeclaration);
           } else {
-            // This is a raw FunctionDeclaration
-            toolsList.push(tool);
+            toolsList.push(tool as ToolFunctionDeclaration);
           }
         }
         toolsList.push(
-          ...this.toolRegistry.getFunctionDeclarationsFiltered(toolsToLoad),
+          ...(this.toolRegistry.getFunctionDeclarationsFiltered(toolsToLoad) as ToolFunctionDeclaration[]),
         );
       }
       // Add local scope functions if outputs are expected.
@@ -422,12 +421,14 @@ export class SubAgentScope {
         }
 
         const promptId = `${this.runtimeContext.getSessionId()}#${this.subagentId}#${turnCounter++}`;
-        const messageParams = {
-          message: currentMessages[0]?.parts || [],
-          config: {
-            abortSignal: abortController.signal,
-            tools: [{ functionDeclarations: toolsList }],
-          },
+        const messageConfig: GenerateContentConfig = {
+          ...this.baseGenerationConfig,
+          abortSignal: abortController.signal,
+          tools: [{ functionDeclarations: toolsList }] as Tool[],
+        };
+        const messageParams: SendMessageParameters = {
+          message: (currentMessages[0]?.parts || []) as PartListUnion,
+          config: messageConfig,
         };
 
         const responseStream = await chat.sendMessageStream(
@@ -436,15 +437,50 @@ export class SubAgentScope {
         );
 
         const functionCalls: FunctionCall[] = [];
+        const seenCallIds = new Set<string>();
+        const attachCall = (rawCall: FunctionCall) => {
+          const normalized: FunctionCall = {
+            ...rawCall,
+            args: rawCall.args ?? {},
+          };
+          const fingerprint =
+            normalized.id ?? JSON.stringify({ name: normalized.name, args: normalized.args });
+          if (seenCallIds.has(fingerprint)) {
+            return;
+          }
+          const assignedId = normalized.id ?? `${normalized.name ?? 'tool'}-${functionCalls.length}`;
+          normalized.id = assignedId;
+          seenCallIds.add(fingerprint);
+          seenCallIds.add(assignedId);
+          functionCalls.push(normalized);
+        };
+
         let textResponse = '';
         for await (const resp of responseStream) {
           if (abortController.signal.aborted) return;
-          if (resp.functionCalls) {
-            functionCalls.push(...resp.functionCalls);
+
+          const candidate = resp.candidates?.[0];
+          if (!candidate) {
+            continue;
           }
-          const text = resp.text;
-          if (text) {
-            textResponse += text;
+
+          if (Array.isArray(candidate.functionCalls)) {
+            for (const call of candidate.functionCalls as FunctionCall[]) {
+              attachCall(call);
+            }
+          }
+
+          const parts = Array.isArray(candidate.content?.parts)
+            ? (candidate.content?.parts as Part[])
+            : [];
+
+          for (const part of parts) {
+            if (part.functionCall) {
+              attachCall(part.functionCall as FunctionCall);
+            }
+            if (typeof part.text === 'string' && part.text.length > 0) {
+              textResponse += part.text;
+            }
           }
         }
 
@@ -626,7 +662,7 @@ export class SubAgentScope {
       { role: 'model', parts: [{ text: 'Got it. Thanks for the context!' }] },
     ];
 
-    const start_history = [
+    const startHistory = [
       ...envHistory,
       ...(this.promptConfig.initialMessages ?? []),
     ];
@@ -636,36 +672,27 @@ export class SubAgentScope {
       : undefined;
 
     try {
-      const generationConfig: GenerateContentConfig & {
-        systemInstruction?: string | Content;
-      } = {
+      this.baseGenerationConfig = {
         temperature: this.modelConfig.temp,
         topP: this.modelConfig.top_p,
       };
 
-      if (systemInstruction) {
-        generationConfig.systemInstruction = systemInstruction;
-      }
-
-      const contentGenerator = await createContentGenerator(
-        this.runtimeContext.getContentGeneratorConfig(),
-        this.runtimeContext,
-        this.runtimeContext.getSessionId(),
-      );
-
       this.runtimeContext.setModel(this.modelConfig.model);
 
-      return new GeminiChat(
-        this.runtimeContext,
-        contentGenerator,
-        generationConfig,
-        start_history,
-      );
+      const chat = new AgentsClient(this.runtimeContext);
+      await chat.initialize(this.runtimeContext.getContentGeneratorConfig());
+      chat.setHistory(startHistory);
+
+      if (systemInstruction) {
+        chat.setSystemInstruction(systemInstruction);
+      }
+
+      return chat;
     } catch (error) {
       await reportError(
         error,
-        'Error initializing Gemini chat session.',
-        start_history,
+        'Error initializing Agents chat session.',
+        startHistory,
         'startChat',
       );
       // The calling function will handle the undefined return.
@@ -679,7 +706,7 @@ export class SubAgentScope {
    * @returns An array of `FunctionDeclaration` objects.
    */
   private getScopeLocalFuncDefs() {
-    const emitValueTool: FunctionDeclaration = {
+    const emitValueTool: ToolFunctionDeclaration = {
       name: 'self.emitvalue',
       description: `* This tool emits A SINGLE return value from this execution, such that it can be collected and presented to the calling function.
         * You can only emit ONE VALUE each time you call this tool. You are expected to call this tool MULTIPLE TIMES if you have MULTIPLE OUTPUTS.`,

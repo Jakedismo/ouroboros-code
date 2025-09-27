@@ -245,7 +245,7 @@ describe('ReadManyFilesTool', () => {
       const params = { paths: ['file1.txt', 'subdir/file2.js'] };
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
-      const content = result.llmContent as string[];
+      const content = result.llmContent as unknown as string[];
       const expectedPath1 = path.join(tempRootDir, 'file1.txt');
       const expectedPath2 = path.join(tempRootDir, 'subdir/file2.js');
       expect(
@@ -270,7 +270,7 @@ describe('ReadManyFilesTool', () => {
       const params = { paths: ['*.txt'] };
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
-      const content = result.llmContent as string[];
+      const content = result.llmContent as unknown as string[];
       const expectedPath1 = path.join(tempRootDir, 'file.txt');
       const expectedPath2 = path.join(tempRootDir, 'another.txt');
       expect(
@@ -295,7 +295,7 @@ describe('ReadManyFilesTool', () => {
       const params = { paths: ['src/**/*.ts'], exclude: ['**/*.test.ts'] };
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
-      const content = result.llmContent as string[];
+      const content = result.llmContent as unknown as string[];
       const expectedPath = path.join(tempRootDir, 'src/main.ts');
       expect(content).toEqual([
         `--- ${expectedPath} ---\n\nMain content\n\n`,
@@ -327,7 +327,7 @@ describe('ReadManyFilesTool', () => {
       const params = { paths: ['**/*.js'] };
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
-      const content = result.llmContent as string[];
+      const content = result.llmContent as unknown as string[];
       const expectedPath = path.join(tempRootDir, 'src/app.js');
       expect(content).toEqual([
         `--- ${expectedPath} ---\n\napp code\n\n`,
@@ -347,7 +347,7 @@ describe('ReadManyFilesTool', () => {
       const params = { paths: ['**/*.js'], useDefaultExcludes: false };
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
-      const content = result.llmContent as string[];
+      const content = result.llmContent as unknown as string[];
       const expectedPath1 = path.join(
         tempRootDir,
         'node_modules/some-lib/index.js',
@@ -419,7 +419,7 @@ describe('ReadManyFilesTool', () => {
       const params = { paths: ['*'] }; // Generic glob, not specific to .pdf
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
-      const content = result.llmContent as string[];
+      const content = result.llmContent as unknown as string[];
       const expectedPath = path.join(tempRootDir, 'notes.txt');
       expect(
         content.some(
@@ -511,7 +511,7 @@ describe('ReadManyFilesTool', () => {
       const params = { paths: ['*.txt'] };
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
-      const content = result.llmContent as string[];
+      const content = result.llmContent as unknown as string[];
       if (!Array.isArray(content)) {
         throw new Error(`llmContent is not an array: ${content}`);
       }
@@ -547,7 +547,7 @@ describe('ReadManyFilesTool', () => {
       const params = { paths: ['*.txt'] };
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
-      const content = result.llmContent as string[];
+      const content = result.llmContent as unknown as string[];
 
       const normalFileContent = content.find((c) => c.includes('file1.txt'));
       const truncatedFileContent = content.find((c) =>
@@ -667,7 +667,7 @@ Content of file[1]
 
       // Verify all files were processed. The content should have fileCount
       // entries + 1 for the output terminator.
-      const content = result.llmContent as string[];
+      const content = result.llmContent as unknown as string[];
       expect(content).toHaveLength(fileCount + 1);
       for (let i = 0; i < fileCount; i++) {
         expect(content.join('')).toContain(`Batch test ${i}`);
@@ -694,7 +694,7 @@ Content of file[1]
 
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
-      const content = result.llmContent as string[];
+      const content = result.llmContent as unknown as string[];
 
       // Should successfully process valid files despite one failure
       expect(content.length).toBeGreaterThanOrEqual(3);

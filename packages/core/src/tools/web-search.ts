@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { GroundingMetadata } from '@google/genai';
+import type { GroundingMetadata, Content } from '../runtime/genaiCompat.js';
 import type { ToolInvocation, ToolResult } from './tools.js';
 import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
 import { ToolErrorType } from './tool-error.js';
@@ -71,13 +71,14 @@ class WebSearchToolInvocation extends BaseToolInvocation<
   }
 
   async execute(signal: AbortSignal): Promise<WebSearchToolResult> {
-    const geminiClient = this.config.getGeminiClient();
+    const agentsClient = this.config.getConversationClient();
 
     try {
-      const response = await geminiClient.generateContent(
-        [{ role: 'user', parts: [{ text: this.params.query }] }],
-        { tools: [{ googleSearch: {} }] },
+      const response = await agentsClient.generateContent(
+        [{ role: 'user', parts: [{ text: this.params.query }] } as Content],
+        { tools: [{ functionDeclarations: [], googleSearch: {} }] },
         signal,
+        this.config.getModel(),
       );
 
       const responseText = getResponseText(response);

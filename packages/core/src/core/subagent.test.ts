@@ -21,23 +21,23 @@ import type {
 } from './subagent.js';
 import { Config } from '../config/config.js';
 import type { ConfigParameters } from '../config/config.js';
-import { GeminiChat } from './geminiChat.js';
-import { createContentGenerator } from './contentGenerator.js';
+import { AgentsClient } from './agentsClient.js';
 import { getEnvironmentContext } from '../utils/environmentContext.js';
 import { executeToolCall } from './nonInteractiveToolExecutor.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import { DEFAULT_GEMINI_MODEL } from '../config/models.js';
-import { Type } from '@google/genai';
+import { Type } from '../runtime/genaiCompat.js';
 import type {
   Content,
   FunctionCall,
-  FunctionDeclaration,
+  ToolFunctionDeclaration,
   GenerateContentConfig,
-} from '@google/genai';
+  GenerateContentResponse,
+  Part,
+} from '../runtime/agentsTypes.js';
 import { ToolErrorType } from '../tools/tool-error.js';
 
-vi.mock('./geminiChat.js');
-vi.mock('./contentGenerator.js');
+vi.mock('./agentsClient.js');
 vi.mock('../utils/environmentContext.js');
 vi.mock('./nonInteractiveToolExecutor.js');
 vi.mock('../ide/ide-client.js');
@@ -60,7 +60,7 @@ async function createMockConfig(
   // Mock ToolRegistry
   const mockToolRegistry = {
     getTool: vi.fn(),
-    getFunctionDeclarationsFiltered: vi.fn().mockReturnValue([]),
+    getToolFunctionDeclarationsFiltered: vi.fn().mockReturnValue([]),
     ...toolRegistryMocks,
   } as unknown as ToolRegistry;
 
@@ -73,17 +73,47 @@ const createMockStream = (
   functionCallsList: Array<FunctionCall[] | 'stop'>,
 ) => {
   let index = 0;
+  const buildResponse = ({
+    text,
+    functionCalls,
+    finishReason,
+  }: {
+    text?: string;
+    functionCalls?: FunctionCall[];
+    finishReason?: string;
+  }): GenerateContentResponse => {
+    const parts: Part[] = [];
+    if (text) {
+      parts.push({ text });
+    }
+    if (functionCalls?.length) {
+      for (const call of functionCalls) {
+        parts.push({ functionCall: call });
+      }
+    }
+    const candidate: Record<string, unknown> = { index: 0 };
+    if (parts.length > 0) {
+      candidate['content'] = { role: 'model', parts };
+    }
+    if (functionCalls?.length) {
+      candidate['functionCalls'] = functionCalls;
+    }
+    if (finishReason) {
+      candidate['finishReason'] = finishReason;
+    }
+    return { candidates: [candidate] } as GenerateContentResponse;
+  };
+
   return vi.fn().mockImplementation(() => {
     const response = functionCallsList[index] || 'stop';
     index++;
     return (async function* () {
       if (response === 'stop') {
-        // When stopping, the model might return text, but the subagent logic primarily cares about the absence of functionCalls.
-        yield { text: 'Done.' };
+        yield buildResponse({ text: 'Done.', finishReason: 'STOP' });
       } else if (response.length > 0) {
-        yield { functionCalls: response };
+        yield buildResponse({ functionCalls: response });
       } else {
-        yield { text: 'Done.' }; // Handle empty array also as stop
+        yield buildResponse({ text: 'Done.', finishReason: 'STOP' });
       }
     })();
   });
@@ -108,6 +138,9 @@ describe('subagent.ts', () => {
 
   describe('SubAgentScope', () => {
     let mockSendMessageStream: Mock;
+    let mockInitialize: Mock;
+    let mockSetHistory: Mock;
+    let mockSetSystemInstruction: Mock;
 
     const defaultModelConfig: ModelConfig = {
       model: 'gemini-1.5-flash-latest',
@@ -126,38 +159,28 @@ describe('subagent.ts', () => {
       vi.mocked(getEnvironmentContext).mockResolvedValue([
         { text: 'Env Context' },
       ]);
-      vi.mocked(createContentGenerator).mockResolvedValue({
-        getGenerativeModel: vi.fn(),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
 
+      mockInitialize = vi.fn().mockResolvedValue(undefined);
+      mockSetHistory = vi.fn();
+      mockSetSystemInstruction = vi.fn();
       mockSendMessageStream = vi.fn();
-      // We mock the implementation of the constructor.
-      vi.mocked(GeminiChat).mockImplementation(
-        () =>
-          ({
-            sendMessageStream: mockSendMessageStream,
-          }) as unknown as GeminiChat,
-      );
+
+      vi.mocked(AgentsClient).mockImplementation(() => ({
+        initialize: mockInitialize,
+        setHistory: mockSetHistory,
+        setSystemInstruction: mockSetSystemInstruction,
+        sendMessageStream: mockSendMessageStream,
+        resetChat: vi.fn(),
+        setTools: vi.fn(),
+        getHistory: vi.fn().mockReturnValue([]),
+        addHistory: vi.fn(),
+        clearSystemInstruction: vi.fn(),
+      }) as unknown as AgentsClient);
     });
 
     afterEach(() => {
       vi.restoreAllMocks();
     });
-
-    // Helper to safely access generationConfig from mock calls
-    const getGenerationConfigFromMock = (
-      callIndex = 0,
-    ): GenerateContentConfig & { systemInstruction?: string | Content } => {
-      const callArgs = vi.mocked(GeminiChat).mock.calls[callIndex];
-      const generationConfig = callArgs?.[2];
-      // Ensure it's defined before proceeding
-      expect(generationConfig).toBeDefined();
-      if (!generationConfig) throw new Error('generationConfig is undefined');
-      return generationConfig as GenerateContentConfig & {
-        systemInstruction?: string | Content;
-      };
-    };
 
     describe('create (Tool Validation)', () => {
       const promptConfig: PromptConfig = { systemPrompt: 'Test prompt' };
@@ -289,10 +312,8 @@ describe('subagent.ts', () => {
     });
 
     describe('runNonInteractive - Initialization and Prompting', () => {
-      it('should correctly template the system prompt and initialize GeminiChat', async () => {
+      it('should correctly template the system prompt and initialize the Agents client', async () => {
         const { config } = await createMockConfig();
-
-        vi.mocked(GeminiChat).mockClear();
 
         const promptConfig: PromptConfig = {
           systemPrompt: 'Hello ${name}, your task is ${task}.',
@@ -312,38 +333,39 @@ describe('subagent.ts', () => {
           defaultRunConfig,
         );
 
+        const initialClientCalls = vi.mocked(AgentsClient).mock.calls.length;
+        const initialInitializeCalls = mockInitialize.mock.calls.length;
+        const initialHistoryCalls = mockSetHistory.mock.calls.length;
+        const initialInstructionCalls = mockSetSystemInstruction.mock.calls.length;
+
         await scope.runNonInteractive(context);
 
-        // Check if GeminiChat was initialized correctly by the subagent
-        expect(GeminiChat).toHaveBeenCalledTimes(1);
-        const callArgs = vi.mocked(GeminiChat).mock.calls[0];
-
-        // Check Generation Config
-        const generationConfig = getGenerationConfigFromMock();
-
-        // Check temperature override
-        expect(generationConfig.temperature).toBe(defaultModelConfig.temp);
-        expect(generationConfig.systemInstruction).toContain(
-          'Hello Agent, your task is Testing.',
+        expect(vi.mocked(AgentsClient).mock.calls.length).toBe(
+          initialClientCalls + 1,
         );
-        expect(generationConfig.systemInstruction).toContain(
-          'Important Rules:',
-        );
-
-        // Check History (should include environment context)
-        const history = callArgs[3];
+        expect(mockInitialize.mock.calls.length).toBe(initialInitializeCalls + 1);
+        expect(mockSetHistory.mock.calls.length).toBe(initialHistoryCalls + 1);
+        const history = mockSetHistory.mock.calls.at(-1)?.[0];
         expect(history).toEqual([
           { role: 'user', parts: [{ text: 'Env Context' }] },
-          {
-            role: 'model',
-            parts: [{ text: 'Got it. Thanks for the context!' }],
-          },
+          { role: 'model', parts: [{ text: 'Got it. Thanks for the context!' }] },
         ]);
+
+        expect(mockSetSystemInstruction.mock.calls.length).toBe(
+          initialInstructionCalls + 1,
+        );
+        const systemPrompt = mockSetSystemInstruction.mock.calls.at(-1)?.[0];
+        expect(systemPrompt).toContain('Hello Agent, your task is Testing.');
+        expect(systemPrompt).toContain('Important Rules:');
+
+        const sendArgs = mockSendMessageStream.mock.calls[0];
+        const messageConfig = sendArgs[0]?.config as GenerateContentConfig;
+        expect(messageConfig.temperature).toBe(defaultModelConfig.temp);
+        expect(messageConfig.topP).toBe(defaultModelConfig.top_p);
       });
 
       it('should include output instructions in the system prompt when outputs are defined', async () => {
         const { config } = await createMockConfig();
-        vi.mocked(GeminiChat).mockClear();
 
         const promptConfig: PromptConfig = { systemPrompt: 'Do the task.' };
         const outputConfig: OutputConfig = {
@@ -367,8 +389,7 @@ describe('subagent.ts', () => {
 
         await scope.runNonInteractive(context);
 
-        const generationConfig = getGenerationConfigFromMock();
-        const systemInstruction = generationConfig.systemInstruction as string;
+        const systemInstruction = mockSetSystemInstruction.mock.calls[0][0] as string;
 
         expect(systemInstruction).toContain('Do the task.');
         expect(systemInstruction).toContain(
@@ -381,7 +402,6 @@ describe('subagent.ts', () => {
 
       it('should use initialMessages instead of systemPrompt if provided', async () => {
         const { config } = await createMockConfig();
-        vi.mocked(GeminiChat).mockClear();
 
         const initialMessages: Content[] = [
           { role: 'user', parts: [{ text: 'Hi' }] },
@@ -402,12 +422,8 @@ describe('subagent.ts', () => {
 
         await scope.runNonInteractive(context);
 
-        const callArgs = vi.mocked(GeminiChat).mock.calls[0];
-        const generationConfig = getGenerationConfigFromMock();
-        const history = callArgs[3];
-
-        expect(generationConfig.systemInstruction).toBeUndefined();
-        expect(history).toEqual([
+        expect(mockSetSystemInstruction).not.toHaveBeenCalled();
+        expect(mockSetHistory).toHaveBeenCalledWith([
           { role: 'user', parts: [{ text: 'Env Context' }] },
           {
             role: 'model',
@@ -536,14 +552,14 @@ describe('subagent.ts', () => {
       });
 
       it('should execute external tools and provide the response to the model', async () => {
-        const listFilesToolDef: FunctionDeclaration = {
+        const listFilesToolDef: ToolFunctionDeclaration = {
           name: 'list_files',
           description: 'Lists files',
           parameters: { type: Type.OBJECT, properties: {} },
         };
 
         const { config } = await createMockConfig({
-          getFunctionDeclarationsFiltered: vi
+          getToolFunctionDeclarationsFiltered: vi
             .fn()
             .mockReturnValue([listFilesToolDef]),
           getTool: vi.fn().mockReturnValue(undefined),

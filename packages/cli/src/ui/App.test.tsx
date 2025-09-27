@@ -14,7 +14,7 @@ import type {
   MCPServerConfig,
   ToolRegistry,
   SandboxConfig,
-  GeminiClient,
+  AgentsClient,
   AuthType,
 } from '@ouroboros/ouroboros-code-core';
 import {
@@ -91,7 +91,7 @@ interface MockServerConfig {
   getAccessibility: Mock<() => AccessibilitySettings>;
   getProjectRoot: Mock<() => string | undefined>;
   getAllGeminiMdFilenames: Mock<() => string[]>;
-  getGeminiClient: Mock<() => GeminiClient | undefined>;
+  getConversationClient: Mock<() => AgentsClient | undefined>;
   getUserTier: Mock<() => Promise<string | undefined>>;
   getIdeClient: Mock<() => { getCurrentIde: Mock<() => string | undefined> }>;
   getScreenReader: Mock<() => boolean>;
@@ -156,7 +156,7 @@ vi.mock('@ouroboros/ouroboros-code-core', async (importOriginal) => {
         getAccessibility: vi.fn(() => opts.accessibility ?? {}),
         getProjectRoot: vi.fn(() => opts.targetDir),
         getEnablePromptCompletion: vi.fn(() => false),
-        getGeminiClient: vi.fn(() => ({
+        getConversationClient: vi.fn(() => ({
           getUserTier: vi.fn(),
         })),
         getCheckpointingEnabled: vi.fn(() => opts.checkpointing ?? true),
@@ -1062,10 +1062,10 @@ describe('App UI', () => {
         thought: null,
       });
 
-      mockConfig.getGeminiClient.mockReturnValue({
+      mockConfig.getConversationClient.mockReturnValue({
         isInitialized: vi.fn(() => true),
         getUserTier: vi.fn(),
-      } as unknown as GeminiClient);
+      } as unknown as AgentsClient);
 
       const { unmount, rerender } = renderWithProviders(
         <App

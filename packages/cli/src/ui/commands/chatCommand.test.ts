@@ -14,7 +14,7 @@ import type {
 } from './types.js';
 import { createMockCommandContext } from '../../test-utils/mockCommandContext.js';
 import type { GeminiContent } from '../types/geminiCompat.js';
-import type { GeminiClient } from '@ouroboros/ouroboros-code-core';
+import type { AgentsClient } from '@ouroboros/ouroboros-code-core';
 
 import * as fsPromises from 'node:fs/promises';
 import { chatCommand } from './chatCommand.js';
@@ -30,7 +30,7 @@ describe('chatCommand', () => {
   const mockFs = fsPromises as Mocked<typeof fsPromises>;
 
   let mockContext: CommandContext;
-  let mockGetChat: ReturnType<typeof vi.fn>;
+  let mockAgentsClient: AgentsClient;
   let mockSaveCheckpoint: ReturnType<typeof vi.fn>;
   let mockLoadCheckpoint: ReturnType<typeof vi.fn>;
   let mockDeleteCheckpoint: ReturnType<typeof vi.fn>;
@@ -50,9 +50,11 @@ describe('chatCommand', () => {
 
   beforeEach(() => {
     mockGetHistory = vi.fn().mockReturnValue([]);
-    mockGetChat = vi.fn().mockResolvedValue({
+    const mockSetHistory = vi.fn();
+    mockAgentsClient = {
       getHistory: mockGetHistory,
-    });
+      setHistory: mockSetHistory,
+    } as unknown as AgentsClient;
     mockSaveCheckpoint = vi.fn().mockResolvedValue(undefined);
     mockLoadCheckpoint = vi.fn().mockResolvedValue([]);
     mockDeleteCheckpoint = vi.fn().mockResolvedValue(true);
@@ -61,10 +63,7 @@ describe('chatCommand', () => {
       services: {
         config: {
           getProjectRoot: () => '/project/root',
-          getGeminiClient: () =>
-            ({
-              getChat: mockGetChat,
-            }) as unknown as GeminiClient,
+          getConversationClient: () => mockAgentsClient,
           storage: {
             getProjectTempDir: () => '/project/root/.gemini/tmp/mockhash',
           },

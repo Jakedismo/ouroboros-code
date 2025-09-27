@@ -37,8 +37,8 @@ describe('directoryCommand', () => {
     mockConfig = {
       getWorkspaceContext: () => mockWorkspaceContext,
       isRestrictiveSandbox: vi.fn().mockReturnValue(false),
-      getGeminiClient: vi.fn().mockReturnValue({
-        addDirectoryContext: vi.fn(),
+      getConversationClient: vi.fn().mockReturnValue({
+        addHistory: vi.fn(),
       }),
       getWorkingDir: () => '/test/dir',
       shouldLoadMemoryFromIncludeDirectories: () => false,

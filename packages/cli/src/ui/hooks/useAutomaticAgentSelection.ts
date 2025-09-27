@@ -36,12 +36,16 @@ interface SelectionExecutionPayload {
     confidence: number;
     handoffAgentIds: string[];
     rawText?: string;
+    liveThought?: string;
+    status?: 'pending' | 'running' | 'complete';
     toolEvents: Array<{
       callId: string;
       toolName: string;
       arguments: Record<string, unknown>;
       outputText?: string;
       resultDisplay?: unknown;
+      errorMessage?: string;
+      errorType?: string;
       timestamp: number;
     }>;
   }>;
@@ -52,6 +56,7 @@ export interface SelectionFeedbackPayload {
   reasoning: string;
   confidence: number;
   processingTime: number;
+  status?: 'planning' | 'running' | 'complete';
   execution?: SelectionExecutionPayload;
 }
 
@@ -68,6 +73,8 @@ export type SelectionStreamEvent =
           arguments: Record<string, unknown>;
           outputText?: string;
           resultDisplay?: unknown;
+          errorMessage?: string;
+          errorType?: string;
           timestamp: number;
         };
       };
@@ -98,12 +105,13 @@ const buildSelectionDisplay = (
   selection: SelectionFeedbackPayload,
   status: 'planning' | 'running' | 'complete',
 ): MultiAgentSelectionDisplay => {
+  const effectiveStatus = selection.status ?? status;
   const display: MultiAgentSelectionDisplay = {
     selectedAgents: selection.selectedAgents.map(toPersonaSummary),
     reasoning: selection.reasoning,
     confidence: selection.confidence,
     processingTime: selection.processingTime,
-    status,
+    status: effectiveStatus,
   };
 
   if (selection.execution) {
@@ -122,15 +130,21 @@ const buildSelectionDisplay = (
         solution: result.solution,
         confidence: result.confidence,
         handoffAgentIds: result.handoffAgentIds,
+        rawText: result.rawText,
+        liveThought: result.liveThought,
+        status: result.status,
         tools: result.toolEvents.map((event) => {
           const output = stringifyResultDisplay(
             event.outputText,
             event.resultDisplay,
+            event.errorMessage,
           );
           return {
             name: event.toolName,
             args: stringifyArgs(event.arguments),
             output,
+            status: event.errorMessage ? ToolCallStatus.Error : ToolCallStatus.Success,
+            error: event.errorMessage,
           };
         }),
       })),
@@ -152,9 +166,13 @@ const stringifyArgs = (value: unknown): string => {
 const stringifyResultDisplay = (
   outputText?: string,
   resultDisplay?: unknown,
+  errorMessage?: string,
 ): string | undefined => {
   if (outputText && outputText.trim().length > 0) {
     return outputText;
+  }
+  if (errorMessage && errorMessage.trim().length > 0) {
+    return errorMessage;
   }
   if (resultDisplay === undefined || resultDisplay === null) {
     return undefined;
@@ -177,7 +195,9 @@ const buildToolGroupDisplay = (
   const resultDisplay = stringifyResultDisplay(
     event.outputText,
     event.resultDisplay,
+    event.errorMessage,
   );
+  const status = event.errorMessage ? ToolCallStatus.Error : ToolCallStatus.Success;
 
   return {
     type: 'tool_group',
@@ -187,7 +207,7 @@ const buildToolGroupDisplay = (
         name: event.toolName,
         description,
         resultDisplay,
-        status: ToolCallStatus.Success,
+        status,
         confirmationDetails: undefined,
         renderOutputAsMarkdown: true,
         agentId: agent.id,
@@ -202,11 +222,14 @@ export const createMultiAgentHistoryItem = (
   selection: SelectionFeedbackPayload,
   status: 'planning' | 'running' | 'complete',
   interactive?: MultiAgentInteractiveState,
-): Omit<HistoryItemMultiAgentStatus, 'id'> => ({
-  type: 'multi_agent_status',
-  selection: buildSelectionDisplay(selection, status),
-  interactive,
-});
+): Omit<HistoryItemMultiAgentStatus, 'id'> => {
+  const effectiveStatus = selection.status ?? status;
+  return {
+    type: 'multi_agent_status',
+    selection: buildSelectionDisplay(selection, effectiveStatus),
+    interactive,
+  };
+};
 
 export const useAutomaticAgentSelection = (
   config: Config,
@@ -225,23 +248,15 @@ export const useAutomaticAgentSelection = (
 
   // Initialize the orchestrator
   useEffect(() => {
+    if (isInitialized) {
+      return;
+    }
+
+    let cancelled = false;
+
     const initOrchestrator = async () => {
       console.log('[DEBUG-AUTO-AGENT] Starting orchestrator initialization...');
       try {
-        // Check if GeminiClient is initialized first
-        const geminiClient = config.getGeminiClient();
-        console.log('[DEBUG-AUTO-AGENT] GeminiClient exists:', !!geminiClient);
-        if (!geminiClient) {
-          console.log(
-            '[AutoAgentSelection] GeminiClient not ready yet, waiting...',
-          );
-          return;
-        }
-
-        console.log(
-          '[DEBUG-AUTO-AGENT] Attempting to import ConversationOrchestrator...',
-        );
-        // Dynamically import ConversationOrchestrator
         const { ConversationOrchestrator } = await import(
           '@ouroboros/ouroboros-code-core'
         );
@@ -253,21 +268,22 @@ export const useAutomaticAgentSelection = (
         console.log(
           '[DEBUG-AUTO-AGENT] ConversationOrchestrator instance retrieved',
         );
-
-        // Initialize with the SAME Config that regular chat uses
-        // This ensures both systems use the exact same ContentGenerator
-        console.log(
-          '[DEBUG-AUTO-AGENT] Initializing orchestrator with config...',
-        );
+        console.log('[DEBUG-AUTO-AGENT] Initializing orchestrator with config...');
         await instance.initialize(config);
+        if (cancelled) {
+          return;
+        }
         console.log('[DEBUG-AUTO-AGENT] Orchestrator initialized successfully');
 
         setOrchestrator(instance);
         setIsInitialized(true);
         console.log(
-          '[AutoAgentSelection] Initialized with same ContentGenerator as regular chat',
+          '[AutoAgentSelection] Initialized with unified Agents runtime',
         );
       } catch (error) {
+        if (cancelled) {
+          return;
+        }
         console.error(
           '[DEBUG-AUTO-AGENT] Failed to initialize ConversationOrchestrator:',
           error,
@@ -279,18 +295,11 @@ export const useAutomaticAgentSelection = (
       }
     };
 
-    // Try to initialize immediately
     initOrchestrator();
 
-    // Also set up a retry mechanism in case the client isn't ready yet
-    const retryInterval = setInterval(() => {
-      if (!isInitialized && config.getGeminiClient()) {
-        initOrchestrator();
-        clearInterval(retryInterval);
-      }
-    }, 1000); // Check every second
-
-    return () => clearInterval(retryInterval);
+    return () => {
+      cancelled = true;
+    };
   }, [config, isInitialized]);
 
   /**
@@ -345,8 +354,9 @@ export const useAutomaticAgentSelection = (
             // Create final selection feedback
             const selectionSnapshot = event.selectionFeedback;
             const showSelectionFeedback = () => {
+              const status = selectionSnapshot.status ?? 'complete';
               addItem(
-                createMultiAgentHistoryItem(selectionSnapshot, 'complete'),
+                createMultiAgentHistoryItem(selectionSnapshot, status),
                 Date.now(),
               );
             };
@@ -421,8 +431,9 @@ export const useAutomaticAgentSelection = (
           // Create a callback to show the selection feedback
           const selectionSnapshot = result.selectionFeedback;
           const showSelectionFeedback = () => {
+            const status = selectionSnapshot.status ?? 'complete';
             addItem(
-              createMultiAgentHistoryItem(selectionSnapshot, 'complete'),
+              createMultiAgentHistoryItem(selectionSnapshot, status),
               Date.now(),
             );
           };

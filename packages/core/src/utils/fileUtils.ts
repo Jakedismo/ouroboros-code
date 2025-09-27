@@ -6,7 +6,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { PartUnion } from '@google/genai';
+import type { AgentContentFragment } from '../runtime/agentsTypes.js';
 import mime from 'mime-types';
 import type { FileSystemService } from '../services/fileSystemService.js';
 import { ToolErrorType } from '../tools/tool-error.js';
@@ -293,7 +293,7 @@ export async function detectFileType(
 }
 
 export interface ProcessedFileReadResult {
-  llmContent: PartUnion; // string for text, Part for image/pdf/unreadable binary
+  llmContent: AgentContentFragment; // string for text, object for image/pdf/unreadable binary
   returnDisplay: string;
   error?: string; // Optional error message for the LLM if file processing failed
   errorType?: ToolErrorType; // Structured error type

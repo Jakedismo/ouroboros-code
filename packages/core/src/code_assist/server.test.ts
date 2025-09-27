@@ -211,7 +211,7 @@ describe('CodeAssistServer', () => {
     await expect(
       server.embedContent({
         model: 'test-model',
-        contents: [{ role: 'user', parts: [{ text: 'request' }] }],
+        content: [{ role: 'user', parts: [{ text: 'request' }] }],
       }),
     ).rejects.toThrow();
   });

@@ -7,15 +7,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WebFetchTool } from './web-fetch.js';
 import type { Config } from '../config/config.js';
+import type { AgentsClient } from '../core/agentsClient.js';
 import { ApprovalMode } from '../config/config.js';
 import { ToolConfirmationOutcome } from './tools.js';
 import { ToolErrorType } from './tool-error.js';
 import * as fetchUtils from '../utils/fetch.js';
 
 const mockGenerateContent = vi.fn();
-const mockGetGeminiClient = vi.fn(() => ({
-  generateContent: mockGenerateContent,
-}));
+const mockAgentsClient = { generateContent: mockGenerateContent } as unknown as AgentsClient;
+const mockGetAgentsClient = vi.fn(() => mockAgentsClient);
 
 vi.mock('../utils/fetch.js', async (importOriginal) => {
   const actual = await importOriginal<typeof fetchUtils>();
@@ -35,7 +35,7 @@ describe('WebFetchTool', () => {
       getApprovalMode: vi.fn(),
       setApprovalMode: vi.fn(),
       getProxy: vi.fn(),
-      getGeminiClient: mockGetGeminiClient,
+      getConversationClient: mockGetAgentsClient,
     } as unknown as Config;
   });
 

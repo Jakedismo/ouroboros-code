@@ -14,13 +14,12 @@ import {
 import type {
   ContentListUnion,
   GenerateContentParameters,
-} from '@google/genai';
-import {
-  GenerateContentResponse,
-  FinishReason,
   BlockedReason,
-  type Part,
-} from '@google/genai';
+} from '../runtime/genaiCompat.js';
+import type {
+  FinishReason,
+  Part,
+} from '../runtime/genaiCompat.js';
 
 describe('converter', () => {
   describe('toCodeAssistRequest', () => {
@@ -238,14 +237,14 @@ describe('converter', () => {
                 role: 'model',
                 parts: [{ text: 'Hi there!' }],
               },
-              finishReason: FinishReason.STOP,
+              finishReason: 'STOP' as FinishReason,
               safetyRatings: [],
             },
           ],
         },
       };
       const genaiRes = fromGenerateContentResponse(codeAssistRes);
-      expect(genaiRes).toBeInstanceOf(GenerateContentResponse);
+      expect(genaiRes).toMatchObject({'finishReason': 'STOP'});
       expect(genaiRes.candidates).toEqual(codeAssistRes.response.candidates);
     });
 
@@ -254,7 +253,7 @@ describe('converter', () => {
         response: {
           candidates: [],
           promptFeedback: {
-            blockReason: BlockedReason.SAFETY,
+            blockReason: 'SAFETY' as BlockedReason,
             safetyRatings: [],
           },
           usageMetadata: {

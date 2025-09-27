@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type {
   GenerateContentParameters,
   GenerateContentResponse,
-} from '@google/genai';
+} from '../runtime/genaiCompat.js';
 
 import {
   createContentGenerator,

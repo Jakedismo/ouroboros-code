@@ -223,7 +223,7 @@ packages/core/src/agents/
 ### Changed
 - Enhanced core system prompt integration to support agent-modified prompts
 - Updated Config class with agent system prompt management methods
-- Modified GeminiClient to pass config context for agent integration
+- Modified ConversationClient (formerly GeminiClient) to pass config context for agent integration
 - Extended CLI initialization to include AgentManager setup
 
 ### Fixed

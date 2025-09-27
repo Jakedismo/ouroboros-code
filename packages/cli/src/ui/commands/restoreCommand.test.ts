@@ -11,7 +11,7 @@ import * as path from 'node:path';
 import { restoreCommand } from './restoreCommand.js';
 import { type CommandContext } from './types.js';
 import { createMockCommandContext } from '../../test-utils/mockCommandContext.js';
-import type { Config, GitService } from '@ouroboros/ouroboros-code-core';
+import type { Config, GitService, AgentsClient } from '@ouroboros/ouroboros-code-core';
 
 describe('restoreCommand', () => {
   let mockContext: CommandContext;
@@ -43,9 +43,9 @@ describe('restoreCommand', () => {
         getProjectTempCheckpointsDir: vi.fn().mockReturnValue(checkpointsDir),
         getProjectTempDir: vi.fn().mockReturnValue(geminiTempDir),
       },
-      getGeminiClient: vi.fn().mockReturnValue({
+      getConversationClient: vi.fn().mockReturnValue({
         setHistory: mockSetHistory,
-      }),
+      } as unknown as AgentsClient),
     } as unknown as Config;
 
     mockContext = createMockCommandContext({

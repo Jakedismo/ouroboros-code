@@ -30,7 +30,7 @@ The Ouroboros runtime now routes every interaction through the [OpenAI Agents SD
 
 ## Session Lifecycle
 1. Config initialises the unified runtime and stores provider/model preferences.
-2. `GeminiClient.initialize` requests an `AgentsContentGenerator`; no provider-specific clients remain.
+2. `ConversationClient.initialize` requests an `AgentsContentGenerator`; no provider-specific clients remain.
 3. Each user turn constructs a `Turn` object, which calls `UnifiedAgentsClient.streamResponse` for *every* provider.
 4. Stream events flow through the existing thought/content/tool event pipeline, so UI surfaces continue to behave the same way.
 

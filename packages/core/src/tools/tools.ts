@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { FunctionDeclaration, PartListUnion } from '@google/genai';
+import type { ToolFunctionDeclaration, AgentContentFragment, JsonSchema } from '../runtime/agentsTypes.js';
 import { ToolErrorType } from './tool-error.js';
 import type { DiffUpdateResult } from '../ide/ideContext.js';
 import { SchemaValidator } from '../utils/schemaValidator.js';
+
+export { ToolErrorType } from './tool-error.js';
 
 /**
  * Represents a validated and ready-to-execute tool call.
@@ -118,7 +120,7 @@ export interface ToolBuilder<
   /**
    * Function declaration schema from @google/genai.
    */
-  schema: FunctionDeclaration;
+  schema: ToolFunctionDeclaration;
 
   /**
    * Whether the tool's output should be rendered as markdown.
@@ -152,12 +154,12 @@ export abstract class DeclarativeTool<
     readonly displayName: string,
     readonly description: string,
     readonly kind: Kind,
-    readonly parameterSchema: unknown,
+    readonly parameterSchema: JsonSchema | undefined,
     readonly isOutputMarkdown: boolean = true,
     readonly canUpdateOutput: boolean = false,
   ) {}
 
-  get schema(): FunctionDeclaration {
+  get schema(): ToolFunctionDeclaration {
     return {
       name: this.name,
       description: this.description,
@@ -327,7 +329,7 @@ export interface ToolResult {
    * Content meant to be included in LLM history.
    * This should represent the factual outcome of the tool execution.
    */
-  llmContent: PartListUnion;
+  llmContent: AgentContentFragment;
 
   /**
    * Markdown string for user display.

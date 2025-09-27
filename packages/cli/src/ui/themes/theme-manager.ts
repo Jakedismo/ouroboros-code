@@ -15,6 +15,7 @@ import { DefaultLight } from './default-light.js';
 import { DefaultDark } from './default.js';
 import { ShadesOfPurple } from './shades-of-purple.js';
 import { XCode } from './xcode.js';
+import { StellarOuroboros } from './ouroboros-default.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -32,7 +33,7 @@ export interface ThemeDisplay {
   isCustom?: boolean;
 }
 
-export const DEFAULT_THEME: Theme = DefaultDark;
+export const DEFAULT_THEME: Theme = StellarOuroboros;
 
 class ThemeManager {
   private readonly availableThemes: Theme[];
@@ -51,6 +52,7 @@ class ThemeManager {
       GitHubLight,
       GoogleCode,
       ShadesOfPurple,
+      StellarOuroboros,
       XCode,
       ANSI,
       ANSILight,

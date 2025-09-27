@@ -76,6 +76,7 @@ import type {
   ConfirmShellCommandsActionReturn,
   SlashCommand,
 } from '../commands/types.js';
+import type { AgentsClient } from '@ouroboros/ouroboros-code-core';
 import { CommandKind } from '../commands/types.js';
 import type { LoadedSettings } from '../../config/settings.js';
 import { MessageType } from '../types.js';
@@ -111,15 +112,22 @@ describe('useSlashCommandProcessor', () => {
   const mockSetQuittingMessages = vi.fn();
 
   const mockConfig = makeFakeConfig({});
+  const mockAgentsClient = {
+    getHistory: vi.fn().mockReturnValue([]),
+    setHistory: vi.fn(),
+  } as unknown as AgentsClient;
   vi.spyOn(mockConfig, 'getIdeClient').mockReturnValue({
     addStatusChangeListener: vi.fn(),
     removeStatusChangeListener: vi.fn(),
   } as unknown as IdeClient);
+  vi.spyOn(mockConfig, 'getConversationClient').mockReturnValue(mockAgentsClient);
 
   const mockSettings = {} as LoadedSettings;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAgentsClient.getHistory = vi.fn().mockReturnValue([]);
+    mockAgentsClient.setHistory = vi.fn();
     (vi.mocked(BuiltinCommandLoader) as Mock).mockClear();
     mockBuiltinLoadCommands.mockResolvedValue([]);
     mockFileLoadCommands.mockResolvedValue([]);
@@ -410,6 +418,7 @@ describe('useSlashCommandProcessor', () => {
         await result.current.handleSlashCommand('/load');
       });
 
+      expect(mockAgentsClient.setHistory).toHaveBeenCalledWith([{ role: 'user', parts: [{ text: 'old prompt' }] }]);
       expect(mockClearItems).toHaveBeenCalledTimes(1);
       expect(mockAddItem).toHaveBeenCalledWith(
         { type: 'user', text: 'old prompt' },
@@ -419,15 +428,14 @@ describe('useSlashCommandProcessor', () => {
 
     it('should strip thoughts when handling "load_history" action', async () => {
       const mockSetHistory = vi.fn();
-      const mockGeminiClient = {
+      const mockAgentsClientInstance = {
         setHistory: mockSetHistory,
       };
-      vi.spyOn(mockConfig, 'getGeminiClient').mockReturnValue(
+      vi.spyOn(mockConfig, 'getConversationClient').mockReturnValue(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        mockGeminiClient as any,
+        mockAgentsClientInstance as any,
       );
-
-      const historyWithThoughts = [
+            const historyWithThoughts = [
         {
           role: 'model',
           parts: [{ text: 'response', thoughtSignature: 'CikB...' }],
@@ -453,6 +461,7 @@ describe('useSlashCommandProcessor', () => {
       expect(mockSetHistory).toHaveBeenCalledWith(historyWithThoughts, {
         stripThoughts: true,
       });
+      expect(mockAgentsClient.setHistory).toHaveBeenCalledWith(historyWithThoughts);
     });
 
     describe('with fake timers', () => {

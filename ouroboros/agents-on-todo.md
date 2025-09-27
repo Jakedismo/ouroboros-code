@@ -1,0 +1,21 @@
+# /agents on Feature TODO
+
+- [x] Align CLI streaming payloads and Zed integration with Agents SDK content types.
+- [x] Remove direct `@google/genai` imports from A2A task pipeline.
+- [x] Audit multi-agent executor to confirm sequential wave handoffs and document findings.
+- [x] Surface agent thinking/tool progress in CLI history during `/agents on` runs.
+- [x] Migrate edit/write tooling and helpers to the AgentsClient interface.
+- [x] Switch shell tooling and summarizer to AgentsClient APIs.
+- [x] Port web-fetch tool (and fallback) to AgentsClient.
+- [x] Move loop detection service to AgentsClient (history + JSON checks).
+- [x] Shift CLI prompt completion to AgentsClient for suggestions.
+- [x] Port CLI slash command reload to use AgentsClient history.
+- [x] Update CLI built-in commands (clear/copy/restore/directory) to use AgentsClient.
+- [x] Verify tool prompt injections cover all built-in tools (expect 11) and adjust personas.
+- [ ] Investigate `/agents on` hang after repeated tool failures (parameter handling). (Tool error telemetry now surfaces in CLI; need root cause fix.)
+- [ ] Ensure ctrl+c exits terminate background agent processes cleanly.
+- [ ] Rebuild `GeminiClient` as an AgentsClient shim (replace Turn/GeminiChat runtime).
+- [x] Port multi-agent subagent execution to the unified Agents runtime.
+- [ ] Remove legacy Gemini-specific tests and delete the old client once parity is confirmed.
+- [ ] Update failing test suites (HistoryItemDisplay etc.) after runtime refactors.
+- [ ] Commit and document Repository Guidelines updates once feature stabilises.

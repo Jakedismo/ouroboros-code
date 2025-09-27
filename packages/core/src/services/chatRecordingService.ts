@@ -11,7 +11,7 @@ import { getProjectHash } from '../utils/paths.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import type { PartListUnion } from '@google/genai';
+import type { PartListUnion } from '../runtime/agentsTypes.js';
 
 /**
  * Token usage summary for a message or conversation.

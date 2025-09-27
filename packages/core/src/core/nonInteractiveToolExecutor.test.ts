@@ -13,7 +13,7 @@ import type {
   Config,
 } from '../index.js';
 import { ToolErrorType, ApprovalMode } from '../index.js';
-import type { Part } from '@google/genai';
+import type { Part } from '../runtime/genaiCompat.js';
 import { MockTool } from '../test-utils/tools.js';
 import * as telemetryLoggers from '../telemetry/loggers.js';
 

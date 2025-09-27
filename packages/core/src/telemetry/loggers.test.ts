@@ -7,13 +7,11 @@
 import type {
   AnyToolInvocation,
   CompletedToolCall,
-  ContentGeneratorConfig,
   ErroredToolCall,
 } from '../index.js';
 import {
   AuthType,
   EditTool,
-  GeminiClient,
   ToolConfirmationOutcome,
   ToolErrorType,
   ToolRegistry,
@@ -54,7 +52,7 @@ import {
 import * as metrics from './metrics.js';
 import * as sdk from './sdk.js';
 import { vi, describe, beforeEach, it, expect } from 'vitest';
-import type { GenerateContentResponseUsageMetadata } from '@google/genai';
+import type { GenerateContentResponseUsageMetadata } from '../runtime/genaiCompat.js';
 import * as uiTelemetry from './uiTelemetry.js';
 import { makeFakeConfig } from '../test-utils/config.js';
 import { ClearcutLogger } from './clearcut-logger/clearcut-logger.js';
@@ -453,40 +451,12 @@ describe('loggers', () => {
     const cfg1 = {
       getSessionId: () => 'test-session-id',
       getTargetDir: () => 'target-dir',
-      getGeminiClient: () => mockGeminiClient,
     } as Config;
-    const cfg2 = {
-      getSessionId: () => 'test-session-id',
-      getTargetDir: () => 'target-dir',
-      getProxy: () => 'http://test.proxy.com:8080',
-      getContentGeneratorConfig: () =>
-        ({ model: 'test-model' }) as ContentGeneratorConfig,
-      getModel: () => 'test-model',
-      getEmbeddingModel: () => 'test-embedding-model',
-      getWorkingDir: () => 'test-working-dir',
-      getSandbox: () => true,
-      getCoreTools: () => ['ls', 'read-file'],
-      getApprovalMode: () => 'default',
-      getTelemetryLogPromptsEnabled: () => true,
-      getFileFilteringRespectGitIgnore: () => true,
-      getFileFilteringAllowBuildArtifacts: () => false,
-      getDebugMode: () => true,
-      getMcpServers: () => ({
-        'test-server': {
-          command: 'test-command',
-        },
-      }),
-      getQuestion: () => 'test-question',
-      getToolRegistry: () => new ToolRegistry(cfg1),
-      getFullContext: () => false,
-      getUserMemory: () => 'user-memory',
-    } as unknown as Config;
 
-    const mockGeminiClient = new GeminiClient(cfg2);
     const mockConfig = {
+      getToolRegistry: () => new ToolRegistry(cfg1),
       getSessionId: () => 'test-session-id',
       getTargetDir: () => 'target-dir',
-      getGeminiClient: () => mockGeminiClient,
       getUsageStatisticsEnabled: () => true,
       getTelemetryEnabled: () => true,
       getTelemetryLogPromptsEnabled: () => true,

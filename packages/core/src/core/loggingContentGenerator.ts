@@ -13,7 +13,7 @@ import type {
   GenerateContentParameters,
   GenerateContentResponseUsageMetadata,
   GenerateContentResponse,
-} from '@google/genai';
+} from '../runtime/genaiCompat.js';
 import {
   ApiRequestEvent,
   ApiResponseEvent,
@@ -106,7 +106,8 @@ export class LoggingContentGenerator implements ContentGenerator {
     userPromptId: string,
   ): Promise<GenerateContentResponse> {
     const startTime = Date.now();
-    this.logApiRequest(toContents(req.contents), req.model, userPromptId);
+    const modelForLogging = req.model ?? this.config.getModel();
+    this.logApiRequest(toContents(req.contents), modelForLogging, userPromptId);
     try {
       const response = await this.wrapped.generateContent(req, userPromptId);
       const durationMs = Date.now() - startTime;
@@ -129,7 +130,8 @@ export class LoggingContentGenerator implements ContentGenerator {
     userPromptId: string,
   ): Promise<AsyncGenerator<GenerateContentResponse>> {
     const startTime = Date.now();
-    this.logApiRequest(toContents(req.contents), req.model, userPromptId);
+    const modelForLogging = req.model ?? this.config.getModel();
+    this.logApiRequest(toContents(req.contents), modelForLogging, userPromptId);
 
     let stream: AsyncGenerator<GenerateContentResponse>;
     try {

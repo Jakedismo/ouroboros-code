@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type {
+  AgentMessage as CoreAgentMessage,
+  AgentFunctionCall as CoreAgentFunctionCall,
+  Part as CorePart,
+  PartListUnion as CorePartListUnion,
+} from '@ouroboros/ouroboros-code-core';
+
 export type GeminiFinishReason =
   | 'FINISH_REASON_UNSPECIFIED'
   | 'STOP'
@@ -19,29 +26,27 @@ export type GeminiFinishReason =
   | 'IMAGE_SAFETY'
   | 'UNEXPECTED_TOOL_CALL';
 
-export interface GeminiFunctionCall {
-  id?: string;
-  name: string;
-  args?: Record<string, unknown>;
+export const GeminiFinishReasons: Record<GeminiFinishReason, GeminiFinishReason> = {
+  FINISH_REASON_UNSPECIFIED: 'FINISH_REASON_UNSPECIFIED',
+  STOP: 'STOP',
+  MAX_TOKENS: 'MAX_TOKENS',
+  SAFETY: 'SAFETY',
+  RECITATION: 'RECITATION',
+  LANGUAGE: 'LANGUAGE',
+  BLOCKLIST: 'BLOCKLIST',
+  PROHIBITED_CONTENT: 'PROHIBITED_CONTENT',
+  SPII: 'SPII',
+  OTHER: 'OTHER',
+  MALFORMED_FUNCTION_CALL: 'MALFORMED_FUNCTION_CALL',
+  IMAGE_SAFETY: 'IMAGE_SAFETY',
+  UNEXPECTED_TOOL_CALL: 'UNEXPECTED_TOOL_CALL',
+};
+
+export function isGeminiFinishReason(value: unknown): value is GeminiFinishReason {
+  return typeof value === 'string' && value in GeminiFinishReasons;
 }
 
-export interface GeminiPart {
-  text?: string;
-  functionCall?: GeminiFunctionCall;
-  functionResponse?: {
-    id?: string;
-    name?: string;
-    response?: unknown;
-  };
-  [key: string]: unknown;
-}
-
-export type GeminiPartListUnion =
-  | string
-  | GeminiPart
-  | Array<string | GeminiPart>;
-
-export interface GeminiContent {
-  role: string;
-  parts: GeminiPartListUnion[];
-}
+export type GeminiPart = CorePart;
+export type GeminiPartListUnion = CorePartListUnion;
+export type GeminiContent = CoreAgentMessage;
+export type GeminiFunctionCall = CoreAgentFunctionCall;

@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Content } from '@google/genai';
+import type { Content } from '../runtime/genaiCompat.js';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
-import type { GeminiClient } from '../core/client.js';
-import type { GeminiChat } from '../core/geminiChat.js';
+import type { AgentsClient } from '../core/agentsClient.js';
 import type { Config } from '../config/config.js';
 import { isFunctionResponse } from './messageInspectors.js';
 
@@ -41,8 +40,7 @@ export interface NextSpeakerResponse {
 }
 
 export async function checkNextSpeaker(
-  chat: GeminiChat,
-  geminiClient: GeminiClient,
+  agentsClient: AgentsClient,
   abortSignal: AbortSignal,
   config?: Config,
 ): Promise<NextSpeakerResponse | null> {
@@ -50,7 +48,7 @@ export async function checkNextSpeaker(
   // that when passed back up to the endpoint will break subsequent calls. An example of this is when the model decides
   // to respond with an empty part collection if you were to send that message back to the server it will respond with
   // a 400 indicating that model part collections MUST have content.
-  const curatedHistory = chat.getHistory(/* curated */ true);
+  const curatedHistory = agentsClient.getCuratedHistory();
 
   // Ensure there's a model response to analyze
   if (curatedHistory.length === 0) {
@@ -58,7 +56,7 @@ export async function checkNextSpeaker(
     return null;
   }
 
-  const comprehensiveHistory = chat.getHistory();
+  const comprehensiveHistory = agentsClient.getHistory();
   // If comprehensiveHistory is empty, there is no last message to check.
   // This case should ideally be caught by the curatedHistory.length check earlier,
   // but as a safeguard:
@@ -110,11 +108,12 @@ export async function checkNextSpeaker(
   ];
 
   try {
-    const parsedResponse = (await geminiClient.generateJson(
+    const modelToUse = config?.getModel() ?? DEFAULT_GEMINI_FLASH_MODEL;
+    const parsedResponse = (await agentsClient.generateJson(
       contents,
       RESPONSE_SCHEMA,
       abortSignal,
-      DEFAULT_GEMINI_FLASH_MODEL,
+      modelToUse,
       { temperature: 0.1 },
     )) as unknown as NextSpeakerResponse;
 

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Config } from '@ouroboros/ouroboros-code-core';
+import type { Config, AgentsClient } from '@ouroboros/ouroboros-code-core';
 import {
   GeminiEventType,
   ApprovalMode,
@@ -68,6 +68,12 @@ vi.mock('./config.js', async () => {
   return {
     ...actual,
     loadConfig: vi.fn().mockImplementation(async () => {
+      const mockAgentsClient = {
+        sendMessageStream: sendMessageStreamSpy,
+        addHistory: vi.fn(),
+        getUserTier: vi.fn().mockReturnValue('free'),
+      } as unknown as AgentsClient;
+
       config = {
         getToolRegistry: getToolRegistrySpy,
         getApprovalMode: getApprovalModeSpy,
@@ -78,7 +84,7 @@ vi.mock('./config.js', async () => {
           isPathWithinWorkspace: () => true,
         }),
         getTargetDir: () => '/test',
-        getGeminiClient: vi.fn(),
+        getConversationClient: vi.fn().mockReturnValue(mockAgentsClient),
         getDebugMode: vi.fn().mockReturnValue(false),
         getContentGeneratorConfig: vi
           .fn()
@@ -93,13 +99,13 @@ vi.mock('./config.js', async () => {
   };
 });
 
-// Mock the GeminiClient to avoid actual API calls
+// Mock the AgentsClient to avoid actual API calls
 const sendMessageStreamSpy = vi.fn();
 vi.mock('@ouroboros/ouroboros-code-core', async () => {
   const actual = await vi.importActual('@ouroboros/ouroboros-code-core');
   return {
     ...actual,
-    GeminiClient: vi.fn().mockImplementation(() => ({
+    AgentsClient: vi.fn().mockImplementation(() => ({
       sendMessageStream: sendMessageStreamSpy,
       getUserTier: vi.fn().mockReturnValue('free'),
       initialize: vi.fn(),

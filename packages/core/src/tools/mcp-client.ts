@@ -26,8 +26,8 @@ import { AuthProviderType } from '../config/config.js';
 import { GoogleCredentialProvider } from '../mcp/google-auth-provider.js';
 import { DiscoveredMCPTool } from './mcp-tool.js';
 
-import type { FunctionDeclaration } from '@google/genai';
-import { mcpToTool } from '@google/genai';
+import type { ToolFunctionDeclaration } from '../runtime/agentsTypes.js';
+import { mcpToTool } from '../runtime/genaiCompat.js';
 import type { ToolRegistry } from './tool-registry.js';
 import type { PromptRegistry } from '../prompts/prompt-registry.js';
 import { MCPOAuthProvider } from '../mcp/oauth-provider.js';
@@ -1376,7 +1376,7 @@ export async function createTransport(
 
 /** Visible for testing */
 export function isEnabled(
-  funcDecl: FunctionDeclaration,
+  funcDecl: ToolFunctionDeclaration,
   mcpServerName: string,
   mcpServerConfig: MCPServerConfig,
 ): boolean {

@@ -9,6 +9,8 @@ import type { Config } from '@ouroboros/ouroboros-code-core';
 import {
   DEFAULT_GEMINI_FLASH_LITE_MODEL,
   getResponseText,
+  type Content,
+  type GenerateContentConfig,
 } from '@ouroboros/ouroboros-code-core';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import { isSlashCommand } from '../utils/commandUtils.js';
@@ -82,7 +84,7 @@ export function usePromptCompletion({
 
   const generatePromptSuggestions = useCallback(async () => {
     const trimmedText = buffer.text.trim();
-    const geminiClient = config?.getGeminiClient();
+    const agentsClient = config?.getConversationClient();
 
     if (trimmedText === lastRequestedTextRef.current) {
       return;
@@ -94,7 +96,7 @@ export function usePromptCompletion({
 
     if (
       trimmedText.length < PROMPT_COMPLETION_MIN_LENGTH ||
-      !geminiClient ||
+      !agentsClient ||
       isSlashCommand(trimmedText) ||
       trimmedText.includes('@') ||
       !isPromptCompletionEnabled
@@ -130,9 +132,9 @@ export function usePromptCompletion({
         },
       };
 
-      const response = await geminiClient.generateContent(
-        contents as unknown,
-        generationConfig as unknown,
+      const response = await agentsClient.generateContent(
+        contents as unknown as Content[],
+        generationConfig as unknown as GenerateContentConfig,
         signal,
         DEFAULT_GEMINI_FLASH_LITE_MODEL,
       );

@@ -32,7 +32,7 @@ import { CommandService } from '../../services/CommandService.js';
 import { BuiltinCommandLoader } from '../../services/BuiltinCommandLoader.js';
 import { FileCommandLoader } from '../../services/FileCommandLoader.js';
 import { McpPromptLoader } from '../../services/McpPromptLoader.js';
-import type { AgentContent } from '../types/agentContent.js';
+import { ensureAgentContentArray } from '../types/agentContent.js';
 
 /**
  * Hook to define and process slash commands (e.g., /help, /clear).
@@ -251,14 +251,10 @@ export const useSlashCommandProcessor = (
 
   const handleSlashCommand = useCallback(
     async (
-      rawQuery: AgentContent,
+      rawQuery: string,
       oneTimeShellAllowlist?: Set<string>,
       overwriteConfirmed?: boolean,
     ): Promise<SlashCommandProcessorResult | false> => {
-      if (typeof rawQuery !== 'string') {
-        return false;
-      }
-
       const trimmed = rawQuery.trim();
       if (!trimmed.startsWith('/') && !trimmed.startsWith('?')) {
         return false;
@@ -393,9 +389,7 @@ export const useSlashCommandProcessor = (
                     }
                   }
                 case 'load_history': {
-                  config
-                    ?.getGeminiClient()
-                    ?.setHistory(result.clientHistory, { stripThoughts: true });
+                  config?.getConversationClient()?.setHistory(result.clientHistory as any);
                   fullCommandContext.ui.clear();
                   result.history.forEach((item, index) => {
                     fullCommandContext.ui.addItem(item, index);
@@ -413,7 +407,7 @@ export const useSlashCommandProcessor = (
                 case 'submit_prompt':
                   return {
                     type: 'submit_prompt',
-                    content: result.content,
+                    content: ensureAgentContentArray(result.content),
                   };
                 case 'confirm_shell_commands': {
                   const { outcome, approvedCommands } = await new Promise<{

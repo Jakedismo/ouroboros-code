@@ -8,9 +8,13 @@ import type { WritableStream, ReadableStream } from 'node:stream/web';
 
 import type {
   Config,
-  GeminiChat,
+  AgentsClient,
   ToolResult,
   ToolCallConfirmationDetails,
+  PartListUnion,
+  Part,
+  Content,
+  ServerGeminiStreamEvent,
 } from '@ouroboros/ouroboros-code-core';
 import {
   AuthType,
@@ -24,11 +28,19 @@ import {
   getErrorStatus,
   MCPServerConfig,
   DiscoveredMCPTool,
+  GeminiEventType,
 } from '@ouroboros/ouroboros-code-core';
 import * as acp from './acp.js';
 import { AcpFileSystemService } from './fileSystemService.js';
 import { Readable, Writable } from 'node:stream';
-import type { Content, Part, FunctionCall } from '@google/genai';
+import type {
+  GeminiContent,
+  GeminiFunctionCall,
+  GeminiPart,
+} from '../ui/types/geminiCompat.js';
+import { ensureAgentContentArray } from '../ui/types/agentContent.js';
+import type { AgentContentFragment } from '../ui/types/agentContent.js';
+import { mapAgentsStreamToGeminiEvents } from '@ouroboros/ouroboros-code-core';
 import type { LoadedSettings } from '../config/settings.js';
 import { SettingScope } from '../config/settings.js';
 import * as fs from 'node:fs/promises';
@@ -157,9 +169,8 @@ class GeminiAgent {
       config.setFileSystemService(acpFileSystemService);
     }
 
-    const geminiClient = config.getGeminiClient();
-    const chat = await geminiClient.startChat();
-    const session = new Session(sessionId, chat, config, this.client);
+    const agentsClient = config.getConversationClient();
+    const session = new Session(sessionId, agentsClient, config, this.client);
     this.sessions.set(sessionId, session);
 
     return {
@@ -213,12 +224,55 @@ class GeminiAgent {
   }
 }
 
+const agentFragmentsToPartList = (fragments: AgentContentFragment[]): PartListUnion => {
+  const normalized = ensureAgentContentArray(fragments ?? []);
+  const toParts = (fragment: AgentContentFragment): Part[] => {
+    if (typeof fragment === 'string') {
+      return [{ text: fragment }];
+    }
+    if (Array.isArray(fragment)) {
+      return fragment as Part[];
+    }
+    return [fragment as Part];
+  };
+  const parts = normalized.flatMap(toParts);
+  if (parts.length === 0) {
+    return [];
+  }
+  if (parts.length === 1) {
+    return parts[0];
+  }
+  return parts;
+};
+
+const agentMessageToContent = (message: GeminiContent): Content => {
+  const fragments = ensureAgentContentArray(message.parts ?? []);
+  const parts: Part[] = fragments.flatMap((fragment) => {
+    if (typeof fragment === 'string') {
+      return [{ text: fragment }];
+    }
+    if (Array.isArray(fragment)) {
+      return fragment as Part[];
+    }
+    return [fragment as Part];
+  });
+  return {
+    role: message.role ?? 'user',
+    parts,
+  };
+};
+
+type ContentEvent = Extract<ServerGeminiStreamEvent, { type: GeminiEventType.Content }>;
+type ThoughtEvent = Extract<ServerGeminiStreamEvent, { type: GeminiEventType.Thought }>;
+type ToolCallEvent = Extract<ServerGeminiStreamEvent, { type: GeminiEventType.ToolCallRequest }>;
+type ErrorEvent = Extract<ServerGeminiStreamEvent, { type: GeminiEventType.Error }>;
+
 class Session {
   private pendingPrompt: AbortController | null = null;
 
   constructor(
     private readonly id: string,
-    private readonly chat: GeminiChat,
+    private readonly agentsClient: AgentsClient,
     private readonly config: Config,
     private readonly client: acp.Client,
   ) {}
@@ -238,24 +292,26 @@ class Session {
     this.pendingPrompt = pendingSend;
 
     const promptId = Math.random().toString(16).slice(2);
-    const chat = this.chat;
 
-    const parts = await this.#resolvePrompt(params.prompt, pendingSend.signal);
+    const initialParts = await this.#resolvePrompt(
+      params.prompt,
+      pendingSend.signal,
+    );
 
-    let nextMessage: Content | null = { role: 'user', parts };
+    let nextMessage: GeminiContent | null = { role: 'user', parts: initialParts };
 
     while (nextMessage !== null) {
       if (pendingSend.signal.aborted) {
-        chat.addHistory(nextMessage);
+        await this.agentsClient.addHistory(agentMessageToContent(nextMessage));
         return { stopReason: 'cancelled' };
       }
 
-      const functionCalls: FunctionCall[] = [];
+      const functionCalls: GeminiFunctionCall[] = [];
 
       try {
-        const responseStream = await chat.sendMessageStream(
+        const responseStream = await this.agentsClient.sendMessageStream(
           {
-            message: nextMessage?.parts ?? [],
+            message: agentFragmentsToPartList(nextMessage.parts ?? []),
             config: {
               abortSignal: pendingSend.signal,
             },
@@ -264,34 +320,64 @@ class Session {
         );
         nextMessage = null;
 
-        for await (const resp of responseStream) {
+        for await (const event of mapAgentsStreamToGeminiEvents(
+          responseStream,
+          promptId,
+        )) {
           if (pendingSend.signal.aborted) {
             return { stopReason: 'cancelled' };
           }
 
-          if (resp.candidates && resp.candidates.length > 0) {
-            const candidate = resp.candidates[0];
-            for (const part of candidate.content?.parts ?? []) {
-              if (!part.text) {
-                continue;
-              }
-
+          switch (event.type) {
+            case GeminiEventType.Content: {
+              const contentEvent = event as ContentEvent;
               const content: acp.ContentBlock = {
                 type: 'text',
-                text: part.text,
+                text: contentEvent.value,
               };
-
               this.sendUpdate({
-                sessionUpdate: part.thought
-                  ? 'agent_thought_chunk'
-                  : 'agent_message_chunk',
+                sessionUpdate: 'agent_message_chunk',
                 content,
               });
+              break;
             }
-          }
-
-          if (resp.functionCalls) {
-            functionCalls.push(...resp.functionCalls);
+            case GeminiEventType.Thought: {
+              const thoughtEvent = event as ThoughtEvent;
+              const content: acp.ContentBlock = {
+                type: 'text',
+                text: thoughtEvent.value.description ?? '',
+              };
+              this.sendUpdate({
+                sessionUpdate: 'agent_thought_chunk',
+                content,
+              });
+              break;
+            }
+            case GeminiEventType.ToolCallRequest: {
+              const toolCallEvent = event as ToolCallEvent;
+              functionCalls.push({
+                id: toolCallEvent.value.callId,
+                name: toolCallEvent.value.name,
+                args: toolCallEvent.value.args,
+              } as GeminiFunctionCall);
+              break;
+            }
+            case GeminiEventType.Error: {
+              const errorEvent = event as ErrorEvent;
+              throw new Error(errorEvent.value.error.message);
+            }
+            case GeminiEventType.Finished:
+            case GeminiEventType.ToolCallResponse:
+            case GeminiEventType.ToolCallConfirmation:
+            case GeminiEventType.ChatCompressed:
+            case GeminiEventType.Citation:
+            case GeminiEventType.UserCancelled:
+            case GeminiEventType.MaxSessionTurns:
+            case GeminiEventType.LoopDetected:
+              break;
+            default: {
+              throw new Error('Unhandled Gemini event');
+            }
           }
         }
       } catch (error) {
@@ -306,7 +392,7 @@ class Session {
       }
 
       if (functionCalls.length > 0) {
-        const toolResponseParts: Part[] = [];
+        const toolResponseParts: GeminiPart[] = [];
 
         for (const fc of functionCalls) {
           const response = await this.runTool(pendingSend.signal, promptId, fc);
@@ -332,8 +418,8 @@ class Session {
   private async runTool(
     abortSignal: AbortSignal,
     promptId: string,
-    fc: FunctionCall,
-  ): Promise<Part[]> {
+    fc: GeminiFunctionCall,
+  ): Promise<GeminiPart[]> {
     const callId = fc.id ?? `${fc.name}-${Date.now()}`;
     const args = (fc.args ?? {}) as Record<string, unknown>;
 
@@ -474,7 +560,11 @@ class Session {
             : 'native',
       });
 
-      return convertToFunctionResponse(fc.name, callId, toolResult.llmContent);
+      return convertToFunctionResponse(
+        fc.name,
+        callId,
+        toolResult.llmContent,
+      ) as GeminiPart[];
     } catch (e) {
       const error = e instanceof Error ? e : new Error(String(e));
 
@@ -494,12 +584,12 @@ class Session {
   async #resolvePrompt(
     message: acp.ContentBlock[],
     abortSignal: AbortSignal,
-  ): Promise<Part[]> {
+  ): Promise<GeminiPart[]> {
     const FILE_URI_SCHEME = 'file://';
 
     const embeddedContext: acp.EmbeddedResourceResource[] = [];
 
-    const parts = message.map((part) => {
+    const parts: GeminiPart[] = message.map((part): GeminiPart => {
       switch (part.type) {
         case 'text':
           return { text: part.text };
@@ -507,7 +597,7 @@ class Session {
         case 'audio':
           return {
             inlineData: {
-              mimeType: part.mimeType,
+              mimeType: part.mimeType ?? 'application/octet-stream',
               data: part.data,
             },
           };
@@ -515,8 +605,8 @@ class Session {
           if (part.uri.startsWith(FILE_URI_SCHEME)) {
             return {
               fileData: {
-                mimeData: part.mimeType,
-                name: part.name,
+                mimeType: part.mimeType ?? 'application/octet-stream',
+                displayName: part.name ?? undefined,
                 fileUri: part.uri.slice(FILE_URI_SCHEME.length),
               },
             };
@@ -535,7 +625,14 @@ class Session {
       }
     });
 
-    const atPathCommandParts = parts.filter((part) => 'fileData' in part);
+    type GeminiFilePart = GeminiPart & {
+      fileData: NonNullable<GeminiPart['fileData']> & { fileUri: string };
+    };
+
+    const atPathCommandParts = parts.filter((part): part is GeminiFilePart => {
+      const fileUri = part.fileData?.fileUri;
+      return typeof fileUri === 'string' && fileUri.length > 0;
+    });
 
     if (atPathCommandParts.length === 0 && embeddedContext.length === 0) {
       return parts;
@@ -560,7 +657,7 @@ class Session {
     }
 
     for (const atPathPart of atPathCommandParts) {
-      const pathName = atPathPart.fileData!.fileUri;
+      const pathName = atPathPart.fileData.fileUri;
       // Check if path should be ignored by git
       if (fileDiscovery.shouldGitIgnoreFile(pathName)) {
         ignoredPaths.push(pathName);
@@ -664,8 +761,10 @@ class Session {
         initialQueryText += chunk.text;
       } else {
         // type === 'atPath'
-        const resolvedSpec =
-          chunk.fileData && atPathToResolvedSpecMap.get(chunk.fileData.fileUri);
+        const chunkFileUri = chunk.fileData?.fileUri;
+        const resolvedSpec = chunkFileUri
+          ? atPathToResolvedSpecMap.get(chunkFileUri)
+          : undefined;
         if (
           i > 0 &&
           initialQueryText.length > 0 &&
@@ -674,30 +773,26 @@ class Session {
         ) {
           // Add space if previous part was text and didn't end with space, or if previous was @path
           const prevPart = parts[i - 1];
-          if (
-            'text' in prevPart ||
-            ('fileData' in prevPart &&
-              atPathToResolvedSpecMap.has(prevPart.fileData!.fileUri))
-          ) {
+          const prevFileUri =
+            'fileData' in prevPart ? prevPart.fileData?.fileUri : undefined;
+          if ('text' in prevPart || (prevFileUri && atPathToResolvedSpecMap.has(prevFileUri))) {
             initialQueryText += ' ';
           }
         }
         if (resolvedSpec) {
           initialQueryText += `@${resolvedSpec}`;
-        } else {
+        } else if (chunkFileUri) {
           // If not resolved for reading (e.g. lone @ or invalid path that was skipped),
           // add the original @-string back, ensuring spacing if it's not the first element.
           if (
             i > 0 &&
             initialQueryText.length > 0 &&
             !initialQueryText.endsWith(' ') &&
-            !chunk.fileData?.fileUri.startsWith(' ')
+            !chunkFileUri.startsWith(' ')
           ) {
             initialQueryText += ' ';
           }
-          if (chunk.fileData?.fileUri) {
-            initialQueryText += `@${chunk.fileData.fileUri}`;
-          }
+          initialQueryText += `@${chunkFileUri}`;
         }
       }
     }
@@ -710,7 +805,7 @@ class Session {
       );
     }
 
-    const processedQueryParts: Part[] = [{ text: initialQueryText }];
+    const processedQueryParts: GeminiPart[] = [{ text: initialQueryText }];
 
     if (pathSpecsToRead.length === 0 && embeddedContext.length === 0) {
       // Fallback for lone "@" or completely invalid @-commands resulting in empty initialQueryText
@@ -772,7 +867,7 @@ class Session {
                 processedQueryParts.push({ text: part });
               }
             } else {
-              // part is a Part object.
+              // part is a GeminiPart object.
               processedQueryParts.push(part);
             }
           }

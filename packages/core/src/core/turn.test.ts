@@ -5,9 +5,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Turn, GeminiEventType } from './turn.js';
-import type { GeminiChat } from './geminiChat.js';
+import { Turn, ConversationEventType } from './turn.js';
+import type { AgentsClient } from './agentsClient.js';
 import type { Config } from '../config/config.js';
+import type { Content } from '../runtime/agentsTypes.js';
 import { reportError } from '../utils/errorReporting.js';
 
 const mockCreateSession = vi.fn();
@@ -35,34 +36,35 @@ function makeStream(events: Array<Record<string, unknown>>) {
 }
 
 describe('Turn (Unified Agents Runtime)', () => {
-  let history: any[];
-  let mockChat: GeminiChat & {
-    addHistory: ReturnType<typeof vi.fn>;
-    getHistory: ReturnType<typeof vi.fn>;
-    maybeIncludeSchemaDepthContext: ReturnType<typeof vi.fn>;
-  };
+  let history: Content[];
+  let agentsClient: AgentsClient;
   let config: Config;
   let turn: Turn;
 
   beforeEach(() => {
     vi.clearAllMocks();
     history = [];
-    mockChat = {
-      addHistory: vi.fn((entry) => {
+
+    agentsClient = {
+      addHistory: vi.fn(async (entry: Content) => {
         history.push(entry);
       }),
       getHistory: vi.fn(() => history),
-      maybeIncludeSchemaDepthContext: vi.fn(),
-    } as unknown as GeminiChat & {
-      addHistory: ReturnType<typeof vi.fn>;
-      getHistory: ReturnType<typeof vi.fn>;
-      maybeIncludeSchemaDepthContext: ReturnType<typeof vi.fn>;
-    };
+      getCuratedHistory: vi.fn(() => history),
+      generateJson: vi.fn(),
+      resetChat: vi.fn(),
+      setHistory: vi.fn(),
+      setSystemInstruction: vi.fn(),
+      clearSystemInstruction: vi.fn(),
+      setTools: vi.fn(),
+    } as unknown as AgentsClient;
 
     config = {
       getProvider: vi.fn(() => 'openai'),
       getModel: vi.fn(() => 'gpt-5'),
       getSystemPrompt: vi.fn(() => 'You are helpful.'),
+      getConversationClient: vi.fn(() => agentsClient),
+      getToolRegistry: vi.fn(() => ({ getAllTools: () => [] })),
     } as unknown as Config;
 
     mockCreateSession.mockResolvedValue({
@@ -71,7 +73,7 @@ describe('Turn (Unified Agents Runtime)', () => {
       model: 'gpt-5',
     });
 
-    turn = new Turn(mockChat, 'prompt-id-1', config);
+    turn = new Turn(agentsClient, 'prompt-id-1', config);
   });
 
   afterEach(() => {
@@ -103,10 +105,10 @@ describe('Turn (Unified Agents Runtime)', () => {
     });
 
     expect(events).toEqual([
-      { type: GeminiEventType.Content, value: 'Hello' },
-      { type: GeminiEventType.Content, value: ' world' },
-      { type: GeminiEventType.Content, value: 'Hello world!' },
-      { type: GeminiEventType.Finished, value: 'STOP' },
+      { type: ConversationEventType.Content, value: 'Hello' },
+      { type: ConversationEventType.Content, value: ' world' },
+      { type: ConversationEventType.Content, value: 'Hello world!' },
+      { type: ConversationEventType.Finished, value: 'STOP' },
     ]);
     expect(history).toHaveLength(2);
     expect(history[0]).toEqual({ role: 'user', parts: [{ text: 'Hi' }] });
@@ -140,7 +142,7 @@ describe('Turn (Unified Agents Runtime)', () => {
     }
 
     expect(events[0]).toEqual({
-      type: GeminiEventType.ToolCallRequest,
+      type: ConversationEventType.ToolCallRequest,
       value: {
         callId: 'call-123',
         name: 'run_command',
@@ -150,7 +152,7 @@ describe('Turn (Unified Agents Runtime)', () => {
       },
     });
     expect(events[1]).toEqual({
-      type: GeminiEventType.Finished,
+      type: ConversationEventType.Finished,
       value: 'STOP',
     });
     expect(turn.pendingToolCalls).toHaveLength(1);
@@ -174,7 +176,7 @@ describe('Turn (Unified Agents Runtime)', () => {
 
     expect(events).toEqual([
       {
-        type: GeminiEventType.Error,
+        type: ConversationEventType.Error,
         value: {
           error: { message: 'runtime exploded' },
         },
@@ -206,8 +208,8 @@ describe('Turn (Unified Agents Runtime)', () => {
     }
 
     expect(events).toEqual([
-      { type: GeminiEventType.Content, value: 'First chunk' },
-      { type: GeminiEventType.UserCancelled },
+      { type: ConversationEventType.Content, value: 'First chunk' },
+      { type: ConversationEventType.UserCancelled },
     ]);
   });
 
@@ -224,7 +226,7 @@ describe('Turn (Unified Agents Runtime)', () => {
 
     expect(events).toEqual([
       {
-        type: GeminiEventType.Error,
+        type: ConversationEventType.Error,
         value: {
           error: { message: 'send failed' },
         },
@@ -233,23 +235,9 @@ describe('Turn (Unified Agents Runtime)', () => {
     expect(reportError).not.toHaveBeenCalled();
   });
 
-  it('reports configuration errors when no config is supplied', async () => {
-    const turnWithoutConfig = new Turn(mockChat, 'prompt-id-2');
-
-    const events: unknown[] = [];
-    for await (const event of turnWithoutConfig.run('hello', new AbortController().signal)) {
-      events.push(event);
-    }
-
-    expect(events).toEqual([
-      {
-        type: GeminiEventType.Error,
-        value: {
-          error: {
-            message: 'Unified agents runtime requires configuration context',
-          },
-        },
-      },
-    ]);
+  it('reports configuration errors when no config is supplied', () => {
+    expect(() => new Turn(agentsClient, 'prompt-id-2')).toThrow(
+      'Turn requires configuration context',
+    );
   });
 });

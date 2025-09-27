@@ -8,7 +8,8 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type {
   Config,
   EditorType,
-  GeminiClient,
+  AgentsClient,
+  PartListUnion,
   ServerGeminiChatCompressedEvent,
   ServerGeminiContentEvent as ContentEvent,
   ServerGeminiFinishedEvent,
@@ -34,7 +35,16 @@ import {
   ApprovalMode,
   parseAndFormatApiError,
 } from '@ouroboros/ouroboros-code-core';
-import { type Part, type PartListUnion, FinishReason } from '@google/genai';
+import type {
+  GeminiFinishReason,
+  GeminiPart,
+  GeminiPartListUnion,
+} from '../types/geminiCompat.js';
+import {
+  ensureAgentContentArray,
+  type AgentContent,
+  type AgentContentFragment,
+} from '../types/agentContent.js';
 import type {
   HistoryItem,
   HistoryItemWithoutId,
@@ -67,9 +77,30 @@ import {
   useReactToolScheduler,
   mapToDisplay as mapTrackedToolCallsToDisplay,
 } from './useReactToolScheduler.js';
+import { mapAgentsStreamToGeminiEvents } from '@ouroboros/ouroboros-code-core';
 import { useSessionStats } from '../contexts/SessionContext.js';
 import { useKeypress } from './useKeypress.js';
 import type { LoadedSettings } from '../../config/settings.js';
+
+const toGeminiContent = (
+  content: AgentContent,
+): GeminiPartListUnion => {
+  const fragments = ensureAgentContentArray(content);
+  const mapFragment = (
+    fragment: AgentContentFragment,
+  ): string | GeminiPart => {
+    if (typeof fragment === 'string') {
+      return fragment;
+    }
+    if ('text' in fragment && typeof fragment.text === 'string') {
+      return { text: fragment.text };
+    }
+    return fragment as unknown as GeminiPart;
+  };
+  return fragments.length === 1
+    ? mapFragment(fragments[0])
+    : fragments.map(mapFragment);
+};
 
 enum StreamProcessingStatus {
   Completed,
@@ -82,14 +113,14 @@ enum StreamProcessingStatus {
  * API interaction, and tool call lifecycle.
  */
 export const useGeminiStream = (
-  geminiClient: GeminiClient,
+  agentsClient: AgentsClient,
   history: HistoryItem[],
   addItem: UseHistoryManagerReturn['addItem'],
   config: Config,
   settings: LoadedSettings,
   onDebugMessage: (message: string) => void,
   handleSlashCommand: (
-    cmd: PartListUnion,
+    cmd: string,
   ) => Promise<SlashCommandProcessorResult | false>,
   shellModeActive: boolean,
   getPreferredEditor: () => EditorType | undefined,
@@ -167,6 +198,9 @@ export const useGeminiStream = (
   const [multiAgentPersonaLookup, setMultiAgentPersonaLookup] = useState<Record<string, AgentPersonaSummary>>({});
   const [activeSpecialistNames, setActiveSpecialistNames] = useState<string | null>(null);
   const multiAgentClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const multiAgentHistoryActiveRef = useRef(false);
+  const multiAgentShowSelectionRef = useRef<(() => void) | undefined>(undefined);
+  const multiAgentFinalHistoryAddedRef = useRef(false);
   const toolExecutionResolversRef = useRef(
     new Map<
       string,
@@ -185,6 +219,9 @@ export const useGeminiStream = (
     if (multiAgentStatusActiveRef.current || multiAgentPanelActive) {
       setPendingHistoryItem(null);
       multiAgentStatusActiveRef.current = false;
+      multiAgentHistoryActiveRef.current = false;
+      multiAgentShowSelectionRef.current = undefined;
+      multiAgentFinalHistoryAddedRef.current = false;
       setMultiAgentPanelActive(false);
       setMultiAgentAgentIds([]);
       setMultiAgentFocusedId(null);
@@ -234,6 +271,7 @@ export const useGeminiStream = (
 
   const activatePanelForSelection = useCallback(
     (selection: SelectionFeedbackPayload, status: 'planning' | 'running' | 'complete') => {
+      const effectiveStatus = selection.status ?? status;
       if (multiAgentClearTimeoutRef.current) {
         clearTimeout(multiAgentClearTimeoutRef.current);
         multiAgentClearTimeoutRef.current = null;
@@ -248,23 +286,28 @@ export const useGeminiStream = (
         return next;
       });
 
-      if (status === 'complete') {
-        const autoModeActive = isAutoModeEnabled();
-        setActiveSpecialistNames(
-          agentSummaries.length
-            ? agentSummaries.map((agent) => `${agent.emoji} ${agent.name}`).join(', ')
-            : null,
-        );
+      if (effectiveStatus === 'complete') {
+        const summaryNames = agentSummaries.length
+          ? agentSummaries.map((agent) => `${agent.emoji} ${agent.name}`).join(', ')
+          : null;
+        if (summaryNames) {
+          setActiveSpecialistNames(summaryNames);
+        } else {
+          setActiveSpecialistNames(null);
+        }
         multiAgentStatusActiveRef.current = false;
         setMultiAgentPanelActive(false);
         setMultiAgentAgentIds([]);
         setMultiAgentFocusedId(null);
         setMultiAgentExpandedIds([]);
-        if (autoModeActive) {
-          setPendingHistoryItem(createMultiAgentHistoryItem(selection, 'complete'));
-        } else {
-          setPendingHistoryItem(null);
+        if (!multiAgentFinalHistoryAddedRef.current) {
+          const finalItem = createMultiAgentHistoryItem(selection, effectiveStatus);
+          addItem(finalItem, Date.now());
+          multiAgentFinalHistoryAddedRef.current = true;
         }
+        multiAgentHistoryActiveRef.current = multiAgentFinalHistoryAddedRef.current;
+        multiAgentShowSelectionRef.current = undefined;
+        setPendingHistoryItem(null);
         return;
       }
 
@@ -290,14 +333,16 @@ export const useGeminiStream = (
           agentSummaries.map((agent) => `${agent.emoji} ${agent.name}`).join(', '),
         );
       }
+      multiAgentHistoryActiveRef.current = true;
       setPendingHistoryItem(
-        createMultiAgentHistoryItem(selection, status, {
+        createMultiAgentHistoryItem(selection, effectiveStatus, {
           focusedAgentId: nextFocus ?? undefined,
           expandedAgentIds: nextExpanded,
         }),
       );
     },
     [
+      addItem,
       createMultiAgentHistoryItem,
       isAutoModeEnabled,
       multiAgentExpandedIds,
@@ -309,6 +354,10 @@ export const useGeminiStream = (
   const cycleAgentFocus = useCallback(
     (direction: number) => {
       if (!multiAgentPanelActive || multiAgentAgentIds.length === 0) return;
+      if (multiAgentShowSelectionRef.current) {
+        multiAgentShowSelectionRef.current();
+        multiAgentShowSelectionRef.current = undefined;
+      }
       const currentIndex = multiAgentFocusedId
         ? multiAgentAgentIds.indexOf(multiAgentFocusedId)
         : -1;
@@ -335,6 +384,10 @@ export const useGeminiStream = (
 
   const toggleFocusedAgent = useCallback(() => {
     if (!multiAgentPanelActive || !multiAgentFocusedId) return;
+    if (multiAgentShowSelectionRef.current) {
+      multiAgentShowSelectionRef.current();
+      multiAgentShowSelectionRef.current = undefined;
+    }
     setMultiAgentExpandedIds((prev) => {
       const next = prev.includes(multiAgentFocusedId)
         ? prev.filter((id) => id !== multiAgentFocusedId)
@@ -346,6 +399,10 @@ export const useGeminiStream = (
 
   const collapseAgentPanels = useCallback(() => {
     if (!multiAgentPanelActive) return;
+    if (multiAgentShowSelectionRef.current) {
+      multiAgentShowSelectionRef.current();
+      multiAgentShowSelectionRef.current = undefined;
+    }
     if (multiAgentExpandedIds.length === 0) {
       clearMultiAgentStatus();
       return;
@@ -374,7 +431,7 @@ export const useGeminiStream = (
     onExec,
     onDebugMessage,
     config,
-    geminiClient,
+    agentsClient,
   );
 
   const streamingState = useMemo(() => {
@@ -520,12 +577,12 @@ export const useGeminiStream = (
 
   const prepareQueryForGemini = useCallback(
     async (
-      query: PartListUnion,
+      query: GeminiPartListUnion,
       userMessageTimestamp: number,
       abortSignal: AbortSignal,
       prompt_id: string,
     ): Promise<{
-      queryToSend: PartListUnion | null;
+      queryToSend: GeminiPartListUnion | null;
       shouldProceed: boolean;
     }> => {
       if (turnCancelledRef.current) {
@@ -535,7 +592,7 @@ export const useGeminiStream = (
         return { queryToSend: null, shouldProceed: false };
       }
 
-      let localQueryToSendToGemini: PartListUnion | null = null;
+      let localQueryToSendToGemini: GeminiPartListUnion | null = null;
 
       if (typeof query === 'string') {
         const trimmedQuery = query.trim();
@@ -571,7 +628,7 @@ export const useGeminiStream = (
               return { queryToSend: null, shouldProceed: false };
             }
             case 'submit_prompt': {
-              localQueryToSendToGemini = slashCommandResult.content;
+              localQueryToSendToGemini = toGeminiContent(slashCommandResult.content);
 
               return {
                 queryToSend: localQueryToSendToGemini,
@@ -611,10 +668,10 @@ export const useGeminiStream = (
             userMessageTimestamp,
           );
 
-          if (!atCommandResult.shouldProceed) {
+          if (!atCommandResult.shouldProceed || atCommandResult.processedQuery === null) {
             return { queryToSend: null, shouldProceed: false };
           }
-          localQueryToSendToGemini = atCommandResult.processedQuery;
+          localQueryToSendToGemini = toGeminiContent(atCommandResult.processedQuery);
         } else {
           // Normal query for Gemini
           addItem(
@@ -624,7 +681,7 @@ export const useGeminiStream = (
           localQueryToSendToGemini = trimmedQuery;
         }
       } else {
-        // It's a function response (PartListUnion that isn't a string)
+        // It's a function response (GeminiPartListUnion that isn't a string)
         localQueryToSendToGemini = query;
       }
 
@@ -783,31 +840,26 @@ export const useGeminiStream = (
 
   const handleFinishedEvent = useCallback(
     (event: ServerGeminiFinishedEvent, userMessageTimestamp: number) => {
-      const finishReason = event.value;
+      const finishReason = (event.value ?? 'FINISH_REASON_UNSPECIFIED') as GeminiFinishReason | string;
 
-      const finishReasonMessages: Record<FinishReason, string | undefined> = {
-        [FinishReason.FINISH_REASON_UNSPECIFIED]: undefined,
-        [FinishReason.STOP]: undefined,
-        [FinishReason.MAX_TOKENS]: 'Response truncated due to token limits.',
-        [FinishReason.SAFETY]: 'Response stopped due to safety reasons.',
-        [FinishReason.RECITATION]: 'Response stopped due to recitation policy.',
-        [FinishReason.LANGUAGE]:
-          'Response stopped due to unsupported language.',
-        [FinishReason.BLOCKLIST]: 'Response stopped due to forbidden terms.',
-        [FinishReason.PROHIBITED_CONTENT]:
-          'Response stopped due to prohibited content.',
-        [FinishReason.SPII]:
-          'Response stopped due to sensitive personally identifiable information.',
-        [FinishReason.OTHER]: 'Response stopped for other reasons.',
-        [FinishReason.MALFORMED_FUNCTION_CALL]:
-          'Response stopped due to malformed function call.',
-        [FinishReason.IMAGE_SAFETY]:
-          'Response stopped due to image safety violations.',
-        [FinishReason.UNEXPECTED_TOOL_CALL]:
-          'Response stopped due to unexpected tool call.',
+      const finishReasonMessages: Record<GeminiFinishReason | string, string | undefined> = {
+        FINISH_REASON_UNSPECIFIED: undefined,
+        STOP: undefined,
+        MAX_TOKENS: 'Response truncated due to token limits.',
+        SAFETY: 'Response stopped due to safety reasons.',
+        RECITATION: 'Response stopped due to recitation policy.',
+        LANGUAGE: 'Response stopped due to unsupported language.',
+        BLOCKLIST: 'Response stopped due to forbidden terms.',
+        PROHIBITED_CONTENT: 'Response stopped due to prohibited content.',
+        SPII: 'Response stopped due to sensitive personally identifiable information.',
+        OTHER: 'Response stopped for other reasons.',
+        MALFORMED_FUNCTION_CALL: 'Response stopped due to malformed function call.',
+        IMAGE_SAFETY: 'Response stopped due to image safety violations.',
+        UNEXPECTED_TOOL_CALL: 'Response stopped due to unexpected tool call.',
       };
 
-      const message = finishReasonMessages[finishReason];
+      const finishReasonKey: GeminiFinishReason | string = finishReason;
+      const message = finishReasonMessages[finishReasonKey];
       if (message) {
         addItem(
           {
@@ -866,7 +918,6 @@ export const useGeminiStream = (
       stream: AsyncIterable<GeminiEvent>,
       userMessageTimestamp: number,
       signal: AbortSignal,
-      client: GeminiClient,
     ): Promise<StreamProcessingStatus> => {
       console.log('[processGeminiStreamEvents] Starting to process stream...');
       let geminiMessageBuffer = '';
@@ -953,7 +1004,7 @@ export const useGeminiStream = (
         }
         
         // Add assistant's complete response to history
-        client.addHistory({
+        agentsClient.addHistory({
           role: 'model',
           parts: assistantParts
         });
@@ -977,12 +1028,13 @@ export const useGeminiStream = (
       handleFinishedEvent,
       handleMaxSessionTurnsEvent,
       handleCitationEvent,
+      agentsClient,
     ],
   );
 
   const submitQuery = useCallback(
     async (
-      query: PartListUnion,
+      query: GeminiPartListUnion,
       options?: { isContinuation: boolean },
       prompt_id?: string,
     ) => {
@@ -1011,7 +1063,6 @@ export const useGeminiStream = (
 
       // Handle automatic agent selection for new queries (not continuations) with streaming
       let previousAgentState: string[] | undefined;
-      let showSelectionFeedback: (() => void) | undefined;
       let autoSelectionShouldProceed = true;
 
       const autoModeEnabled = isAutoModeEnabled();
@@ -1044,7 +1095,8 @@ export const useGeminiStream = (
             console.log('[DEBUG] Selection stream event:', event.type);
             if (event.type === 'progress') {
               if (event.selectionPreview) {
-                activatePanelForSelection(event.selectionPreview, 'running');
+                const previewStatus = event.selectionPreview.status ?? 'running';
+                activatePanelForSelection(event.selectionPreview, previewStatus);
                 continue;
               }
               // Progress messages are already shown by the stream
@@ -1052,18 +1104,23 @@ export const useGeminiStream = (
             } else if (event.type === 'complete') {
               console.log('[DEBUG] Agent selection completed');
               if (event.selectionFeedback) {
-                activatePanelForSelection(event.selectionFeedback, 'complete');
+                const feedbackStatus = event.selectionFeedback.status ?? 'complete';
+                activatePanelForSelection(event.selectionFeedback, feedbackStatus);
                 const names = event.selectionFeedback.selectedAgents
                   .map((agent) => `${agent.emoji} ${agent.name}`)
                   .join(', ');
                 setActiveSpecialistNames(names);
               }
               if (event.showSelectionFeedback) {
-                showSelectionFeedback = event.showSelectionFeedback;
                 previousAgentState = event.previousAgentState;
-                console.log('[DEBUG] Showing selection feedback...');
-                // Show final selection feedback immediately
-                showSelectionFeedback();
+                multiAgentShowSelectionRef.current = () => {
+                  if (multiAgentFinalHistoryAddedRef.current) {
+                    return;
+                  }
+                  event.showSelectionFeedback?.();
+                  multiAgentFinalHistoryAddedRef.current = true;
+                };
+                console.log('[DEBUG] Captured selection feedback state');
               }
               if (!event.selectionFeedback) {
                 clearMultiAgentStatus();
@@ -1132,16 +1189,7 @@ export const useGeminiStream = (
       try {
         console.log('[DEBUG] Starting LLM conversation phase...');
         console.log('[useGeminiStream] About to call sendMessageStream');
-        console.log('[useGeminiStream] geminiClient exists:', !!geminiClient);
-        console.log('[useGeminiStream] sendMessageStream exists:', !!geminiClient?.sendMessageStream);
         
-        if (!geminiClient) {
-          throw new Error('GeminiClient is undefined in useGeminiStream');
-        }
-        if (!geminiClient.sendMessageStream) {
-          throw new Error('sendMessageStream method is undefined on GeminiClient');
-        }
-
         // Show immediate thinking feedback for selected provider
         const currentProvider = config.getProvider();
         const providerEmojis = {
@@ -1192,22 +1240,27 @@ export const useGeminiStream = (
         }, 3000); // Show progress every 3 seconds during thinking
         
         console.log('[useGeminiStream] Creating stream...');
-        const stream = geminiClient.sendMessageStream(
-          queryToSend,
-          abortSignal,
+        const stream = await agentsClient.sendMessageStream(
+          {
+            message: queryToSend as PartListUnion,
+            config: {
+              abortSignal,
+            },
+          },
           prompt_id!,
         );
-        console.log('[useGeminiStream] Stream created, type:', typeof stream);
-        
-        // Clear the thinking progress once streaming starts
+        console.log('[useGeminiStream] Stream created');
+
+        // Clear the thinking progress once streaming is active
         clearInterval(thinkingProgressInterval);
-        
+
+        const mappedStream = mapAgentsStreamToGeminiEvents(stream, prompt_id!);
+
         console.log('[useGeminiStream] About to process stream events...');
         const processingStatus = await processGeminiStreamEvents(
-          stream,
+          mappedStream,
           userMessageTimestamp,
           abortSignal,
-          geminiClient,
         );
         console.log('[useGeminiStream] Stream processing completed with status:', processingStatus);
 
@@ -1269,7 +1322,7 @@ export const useGeminiStream = (
       addItem,
       setPendingHistoryItem,
       setInitError,
-      geminiClient,
+      agentsClient,
       onAuthError,
       config,
       startNewPrompt,
@@ -1370,13 +1423,13 @@ export const useGeminiStream = (
       );
 
       if (allToolsCancelled) {
-        if (geminiClient) {
+        if (agentsClient) {
           // We need to manually add the function responses to the history
           // so the model knows the tools were cancelled.
           const combinedParts = geminiTools.flatMap(
             (toolCall) => toolCall.response.responseParts,
           );
-          geminiClient.addHistory({
+          agentsClient.addHistory({
             role: 'user',
             parts: combinedParts,
           });
@@ -1389,7 +1442,7 @@ export const useGeminiStream = (
         return;
       }
 
-      const responsesToSend: Part[] = geminiTools.flatMap(
+      const responsesToSend: GeminiPart[] = geminiTools.flatMap(
         (toolCall) => toolCall.response.responseParts,
       );
       const callIdsToMarkAsSubmitted = geminiTools.map(
@@ -1451,7 +1504,7 @@ export const useGeminiStream = (
       isResponding,
       submitQuery,
       markToolsAsSubmitted,
-      geminiClient,
+      agentsClient,
       performMemoryRefresh,
       modelSwitchedFromQuotaError,
     ],
@@ -1538,7 +1591,7 @@ export const useGeminiStream = (
             const toolName = toolCall.request.name;
             const fileName = path.basename(filePath);
             const toolCallWithSnapshotFileName = `${timestamp}-${fileName}-${toolName}.json`;
-            const clientHistory = await geminiClient?.getHistory();
+            const clientHistory = await agentsClient?.getHistory();
             const toolCallWithSnapshotFilePath = path.join(
               checkpointDir,
               toolCallWithSnapshotFileName,
@@ -1578,7 +1631,7 @@ export const useGeminiStream = (
     onDebugMessage,
     gitService,
     history,
-    geminiClient,
+    agentsClient,
     storage,
   ]);
 

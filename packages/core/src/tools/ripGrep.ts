@@ -390,7 +390,7 @@ export class RipGrepTool extends BaseDeclarativeTool<
   RipGrepToolParams,
   ToolResult
 > {
-  static readonly Name = 'search_file_content';
+  static readonly Name = 'ripgrep_search';
 
   constructor(private readonly config: Config) {
     super(

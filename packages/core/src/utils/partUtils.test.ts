@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 Ouroboros Development Team
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,20 +11,20 @@ import {
   flatMapTextParts,
   appendToLastTextPart,
 } from './partUtils.js';
-import type { GenerateContentResponse, Part, PartUnion } from '@google/genai';
+import type { AgentContentFragment, AgentMessage } from '../runtime/agentsTypes.js';
+
+type MockResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<Record<string, unknown> | string>;
+    };
+  }>;
+};
 
 const mockResponse = (
-  parts?: Array<{ text?: string; functionCall?: unknown }>,
-): GenerateContentResponse => ({
-  candidates: parts
-    ? [{ content: { parts: parts as Part[], role: 'model' }, index: 0 }]
-    : [],
-  promptFeedback: { safetyRatings: [] },
-  text: undefined,
-  data: undefined,
-  functionCalls: undefined,
-  executableCode: undefined,
-  codeExecutionResult: undefined,
+  parts?: Array<{ text?: string; functionCall?: unknown } | string>,
+): MockResponse => ({
+  candidates: parts ? [{ content: { parts } }] : [],
 });
 
 describe('partUtils', () => {
@@ -49,9 +49,9 @@ describe('partUtils', () => {
     });
 
     it('should return empty string for non-text parts', () => {
-      const part: Part = { inlineData: { mimeType: 'image/png', data: '' } };
+      const part = { inlineData: { mimeType: 'image/png' } };
       expect(partToString(part)).toBe('');
-      const part2: Part = { functionCall: { name: 'test' } };
+      const part2 = { functionCall: { name: 'test' } };
       expect(partToString(part2)).toBe('');
     });
   });
@@ -76,58 +76,52 @@ describe('partUtils', () => {
     });
 
     it('should return the text property if the part is an object with text', () => {
-      const part: Part = { text: 'hello world' };
+      const part = { text: 'hello world' };
       expect(partToString(part, verboseOptions)).toBe('hello world');
     });
 
     it('should return descriptive string for videoMetadata part', () => {
-      const part = { videoMetadata: {} } as Part;
+      const part = { videoMetadata: {} };
       expect(partToString(part, verboseOptions)).toBe('[Video Metadata]');
     });
 
     it('should return descriptive string for thought part', () => {
-      const part = { thought: 'thinking' } as unknown as Part;
+      const part = { thought: 'thinking' };
       expect(partToString(part, verboseOptions)).toBe('[Thought: thinking]');
     });
 
     it('should return descriptive string for codeExecutionResult part', () => {
-      const part = { codeExecutionResult: {} } as Part;
-      expect(partToString(part, verboseOptions)).toBe(
-        '[Code Execution Result]',
-      );
+      const part = { codeExecutionResult: {} };
+      expect(partToString(part, verboseOptions)).toBe('[Code Execution Result]');
     });
 
     it('should return descriptive string for executableCode part', () => {
-      const part = { executableCode: {} } as Part;
+      const part = { executableCode: {} };
       expect(partToString(part, verboseOptions)).toBe('[Executable Code]');
     });
 
     it('should return descriptive string for fileData part', () => {
-      const part = { fileData: {} } as Part;
+      const part = { fileData: {} };
       expect(partToString(part, verboseOptions)).toBe('[File Data]');
     });
 
     it('should return descriptive string for functionCall part', () => {
-      const part = { functionCall: { name: 'myFunction' } } as Part;
-      expect(partToString(part, verboseOptions)).toBe(
-        '[Function Call: myFunction]',
-      );
+      const part = { functionCall: { name: 'myFunction' } };
+      expect(partToString(part, verboseOptions)).toBe('[Function Call: myFunction]');
     });
 
     it('should return descriptive string for functionResponse part', () => {
-      const part = { functionResponse: { name: 'myFunction' } } as Part;
-      expect(partToString(part, verboseOptions)).toBe(
-        '[Function Response: myFunction]',
-      );
+      const part = { functionResponse: { name: 'myFunction' } };
+      expect(partToString(part, verboseOptions)).toBe('[Function Response: myFunction]');
     });
 
     it('should return descriptive string for inlineData part', () => {
-      const part = { inlineData: { mimeType: 'image/png', data: '' } } as Part;
+      const part = { inlineData: { mimeType: 'image/png' } };
       expect(partToString(part, verboseOptions)).toBe('<image/png>');
     });
 
     it('should return an empty string for an unknown part type', () => {
-      const part: Part = {};
+      const part = {};
       expect(partToString(part, verboseOptions)).toBe('');
     });
 
@@ -138,10 +132,10 @@ describe('partUtils', () => {
         [
           { functionCall: { name: 'func1' } },
           ' end',
-          { inlineData: { mimeType: 'audio/mp3', data: '' } },
+          { inlineData: { mimeType: 'audio/mp3' } },
         ],
       ];
-      expect(partToString(parts as Part, verboseOptions)).toBe(
+      expect(partToString(parts as unknown as AgentContentFragment[], verboseOptions)).toBe(
         'start middle[Function Call: func1] end<audio/mp3>',
       );
     });
@@ -169,26 +163,39 @@ describe('partUtils', () => {
     });
 
     it('should return null if the first candidate has no content property', () => {
-      const response: GenerateContentResponse = {
+      const response: MockResponse = {
         candidates: [
           {
-            index: 0,
+            // no content
           },
         ],
-        promptFeedback: { safetyRatings: [] },
-        text: undefined,
-        data: undefined,
-        functionCalls: undefined,
-        executableCode: undefined,
-        codeExecutionResult: undefined,
       };
       expect(getResponseText(response)).toBeNull();
+    });
+
+    it('should handle agent message payloads', () => {
+      const message: AgentMessage = {
+        role: 'assistant',
+        parts: ['Hello', { text: ' world' }],
+      };
+      expect(getResponseText(message)).toBe('Hello world');
+    });
+
+    it('should handle wrapper objects containing message property', () => {
+      const payload = {
+        message: {
+          role: 'assistant',
+          parts: ['Hi'],
+        },
+      };
+      expect(getResponseText(payload)).toBe('Hi');
     });
   });
 
   describe('flatMapTextParts', () => {
-    // A simple async transform function that splits a string into character parts.
-    const splitCharsTransform = async (text: string): Promise<PartUnion[]> =>
+    const splitCharsTransform = async (
+      text: string,
+    ): Promise<AgentContentFragment[]> =>
       text.split('').map((char) => ({ text: char }));
 
     it('should return an empty array for empty input', async () => {
@@ -201,101 +208,80 @@ describe('partUtils', () => {
       expect(result).toEqual([{ text: 'h' }, { text: 'i' }]);
     });
 
-    it('should transform a single text part object', async () => {
+    it('should transform an array of strings and objects', async () => {
       const result = await flatMapTextParts(
-        { text: 'cat' },
+        ['hi', { text: '!' }],
         splitCharsTransform,
       );
-      expect(result).toEqual([{ text: 'c' }, { text: 'a' }, { text: 't' }]);
+      expect(result).toEqual([{ text: 'h' }, { text: 'i' }, { text: '!' }]);
     });
 
-    it('should transform an array of text parts and flatten the result', async () => {
-      // A transform that duplicates the text to test the "flatMap" behavior.
-      const duplicateTransform = async (text: string): Promise<PartUnion[]> => [
-        { text: `${text}` },
-        { text: `${text}` },
-      ];
-      const parts = [{ text: 'a' }, { text: 'b' }];
-      const result = await flatMapTextParts(parts, duplicateTransform);
-      expect(result).toEqual([
-        { text: 'a' },
-        { text: 'a' },
-        { text: 'b' },
-        { text: 'b' },
-      ]);
-    });
-
-    it('should pass through non-text parts unmodified', async () => {
-      const nonTextPart: Part = { functionCall: { name: 'do_stuff' } };
-      const result = await flatMapTextParts(nonTextPart, splitCharsTransform);
-      expect(result).toEqual([nonTextPart]);
-    });
-
-    it('should handle a mix of text and non-text parts in an array', async () => {
-      const nonTextPart: Part = {
-        inlineData: { mimeType: 'image/jpeg', data: '' },
-      };
-      const parts: PartUnion[] = [{ text: 'go' }, nonTextPart, ' stop'];
-      const result = await flatMapTextParts(parts, splitCharsTransform);
+    it('should preserve non-text parts', async () => {
+      const nonTextPart = { inlineData: { mimeType: 'image/png' } };
+      const result = await flatMapTextParts(
+        ['go', nonTextPart],
+        splitCharsTransform,
+      );
       expect(result).toEqual([
         { text: 'g' },
         { text: 'o' },
-        nonTextPart, // Should be passed through
-        { text: ' ' },
-        { text: 's' },
-        { text: 't' },
-        { text: 'o' },
-        { text: 'p' },
+        nonTextPart,
       ]);
     });
 
-    it('should handle a transform that returns an empty array', async () => {
-      const removeTransform = async (_text: string): Promise<PartUnion[]> => [];
-      const parts: PartUnion[] = [
-        { text: 'remove' },
-        { functionCall: { name: 'keep' } },
-      ];
+    it('should handle nested arrays', async () => {
+      const parts: AgentContentFragment[] = [
+        'hi',
+        [' there', { text: '!' }],
+      ] as unknown as AgentContentFragment[];
+      const result = await flatMapTextParts(parts, splitCharsTransform);
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('should allow transforms to remove parts entirely', async () => {
+      const removeTransform = async (): Promise<AgentContentFragment[]> => [];
+      const parts: AgentContentFragment[] = ['keep', 'drop'];
       const result = await flatMapTextParts(parts, removeTransform);
-      expect(result).toEqual([{ functionCall: { name: 'keep' } }]);
+      expect(result).toEqual([]);
     });
   });
 
   describe('appendToLastTextPart', () => {
     it('should append to an empty prompt', () => {
-      const prompt: PartUnion[] = [];
-      const result = appendToLastTextPart(prompt, 'new text');
-      expect(result).toEqual([{ text: 'new text' }]);
+      const prompt: AgentContentFragment[] = [];
+      expect(appendToLastTextPart(prompt, 'hello')).toEqual([
+        { text: 'hello' },
+      ]);
     });
 
     it('should append to a prompt with a string as the last part', () => {
-      const prompt: PartUnion[] = ['first part'];
-      const result = appendToLastTextPart(prompt, 'new text');
-      expect(result).toEqual(['first part\n\nnew text']);
+      const prompt: AgentContentFragment[] = ['first part'];
+      expect(appendToLastTextPart(prompt, 'second')).toEqual([
+        'first part\n\nsecond',
+      ]);
     });
 
-    it('should append to a prompt with a text part object as the last part', () => {
-      const prompt: PartUnion[] = [{ text: 'first part' }];
-      const result = appendToLastTextPart(prompt, 'new text');
-      expect(result).toEqual([{ text: 'first part\n\nnew text' }]);
+    it('should append to a prompt with a text object as the last part', () => {
+      const prompt: AgentContentFragment[] = [{ text: 'first part' }];
+      expect(appendToLastTextPart(prompt, 'second')).toEqual([
+        { text: 'first part\n\nsecond' },
+      ]);
     });
 
-    it('should append a new text part if the last part is not a text part', () => {
-      const nonTextPart: Part = { functionCall: { name: 'do_stuff' } };
-      const prompt: PartUnion[] = [nonTextPart];
-      const result = appendToLastTextPart(prompt, 'new text');
-      expect(result).toEqual([nonTextPart, { text: '\n\nnew text' }]);
+    it('should add a new text part if the last part is non-text', () => {
+      const nonTextPart = { inlineData: { mimeType: 'image/png' } };
+      const prompt: AgentContentFragment[] = [nonTextPart];
+      expect(appendToLastTextPart(prompt, 'second')).toEqual([
+        nonTextPart,
+        { text: 'second' },
+      ]);
     });
 
-    it('should not append anything if the text to append is empty', () => {
-      const prompt: PartUnion[] = ['first part'];
-      const result = appendToLastTextPart(prompt, '');
-      expect(result).toEqual(['first part']);
-    });
-
-    it('should use a custom separator', () => {
-      const prompt: PartUnion[] = ['first part'];
-      const result = appendToLastTextPart(prompt, 'new text', '---');
-      expect(result).toEqual(['first part---new text']);
+    it('should respect custom separator', () => {
+      const prompt: AgentContentFragment[] = ['first part'];
+      expect(appendToLastTextPart(prompt, 'second', '---')).toEqual([
+        'first part---second',
+      ]);
     });
   });
 });

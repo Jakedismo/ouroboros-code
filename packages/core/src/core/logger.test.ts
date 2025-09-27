@@ -24,7 +24,7 @@ import { Storage } from '../config/storage.js';
 import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type { Content } from '@google/genai';
+import type { Content } from '../runtime/genaiCompat.js';
 
 const LOG_FILE_NAME = 'logs.json';
 const CHECKPOINT_FILE_NAME = 'checkpoint.json';

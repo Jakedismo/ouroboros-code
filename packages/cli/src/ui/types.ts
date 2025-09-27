@@ -9,8 +9,8 @@ import type {
   ToolCallConfirmationDetails,
   ToolResultDisplay,
 } from '@ouroboros/ouroboros-code-core';
-import type { AgentContent } from './types/agentContent.js';
 
+import type { AgentContent } from './types/agentContent.js';
 // Only defining the state enum needed by the UI
 export enum StreamingState {
   Idle = 'idle',
@@ -84,6 +84,9 @@ export interface MultiAgentAgentResultDisplay {
   confidence: number;
   handoffAgentIds: string[];
   tools?: MultiAgentToolEventDisplay[];
+  liveThought?: string;
+  rawText?: string;
+  status?: 'pending' | 'running' | 'complete';
 }
 
 export interface MultiAgentExecutionDisplay {
@@ -107,6 +110,8 @@ export interface MultiAgentToolEventDisplay {
   name: string;
   args: string;
   output?: string;
+  status: ToolCallStatus;
+  error?: string;
 }
 
 export interface MultiAgentInteractiveState {

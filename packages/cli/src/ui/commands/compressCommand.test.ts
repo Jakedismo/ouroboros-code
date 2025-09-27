@@ -7,7 +7,7 @@
 import {
   CompressionStatus,
   type ChatCompressionInfo,
-  type GeminiClient,
+  type AgentsClient,
 } from '@ouroboros/ouroboros-code-core';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { compressCommand } from './compressCommand.js';
@@ -23,10 +23,10 @@ describe('compressCommand', () => {
     context = createMockCommandContext({
       services: {
         config: {
-          getGeminiClient: () =>
+          getConversationClient: () =>
             ({
               tryCompressChat: mockTryCompressChat,
-            }) as unknown as GeminiClient,
+            }) as unknown as AgentsClient,
         },
       },
     });

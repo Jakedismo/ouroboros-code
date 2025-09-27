@@ -4,8 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { ContentGenerator } from '../core/contentGenerator.js';
 import type { Config } from '../config/config.js';
+import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
+import type {
+  UnifiedAgentMessage,
+  UnifiedAgentStreamOptions,
+} from '../runtime/types.js';
 import { AgentManager } from './agentManager.js';
 import { AGENT_PERSONAS, getAgentById, type AgentPersona } from './personas.js';
 import {
@@ -55,7 +59,7 @@ const AGENT_SELECTION_SCHEMA = {
  */
 export class AgentSelectorService {
   private static instance: AgentSelectorService | null = null;
-  private contentGenerator: ContentGenerator | null = null;
+  private unifiedClient: UnifiedAgentsClient | null = null;
   private agentManager: AgentManager | null = null;
   private config: Config | null = null;
   private selectedModel: string | null = null;
@@ -87,32 +91,21 @@ export class AgentSelectorService {
 
   /**
    * Initialize the agent selector service with the same ContentGenerator as regular chat
-   * @param config - The Config instance that contains the GeminiClient with ContentGenerator
+   * @param config - Active configuration (provides the shared AgentsClient/content generator)
    */
   async initialize(config: Config): Promise<void> {
-    // Check if GeminiClient exists first
-    const geminiClient = config.getGeminiClient();
-    if (!geminiClient) {
-      throw new Error(
-        'GeminiClient not initialized yet. Please ensure refreshAuth is called before initializing AgentSelectorService',
-      );
-    }
     this.config = config;
+    this.unifiedClient = new UnifiedAgentsClient(config);
 
-    // Use the SAME ContentGenerator that regular chat uses - this ensures unified behavior
-    this.contentGenerator = geminiClient.getContentGenerator();
-
-    // Store the current model from config
     this.selectedModel = config.getModel();
-
     this.agentManager = AgentManager.getInstance();
-    if (this.contentGenerator) {
-      const defaultModel =
-        this.selectedModel || config.getModel() || 'gpt-5-nano';
-      this.multiAgentExecutor = new MultiAgentExecutor(config, {
-        defaultModel,
-      });
-    }
+
+    const defaultModel =
+      this.selectedModel || config.getModel() || 'gpt-5-nano';
+    this.multiAgentExecutor = new MultiAgentExecutor(config, {
+      defaultModel,
+      client: this.unifiedClient,
+    });
   }
 
   /**
@@ -192,7 +185,7 @@ export class AgentSelectorService {
     );
     const startTime = Date.now();
 
-    if (!this.isAutoModeActive || !this.contentGenerator) {
+    if (!this.isAutoModeActive || !this.unifiedClient) {
       return {
         selectedAgents: [],
         reasoning: 'Auto mode disabled or service not initialized',
@@ -319,53 +312,70 @@ export class AgentSelectorService {
     confidence: number;
     taskCategory?: string;
   }> {
-    if (!this.contentGenerator) {
+    if (!this.unifiedClient || !this.config) {
       throw new Error('Agent selector service is not initialized');
     }
 
     const selectionPrompt = this.buildSelectionPrompt(userPrompt);
-    const generationConfig: {
-      temperature?: number;
-      maxOutputTokens?: number;
-      responseJsonSchema: typeof AGENT_SELECTION_SCHEMA.schema;
-      responseMimeType: 'application/json';
-    } = {
-      responseJsonSchema: AGENT_SELECTION_SCHEMA.schema,
-      responseMimeType: 'application/json',
-    };
+    const schemaReference = JSON.stringify(
+      AGENT_SELECTION_SCHEMA.schema,
+      null,
+      2,
+    );
+    const providerId = this.config.getProvider();
 
-    if (this.config?.getProvider() !== 'openai') {
-      generationConfig.temperature = 0.1;
-      generationConfig.maxOutputTokens = 32000;
+    const session = await this.unifiedClient.createSession({
+      providerId,
+      model,
+      systemPrompt:
+        'You are the Ouroboros agent dispatcher. Select the best specialists and respond with strict JSON that matches the documented schema. Do not include prose.',
+      metadata: {
+        agentId: 'auto-dispatcher',
+        agentName: 'Auto Agent Dispatcher',
+      },
+    });
+
+    const streamOptions: UnifiedAgentStreamOptions = {};
+    if (providerId !== 'openai') {
+      streamOptions.temperature = 0.1;
+      streamOptions.maxOutputTokens = 4096;
+    } else {
+      streamOptions.temperature = 0.1;
     }
 
-    const contents = [
+    const messages: UnifiedAgentMessage[] = [
       {
         role: 'user',
-        parts: [{ text: `${selectionPrompt}\n\nUser prompt: ${userPrompt}` }],
+        content: `${selectionPrompt}\n\nSchema reference (for validation only):\n${schemaReference}\n\nRespond **only** with JSON matching the fields above.\n\nUSER PROMPT:
+${userPrompt}`,
       },
     ];
 
-    const response = await this.contentGenerator.generateContent(
-      {
-        model,
-        contents,
-        config: generationConfig as any,
-      },
-      'agent-selection',
-    );
+    let accumulated = '';
 
-    const text = response.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    for await (const event of this.unifiedClient.streamResponse(
+      session,
+      messages,
+      streamOptions,
+    )) {
+      if (event.type === 'text-delta' && event.delta) {
+        accumulated += event.delta;
+      }
+      if (event.type === 'final') {
+        accumulated = event.message.content ?? accumulated;
+      }
+    }
+
     console.log(
       `[Agent Selector] Raw response for model ${model}:`,
-      text.substring(0, 200),
+      accumulated.substring(0, 200),
     );
 
-    if (!text.trim()) {
+    if (!accumulated.trim()) {
       throw new Error('Empty response from selection model');
     }
 
-    const parsed = this.parseSelectionResponse(text);
+    const parsed = this.parseSelectionResponse(accumulated);
 
     if (!parsed.agentIds || parsed.agentIds.length === 0) {
       throw new Error(`Model ${model} returned no agent IDs`);
@@ -478,22 +488,24 @@ ${agentSummaries}
 
 SELECTION CRITERIA:
 1. Choose agents whose specialties directly match the user's request
-2. For complex tasks, select complementary agents (e.g., architect + specialist)  
+2. For complex tasks, select complementary agents (e.g., architect + specialist)
 3. Default to 1-2 agents unless the task clearly needs more perspectives
 4. For ambiguous requests, favor general-purpose agents like systems-architect
 5. Consider the full context and intent, not just keywords
 
 OUTPUT REQUIREMENTS:
-- Select 1-3 agent IDs from the available agents list above
+- Select 1-10 agent IDs from the available agents list above
 - Provide clear reasoning for your selection explaining why these agents are best suited
 - Include a confidence score (0.0 to 1.0) for your selection
 - Optionally categorize the task type
+- Respond with JSON: {"agentIds":["id"], "reasoning":"...", "confidence":0.0-1.0, "taskCategory":"optional"}
+- Do not include any prose outside the JSON object
 
 EXAMPLES:
 User: "Optimize my React component rendering performance"
 → ["react-specialist", "web-performance-specialist"]
 
-User: "Design a microservices API for user authentication"  
+User: "Design a microservices API for user authentication"
 → ["api-designer", "microservices-architect", "security-auditor"]
 
 User: "My database queries are slow"

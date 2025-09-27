@@ -47,3 +47,5 @@ export interface UnifiedAgentStreamOptions {
   toolChoice?: 'auto' | 'none' | { type: 'function'; name: string };
   reasoningEffort?: 'low' | 'medium' | 'high';
 }
+
+export type { AgentStreamEvent, AgentContentFragment, AgentMessage, AgentToolInvocation, AgentToolResult, AgentFunctionCall, ToolFunctionDeclaration } from './agentsTypes.js';

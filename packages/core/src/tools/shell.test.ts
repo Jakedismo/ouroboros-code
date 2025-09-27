@@ -25,6 +25,7 @@ vi.mock('../utils/summarizer.js');
 
 import { isCommandAllowed } from '../utils/shell-utils.js';
 import { ShellTool } from './shell.js';
+import type { AgentsClient } from '../core/agentsClient.js';
 import { type Config } from '../config/config.js';
 import {
   type ShellExecutionResult,
@@ -57,7 +58,7 @@ describe('ShellTool', () => {
       getTargetDir: vi.fn().mockReturnValue('/test/dir'),
       getSummarizeToolOutputConfig: vi.fn().mockReturnValue(undefined),
       getWorkspaceContext: () => createMockWorkspaceContext('.'),
-      getGeminiClient: vi.fn(),
+      getConversationClient: vi.fn().mockReturnValue({} as AgentsClient),
       getShouldUseNodePtyShell: vi.fn().mockReturnValue(false),
     } as unknown as Config;
 
@@ -264,7 +265,7 @@ describe('ShellTool', () => {
 
       expect(summarizer.summarizeToolOutput).toHaveBeenCalledWith(
         expect.any(String),
-        mockConfig.getGeminiClient(),
+        mockConfig.getConversationClient(),
         mockAbortSignal,
         1000,
       );

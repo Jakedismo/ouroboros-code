@@ -42,8 +42,8 @@ export async function validateNonInteractiveAuth(
       process.exit(1);
     }
     
-    // For non-Gemini providers, use API key authentication but still initialize GeminiClient
-    // The GeminiClient acts as a universal interface that can work with all providers
+    // For non-Gemini providers, use API key authentication but still initialize AgentsClient
+    // The AgentsClient acts as a universal interface that can work with all providers
     effectiveAuthType = AuthType.USE_GEMINI; // This represents API key authentication for all providers
   }
 

@@ -9,12 +9,13 @@ import {
   executeToolCall,
   shutdownTelemetry,
   isTelemetrySdkInitialized,
-  GeminiEventType,
   parseAndFormatApiError,
   FatalInputError,
   FatalTurnLimitedError,
+  getResponseText,
 } from '@ouroboros/ouroboros-code-core';
-import type { AgentMessage, AgentContent, AgentContentFragment } from './ui/types/agentContent.js';
+import type { AgentMessage, AgentContentFragment } from './ui/types/agentContent.js';
+import type { FunctionCall, Part, PartListUnion, GenerateContentConfig } from '@ouroboros/ouroboros-code-core';
 import { ensureAgentContentArray } from './ui/types/agentContent.js';
 import * as fs from 'node:fs/promises';
 
@@ -129,7 +130,7 @@ export async function runNonInteractive(
       }
     });
 
-    const geminiClient = config.getGeminiClient();
+    const agentsClient = config.getConversationClient();
 
     const abortController = new AbortController();
 
@@ -180,30 +181,58 @@ export async function runNonInteractive(
           'Reached max session turns for this session. Increase the number of turns by specifying maxSessionTurns in settings.json.',
         );
       }
-      const toolCallRequests: ToolCallRequestInfo[] = [];
 
-      const responseStream = geminiClient.sendMessageStream(
-        currentMessages[0]?.parts || [],
-        abortController.signal,
+      const toolDeclarations = config
+        .getToolRegistry()
+        .getFunctionDeclarations();
+      const generationConfig: GenerateContentConfig = {
+        abortSignal: abortController.signal,
+      };
+      if (toolDeclarations.length > 0) {
+        generationConfig.tools = [{ functionDeclarations: toolDeclarations }];
+      }
+
+      const messageParts = (currentMessages[0]?.parts ?? []) as PartListUnion;
+      const response = await agentsClient.sendMessage(
+        {
+          message: messageParts,
+          config: generationConfig,
+        },
         prompt_id,
       );
 
-      for await (const event of responseStream) {
-        if (abortController.signal.aborted) {
-          console.error('Operation cancelled.');
-          return;
-        }
-
-        if (event.type === GeminiEventType.Content) {
-          process.stdout.write(event.value);
-        } else if (event.type === GeminiEventType.ToolCallRequest) {
-          toolCallRequests.push(event.value);
-        }
+      if (abortController.signal.aborted) {
+        console.error('Operation cancelled.');
+        return;
       }
 
-      if (toolCallRequests.length > 0) {
+      const candidate = response.candidates?.[0];
+      const responseParts =
+        candidate && Array.isArray(candidate.content?.parts)
+          ? (candidate.content!.parts as Part[])
+          : [];
+
+      const functionCalls = responseParts
+        .map((part) => part.functionCall)
+        .filter((call): call is FunctionCall => Boolean(call));
+
+      const responseText = getResponseText(response) ?? '';
+      if (responseText) {
+        process.stdout.write(responseText);
+      }
+
+      if (functionCalls.length > 0) {
         const toolResponseParts: AgentContentFragment[] = [];
-        for (const requestInfo of toolCallRequests) {
+        for (const functionCall of functionCalls) {
+          const requestInfo: ToolCallRequestInfo = {
+            callId:
+              functionCall.id ?? `${functionCall.name ?? 'tool'}-${Date.now()}`,
+            name: functionCall.name ?? 'unknown_tool',
+            args: (functionCall.args ?? {}) as Record<string, unknown>,
+            isClientInitiated: true,
+            prompt_id,
+          };
+
           const toolResponse = await executeToolCall(
             config,
             requestInfo,
@@ -220,6 +249,11 @@ export async function runNonInteractive(
             toolResponseParts.push(...toolResponse.responseParts);
           }
         }
+        if (toolResponseParts.length === 0) {
+          toolResponseParts.push({
+            text: 'All tool calls failed. Please analyze the errors and try an alternative approach.',
+          });
+        }
         currentMessages = [{ role: 'user', parts: toolResponseParts }];
       } else {
         // In autonomous mode, wait for more input instead of exiting
@@ -234,7 +268,9 @@ export async function runNonInteractive(
             }, 100);
           });
         } else {
-          process.stdout.write('\n'); // Ensure a final newline
+          if (!responseText.endsWith('\n')) {
+            process.stdout.write('\n');
+          }
           return;
         }
       }

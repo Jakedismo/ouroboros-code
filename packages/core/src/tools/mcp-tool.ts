@@ -17,7 +17,8 @@ import {
   Kind,
   ToolConfirmationOutcome,
 } from './tools.js';
-import type { CallableTool, FunctionCall, Part } from '@google/genai';
+import type { CallableTool, FunctionCall, Part } from '../runtime/genaiCompat.js';
+import type { JsonSchema } from '../runtime/agentsTypes.js';
 import { ToolErrorType } from './tool-error.js';
 import type { Config } from '../config/config.js';
 
@@ -181,7 +182,7 @@ export class DiscoveredMCPTool extends BaseDeclarativeTool<
     readonly serverName: string,
     readonly serverToolName: string,
     description: string,
-    override readonly parameterSchema: unknown,
+    override readonly parameterSchema: JsonSchema | undefined,
     readonly timeout?: number,
     readonly trust?: boolean,
     nameOverride?: string,
@@ -290,7 +291,11 @@ function transformResourceLinkBlock(block: McpResourceLinkBlock): Part {
  */
 function transformMcpContentToParts(sdkResponse: Part[]): Part[] {
   const funcResponse = sdkResponse?.[0]?.functionResponse;
-  const mcpContent = funcResponse?.response?.['content'] as McpContentBlock[];
+  const rawResponse = funcResponse?.response as Record<string, unknown> | undefined;
+  const contentValue = rawResponse?.['content'];
+  const mcpContent = Array.isArray(contentValue)
+    ? (contentValue as McpContentBlock[])
+    : undefined;
   const toolName = funcResponse?.name || 'unknown tool';
 
   if (!Array.isArray(mcpContent)) {
@@ -327,9 +332,13 @@ function transformMcpContentToParts(sdkResponse: Part[]): Part[] {
  * @returns A formatted string representing the tool's output.
  */
 function getStringifiedResultForDisplay(rawResponse: Part[]): string {
-  const mcpContent = rawResponse?.[0]?.functionResponse?.response?.[
-    'content'
-  ] as McpContentBlock[];
+  const responseRecord = rawResponse?.[0]?.functionResponse?.response as
+    | Record<string, unknown>
+    | undefined;
+  const contentValue = responseRecord?.['content'];
+  const mcpContent = Array.isArray(contentValue)
+    ? (contentValue as McpContentBlock[])
+    : undefined;
 
   if (!Array.isArray(mcpContent)) {
     return '```json\n' + JSON.stringify(rawResponse, null, 2) + '\n```';
