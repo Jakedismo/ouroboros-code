@@ -49,5 +49,6 @@ describe('toolInjector', () => {
     expect(enhanced).toContain('you have access to ALL tools');
     expect(enhanced).toContain('Required keys: path (string');
     expect(enhanced).toContain('Required keys: absolute_path (string');
+    expect(enhanced).toContain('Summarize results with source citations');
   });
 });

@@ -117,9 +117,10 @@ const CORE_TOOL_INSTRUCTIONS = `
 - \`${WEB_FETCH_TOOL_NAME}\` – Fetch documentation from specific URLs when external network access is allowed.
   - Required keys: prompt (string)
   - Example: { "prompt": "Fetch https://example.com/docs/config and summarise installation steps" }
-- \`${WEB_SEARCH_TOOL_NAME}\` – Perform a Google web search via Gemini to gather recent information.
+- \`${WEB_SEARCH_TOOL_NAME}\` – Perform a Google web search (requires network-enabled Gemini provider).
   - Required keys: query (string)
   - Example: { "query": "latest Node.js LTS release" }
+  - Summarize results with source citations; if search is unavailable, explain why instead of guessing.
 
 ## Execution Tips
 - Build absolute paths by combining the workspace root (visible in directory listings) with the relative path referenced in the prompt or prior tool output.
