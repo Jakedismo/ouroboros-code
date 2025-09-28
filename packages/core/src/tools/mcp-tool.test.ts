@@ -68,6 +68,7 @@ describe('DiscoveredMCPTool', () => {
     type: 'object' as const,
     properties: { param: { type: 'string' } },
     required: ['param'],
+    additionalProperties: false,
   };
 
   let tool: DiscoveredMCPTool;
@@ -816,10 +817,10 @@ describe('DiscoveredMCPTool', () => {
 
   describe('DiscoveredMCPToolInvocation', () => {
     it('should return the stringified params from getDescription', () => {
-      const params = { param: 'testValue', param2: 'anotherOne' };
+      const params = { param: 'testValue' };
       const invocation = tool.build(params);
       const description = invocation.getDescription();
-      expect(description).toBe('{"param":"testValue","param2":"anotherOne"}');
+      expect(description).toBe(JSON.stringify(params));
     });
   });
 });

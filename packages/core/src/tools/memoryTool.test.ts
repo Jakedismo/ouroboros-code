@@ -228,6 +228,7 @@ describe('MemoryTool', () => {
           },
         },
         required: ['fact'],
+        additionalProperties: false,
       });
     });
 

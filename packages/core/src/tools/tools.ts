@@ -11,6 +11,119 @@ import { SchemaValidator } from '../utils/schemaValidator.js';
 
 export { ToolErrorType } from './tool-error.js';
 
+export interface DeclarativeToolOptions {
+  /**
+   * When false, allow additional properties and mark the tool as non-strict for the SDK helper.
+   * Defaults to true.
+   */
+  strictParameters?: boolean;
+  /**
+   * Require human approval before the tool runs.
+   */
+  needsApproval?: boolean;
+}
+
+
+const STRICT_SCHEMA_KEYS = ['anyOf', 'allOf', 'oneOf'];
+
+function cloneJsonSchema(schema: JsonSchema): JsonSchema {
+  if (!schema) {
+    return schema;
+  }
+  const globalClone = (globalThis as { structuredClone?: (value: unknown) => unknown }).structuredClone;
+  if (typeof globalClone === 'function') {
+    return globalClone(schema) as JsonSchema;
+  }
+  return JSON.parse(JSON.stringify(schema)) as JsonSchema;
+}
+
+function schemaImpliesObject(schema: JsonSchema): boolean {
+  if (!schema) {
+    return false;
+  }
+  const type = schema.type;
+  if (Array.isArray(type)) {
+    if (type.includes('object')) {
+      return true;
+    }
+  } else if (type === 'object') {
+    return true;
+  }
+  if (schema.properties || schema.required || schema.additionalProperties !== undefined) {
+    return true;
+  }
+  return false;
+}
+
+function enforceStrictSchema(schema: JsonSchema): void {
+  if (!schema || typeof schema !== 'object') {
+    return;
+  }
+
+  if (schemaImpliesObject(schema)) {
+    if (schema.additionalProperties === undefined || schema.additionalProperties === true) {
+      schema.additionalProperties = false;
+    } else if (typeof schema.additionalProperties === 'object') {
+      enforceStrictSchema(schema.additionalProperties as JsonSchema);
+      schema.additionalProperties = false;
+    }
+
+    if (schema.properties) {
+      for (const value of Object.values(schema.properties)) {
+        enforceStrictSchema(value);
+      }
+    }
+  }
+
+  if (schema.items) {
+    if (Array.isArray(schema.items)) {
+      for (const item of schema.items) {
+        enforceStrictSchema(item);
+      }
+    } else {
+      enforceStrictSchema(schema.items);
+    }
+  }
+
+  for (const key of STRICT_SCHEMA_KEYS) {
+    const collection = (schema as Record<string, unknown>)[key];
+    if (Array.isArray(collection)) {
+      for (const candidate of collection) {
+        if (candidate && typeof candidate === 'object') {
+          enforceStrictSchema(candidate as JsonSchema);
+        }
+      }
+    }
+  }
+
+  if ((schema as Record<string, unknown>)['not'] && typeof (schema as Record<string, unknown>)['not'] === 'object') {
+    enforceStrictSchema((schema as Record<string, unknown>)['not'] as JsonSchema);
+  }
+  if ((schema as Record<string, unknown>)['then'] && typeof (schema as Record<string, unknown>)['then'] === 'object') {
+    enforceStrictSchema((schema as Record<string, unknown>)['then'] as JsonSchema);
+  }
+  if ((schema as Record<string, unknown>)['else'] && typeof (schema as Record<string, unknown>)['else'] === 'object') {
+    enforceStrictSchema((schema as Record<string, unknown>)['else'] as JsonSchema);
+  }
+  if ((schema as Record<string, unknown>)['if'] && typeof (schema as Record<string, unknown>)['if'] === 'object') {
+    enforceStrictSchema((schema as Record<string, unknown>)['if'] as JsonSchema);
+  }
+}
+
+function normalizeParameterSchema(
+  schema: JsonSchema | undefined,
+  enforceStrict: boolean,
+): JsonSchema | undefined {
+  if (!schema) {
+    return undefined;
+  }
+  const cloned = cloneJsonSchema(schema);
+  if (enforceStrict) {
+    enforceStrictSchema(cloned);
+  }
+  return cloned;
+}
+
 /**
  * Represents a validated and ready-to-execute tool call.
  * An instance of this is created by a `ToolBuilder`.
@@ -149,6 +262,8 @@ export abstract class DeclarativeTool<
   TResult extends ToolResult,
 > implements ToolBuilder<TParams, TResult>
 {
+  readonly options: DeclarativeToolOptions;
+
   constructor(
     readonly name: string,
     readonly displayName: string,
@@ -157,13 +272,21 @@ export abstract class DeclarativeTool<
     readonly parameterSchema: JsonSchema | undefined,
     readonly isOutputMarkdown: boolean = true,
     readonly canUpdateOutput: boolean = false,
-  ) {}
+    options: DeclarativeToolOptions = {},
+  ) {
+    this.options = options;
+  }
 
   get schema(): ToolFunctionDeclaration {
+    const enforceStrict = this.options.strictParameters !== false;
+    const parametersJsonSchema = normalizeParameterSchema(
+      this.parameterSchema,
+      enforceStrict,
+    );
     return {
       name: this.name,
       description: this.description,
-      parametersJsonSchema: this.parameterSchema,
+      parametersJsonSchema,
     };
   }
 

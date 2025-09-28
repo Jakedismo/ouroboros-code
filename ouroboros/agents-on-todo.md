@@ -12,10 +12,15 @@
 - [x] Port CLI slash command reload to use AgentsClient history.
 - [x] Update CLI built-in commands (clear/copy/restore/directory) to use AgentsClient.
 - [x] Verify tool prompt injections cover all built-in tools (expect 11) and adjust personas.
-- [ ] Investigate `/agents on` hang after repeated tool failures (parameter handling). (Tool error telemetry now surfaces in CLI; need root cause fix.)
+- [x] Investigate `/agents on` hang after repeated tool failures (parameter handling). (Tool error telemetry now surfaces in CLI; need root cause fix.)
+- [x] Add GPT-5/GPT-5 Codex system prompts with full internal tool inventory.
+- [x] Implement and register the `update_plan` tool with plan state storage.
+- [x] Expand `/model` to surface provider-specific model menus (OpenAI & Anthropic).
+- [x] Enforce strict JSON schemas for tool parameters to satisfy OpenAI Agents SDK.
 - [ ] Ensure ctrl+c exits terminate background agent processes cleanly.
 - [ ] Rebuild `GeminiClient` as an AgentsClient shim (replace Turn/GeminiChat runtime).
 - [x] Port multi-agent subagent execution to the unified Agents runtime.
 - [ ] Remove legacy Gemini-specific tests and delete the old client once parity is confirmed.
 - [ ] Update failing test suites (HistoryItemDisplay etc.) after runtime refactors.
 - [ ] Commit and document Repository Guidelines updates once feature stabilises.
+- [ ] Follow up on `agents-tooling-parity` plan to add SDK-style features (strict overrides, approvals, telemetry). (CLI now surfaces tool approval prompts; need telemetry + server parity.)

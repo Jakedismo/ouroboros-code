@@ -55,6 +55,11 @@ const CORE_TOOL_INSTRUCTIONS = `
 
 # Tool Operations Playbook
 
+## Environment Primer
+- You are operating entirely inside the user's checked-out repository. Treat the workspace on disk as the source of truth for code, tests, and configuration.
+- Resolve questions by inspecting files and running local commands before considering external sources. Reach for web search only when the repository cannot reasonably answer the question (for example, to check upstream release notes or API docs).
+- Every tool call, path, and command must stay within the workspace sandbox. Never assume network access for anything except the explicit web tools provided.
+
 ## Ground Rules
 - Keep every file or directory reference inside the workspace root shown in this session. Provide absolute paths (for example, "/workspace/app/src/index.ts"), never relative paths such as "./src/index.ts".
 - Inspect existing code before editing and run the appropriate verification commands after editing to confirm the change.
@@ -120,7 +125,7 @@ const CORE_TOOL_INSTRUCTIONS = `
 - \`${WEB_SEARCH_TOOL_NAME}\` – Perform a Google web search (requires network-enabled Gemini provider).
   - Required keys: query (string)
   - Example: { "query": "latest Node.js LTS release" }
-  - Summarize results with source citations; if search is unavailable, explain why instead of guessing.
+  - Treat this as a last resort once repository evidence and documentation fetched via \`${WEB_FETCH_TOOL_NAME}\` have been exhausted. Summarize results with source citations, and if search is unavailable, explain why instead of guessing.
 
 ## Execution Tips
 - Build absolute paths by combining the workspace root (visible in directory listings) with the relative path referenced in the prompt or prior tool output.
@@ -186,6 +191,24 @@ export function injectToolExamples(agentPrompt: string, agentSpecialties: string
   enhancedPrompt += `2. **Explain impactful actions** — provide a short rationale for edits and shell commands, and capture their output verbatim.\n`;
   enhancedPrompt += `3. **Close the loop** — after edits, run the relevant verification commands and state the result in your final summary.\n\n`;
   enhancedPrompt += `Remember: you are expected to take action, not merely offer advice. Use whichever tools best accomplish the user's goal.`;
+
+  if (process.env['OUROBOROS_DEBUG_TOOL_EXAMPLES'] || process.env['OUROBOROS_DEBUG']) {
+    const toolList = [
+      LS_TOOL_NAME,
+      GLOB_TOOL_NAME,
+      GREP_TOOL_NAME,
+      RIPGREP_TOOL_NAME,
+      READ_FILE_TOOL_NAME,
+      READ_MANY_FILES_TOOL_NAME,
+      EDIT_TOOL_NAME,
+      WRITE_FILE_TOOL_NAME,
+      SHELL_TOOL_NAME,
+      MEMORY_TOOL_NAME,
+      WEB_FETCH_TOOL_NAME,
+      WEB_SEARCH_TOOL_NAME,
+    ];
+    console.debug('[ToolInjector] injected examples for tools:', toolList.join(', '));
+  }
   
   return enhancedPrompt;
 }

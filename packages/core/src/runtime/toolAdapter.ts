@@ -62,18 +62,32 @@ function createAdaptedTool(
   normalizationContext: ArgumentNormalizationContext,
 ): AgentsTool {
   const schema = extractSchema(tool);
+  const strict = tool.options?.strictParameters !== false;
   const parametersSchema = schema
-    ? convertJsonSchemaToZod(schema)
-    : z.object({}).passthrough();
+    ? strict
+      ? convertJsonSchemaToZod(schema)
+      : schema
+    : strict
+      ? z.object({}).passthrough()
+      : { type: 'object', properties: {} };
+
+  const needsApproval = tool.options?.needsApproval;
 
   return createAgentsTool({
     name: tool.name,
     description: tool.description,
     parameters: parametersSchema as any,
-    async execute(_, input) {
+    strict,
+    needsApproval,
+    async execute(
+      input: unknown,
+      _runContext: unknown,
+    ) {
       const normalizedArgs = normalizeArguments(
         tool,
-        input,
+        (typeof input === 'object' && input !== null
+          ? (input as Record<string, unknown>)
+          : ({} as Record<string, unknown>)),
         normalizationContext,
       );
       const callRequest: ToolCallRequestInfo = {
@@ -90,6 +104,9 @@ function createAdaptedTool(
       const abortController = new AbortController();
 
       try {
+        if (context.config.getDebugMode?.() || process.env['OUROBOROS_DEBUG_TOOL_CALLS']) {
+          console.debug('[ToolAdapter][request]', callRequest.name, callRequest.args);
+        }
         const response = await context.config.executeToolCall(
           callRequest,
           abortController.signal,
@@ -99,6 +116,13 @@ function createAdaptedTool(
             agentEmoji: context.agentEmoji,
           },
         );
+
+        if (context.config.getDebugMode?.() || process.env['OUROBOROS_DEBUG_TOOL_CALLS']) {
+          console.debug('[ToolAdapter][response]', callRequest.name, {
+            error: response.error?.message,
+            resultDisplay: response.resultDisplay,
+          });
+        }
 
         context.onToolExecuted?.({ request: callRequest, response });
 

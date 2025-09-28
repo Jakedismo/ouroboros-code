@@ -12,10 +12,11 @@ import type {
   FinishReason,
   Content,
 } from '../runtime/genaiCompat.js';
-import type {
-  ToolCallConfirmationDetails,
-  ToolResult,
-  ToolResultDisplay,
+import {
+  ToolConfirmationOutcome,
+  type ToolCallConfirmationDetails,
+  type ToolResult,
+  type ToolResultDisplay,
 } from '../tools/tools.js';
 import type { ToolErrorType } from '../tools/tool-error.js';
 import { reportError } from '../utils/errorReporting.js';
@@ -28,7 +29,7 @@ import type { Config } from '../config/config.js';
 import type { AgentsClient } from './agentsClient.js';
 import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
 import { hasCycleInSchema } from '../tools/tools.js';
-import type { UnifiedAgentMessage, UnifiedAgentToolCall } from '../runtime/types.js';
+import type { UnifiedAgentMessage, UnifiedAgentToolApproval, UnifiedAgentToolCall } from '../runtime/types.js';
 import type { ToolResponseParts } from '../types/toolResponses.js';
 
 // Define a structure for tools passed to the server
@@ -376,13 +377,29 @@ export class Turn {
         systemPrompt: this.config.getSystemPrompt() || undefined,
       });
 
-      for await (const event of client.streamResponse(session, messages)) {
-        if (signal.aborted) {
-          yield { type: ConversationEventType.UserCancelled };
-          return;
-        }
+      this.config.setToolApprovalHandlers({
+        approve: (callId, options) => client.approveToolCall(callId, options),
+        reject: (callId, options) => client.rejectToolCall(callId, options),
+      });
 
-        switch (event.type) {
+      try {
+        for await (const event of client.streamResponse(session, messages)) {
+          if (signal.aborted) {
+            yield { type: ConversationEventType.UserCancelled };
+            return;
+          }
+
+          switch (event.type) {
+          case 'tool-approval': {
+            const confirmation = this.createToolApprovalConfirmation(event.approval);
+            if (confirmation) {
+              yield {
+                type: ConversationEventType.ToolCallConfirmation,
+                value: confirmation,
+              };
+            }
+            break;
+          }
           case 'final': {
             const content = event.message.content ?? '';
             if (content.length > 0) {
@@ -427,6 +444,9 @@ export class Turn {
           default:
             break;
         }
+      }
+    } finally {
+        this.config.setToolApprovalHandlers(undefined);
       }
     } catch (error) {
       yield {
@@ -511,6 +531,54 @@ export class Turn {
       }
     }
     return textParts.join('\n').trim();
+  }
+
+  private createToolApprovalConfirmation(
+    approval: UnifiedAgentToolApproval,
+  ): ServerToolCallConfirmationDetails | null {
+    const promptLines = [
+      `Tool ${approval.name} requested by the model.`,
+    ];
+    if (Object.keys(approval.args ?? {}).length > 0) {
+      try {
+        const prettyArgs = JSON.stringify(approval.args, null, 2);
+        promptLines.push(`Arguments:\n${prettyArgs}`);
+      } catch (_error) {
+        promptLines.push(`Arguments: ${String(approval.args)}`);
+      }
+    }
+
+    const promptText = promptLines.join('\n\n');
+
+    const details: ToolCallConfirmationDetails = {
+      type: 'info',
+      title: `Allow tool "${approval.name}"?`,
+      prompt: promptText,
+      onConfirm: async (outcome: ToolConfirmationOutcome) => {
+        if (outcome === ToolConfirmationOutcome.ProceedOnce) {
+          this.config.approveToolCall(approval.callId, { alwaysApprove: false });
+          return;
+        }
+        if (outcome === ToolConfirmationOutcome.ProceedAlways) {
+          this.config.approveToolCall(approval.callId, { alwaysApprove: true });
+          return;
+        }
+        this.config.rejectToolCall(approval.callId);
+      },
+    };
+
+    const request: ToolCallRequestInfo = {
+      callId: approval.callId,
+      name: approval.name,
+      args: approval.args,
+      isClientInitiated: false,
+      prompt_id: this.promptId,
+    };
+
+    return {
+      request,
+      details,
+    };
   }
 
   private createToolCallRequestFromUnifiedEvent(toolCall: UnifiedAgentToolCall) {

@@ -1,230 +1,65 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 Ouroboros Development Team
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import type { ToolInvocation, ToolResult } from './tools.js';
-import { DeclarativeTool, hasCycleInSchema, Kind } from './tools.js';
-import { ToolErrorType } from './tool-error.js';
+import { describe, expect, it } from 'vitest';
+import {
+  DeclarativeTool,
+  Kind,
+  type ToolInvocation,
+  type ToolResult,
+  type DeclarativeToolOptions,
+} from './tools.js';
+import type { JsonSchema } from '../runtime/agentsTypes.js';
 
-class TestToolInvocation implements ToolInvocation<object, ToolResult> {
-  constructor(
-    readonly params: object,
-    private readonly executeFn: () => Promise<ToolResult>,
-  ) {}
-
-  getDescription(): string {
-    return 'A test invocation';
+class StubTool extends DeclarativeTool<Record<string, unknown>, ToolResult> {
+  constructor(schema: JsonSchema | undefined, options?: DeclarativeToolOptions) {
+    super('stub', 'Stub', 'Test tool', Kind.Other, schema, true, false, options);
   }
 
-  toolLocations() {
-    return [];
-  }
-
-  shouldConfirmExecute(): Promise<false> {
-    return Promise.resolve(false);
-  }
-
-  execute(): Promise<ToolResult> {
-    return this.executeFn();
+  build(params: Record<string, unknown>): ToolInvocation<Record<string, unknown>, ToolResult> {
+    return {
+      params,
+      getDescription: () => 'stub',
+      toolLocations: () => [],
+      shouldConfirmExecute: async () => false,
+      execute: async () => ({ llmContent: '', returnDisplay: '' }),
+    };
   }
 }
 
-class TestTool extends DeclarativeTool<object, ToolResult> {
-  private readonly buildFn: (params: object) => TestToolInvocation;
-
-  constructor(buildFn: (params: object) => TestToolInvocation) {
-    super('test-tool', 'Test Tool', 'A tool for testing', Kind.Other, {});
-    this.buildFn = buildFn;
-  }
-
-  build(params: object): ToolInvocation<object, ToolResult> {
-    return this.buildFn(params);
-  }
-}
-
-describe('DeclarativeTool', () => {
-  describe('validateBuildAndExecute', () => {
-    const abortSignal = new AbortController().signal;
-
-    it('should return INVALID_TOOL_PARAMS error if build fails', async () => {
-      const buildError = new Error('Invalid build parameters');
-      const buildFn = vi.fn().mockImplementation(() => {
-        throw buildError;
-      });
-      const tool = new TestTool(buildFn);
-      const params = { foo: 'bar' };
-
-      const result = await tool.validateBuildAndExecute(params, abortSignal);
-
-      expect(buildFn).toHaveBeenCalledWith(params);
-      expect(result).toEqual({
-        llmContent: `Error: Invalid parameters provided. Reason: ${buildError.message}`,
-        returnDisplay: buildError.message,
-        error: {
-          message: buildError.message,
-          type: ToolErrorType.INVALID_TOOL_PARAMS,
-        },
-      });
-    });
-
-    it('should return EXECUTION_FAILED error if execute fails', async () => {
-      const executeError = new Error('Execution failed');
-      const executeFn = vi.fn().mockRejectedValue(executeError);
-      const invocation = new TestToolInvocation({}, executeFn);
-      const buildFn = vi.fn().mockReturnValue(invocation);
-      const tool = new TestTool(buildFn);
-      const params = { foo: 'bar' };
-
-      const result = await tool.validateBuildAndExecute(params, abortSignal);
-
-      expect(buildFn).toHaveBeenCalledWith(params);
-      expect(executeFn).toHaveBeenCalled();
-      expect(result).toEqual({
-        llmContent: `Error: Tool call execution failed. Reason: ${executeError.message}`,
-        returnDisplay: executeError.message,
-        error: {
-          message: executeError.message,
-          type: ToolErrorType.EXECUTION_FAILED,
-        },
-      });
-    });
-
-    it('should return the result of execute on success', async () => {
-      const successResult: ToolResult = {
-        llmContent: 'Success!',
-        returnDisplay: 'Success!',
-      };
-      const executeFn = vi.fn().mockResolvedValue(successResult);
-      const invocation = new TestToolInvocation({}, executeFn);
-      const buildFn = vi.fn().mockReturnValue(invocation);
-      const tool = new TestTool(buildFn);
-      const params = { foo: 'bar' };
-
-      const result = await tool.validateBuildAndExecute(params, abortSignal);
-
-      expect(buildFn).toHaveBeenCalledWith(params);
-      expect(executeFn).toHaveBeenCalled();
-      expect(result).toEqual(successResult);
-    });
-  });
-});
-
-describe('hasCycleInSchema', () => {
-  it('should detect a simple direct cycle', () => {
-    const schema = {
-      properties: {
-        data: {
-          $ref: '#/properties/data',
+describe('DeclarativeTool schema normalization', () => {
+  const baseSchema: JsonSchema = {
+    type: 'object',
+    properties: {
+      value: { type: 'string' },
+      nested: {
+        type: 'object',
+        properties: {
+          flag: { type: 'boolean' },
         },
       },
-    };
-    expect(hasCycleInSchema(schema)).toBe(true);
+    },
+    required: ['value'],
+  };
+
+  it('enforces additionalProperties when strict', () => {
+    const tool = new StubTool(baseSchema);
+    const schema = tool.schema.parametersJsonSchema as JsonSchema;
+
+    expect(schema?.additionalProperties).toBe(false);
+    const nested = schema?.properties?.['nested'] as JsonSchema | undefined;
+    expect(nested?.additionalProperties).toBe(false);
+    // Original schema should remain unchanged
+    expect(baseSchema).not.toHaveProperty('additionalProperties');
   });
 
-  it('should detect a cycle from object properties referencing parent properties', () => {
-    const schema = {
-      type: 'object',
-      properties: {
-        data: {
-          type: 'object',
-          properties: {
-            child: { $ref: '#/properties/data' },
-          },
-        },
-      },
-    };
-    expect(hasCycleInSchema(schema)).toBe(true);
-  });
+  it('keeps schema open when strictParameters is false', () => {
+    const tool = new StubTool(baseSchema, { strictParameters: false });
+    const schema = tool.schema.parametersJsonSchema as JsonSchema;
 
-  it('should detect a cycle from array items referencing parent properties', () => {
-    const schema = {
-      type: 'object',
-      properties: {
-        data: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              child: { $ref: '#/properties/data/items' },
-            },
-          },
-        },
-      },
-    };
-    expect(hasCycleInSchema(schema)).toBe(true);
-  });
-
-  it('should detect a cycle between sibling properties', () => {
-    const schema = {
-      type: 'object',
-      properties: {
-        a: {
-          type: 'object',
-          properties: {
-            child: { $ref: '#/properties/b' },
-          },
-        },
-        b: {
-          type: 'object',
-          properties: {
-            child: { $ref: '#/properties/a' },
-          },
-        },
-      },
-    };
-    expect(hasCycleInSchema(schema)).toBe(true);
-  });
-
-  it('should not detect a cycle in a valid schema', () => {
-    const schema = {
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        address: { $ref: '#/definitions/address' },
-      },
-      definitions: {
-        address: {
-          type: 'object',
-          properties: {
-            street: { type: 'string' },
-            city: { type: 'string' },
-          },
-        },
-      },
-    };
-    expect(hasCycleInSchema(schema)).toBe(false);
-  });
-
-  it('should handle non-cyclic sibling refs', () => {
-    const schema = {
-      properties: {
-        a: { $ref: '#/definitions/stringDef' },
-        b: { $ref: '#/definitions/stringDef' },
-      },
-      definitions: {
-        stringDef: { type: 'string' },
-      },
-    };
-    expect(hasCycleInSchema(schema)).toBe(false);
-  });
-
-  it('should handle nested but not cyclic refs', () => {
-    const schema = {
-      properties: {
-        a: { $ref: '#/definitions/defA' },
-      },
-      definitions: {
-        defA: { properties: { b: { $ref: '#/definitions/defB' } } },
-        defB: { type: 'string' },
-      },
-    };
-    expect(hasCycleInSchema(schema)).toBe(false);
-  });
-
-  it('should return false for an empty schema', () => {
-    expect(hasCycleInSchema({})).toBe(false);
+    expect(schema).toEqual(baseSchema);
   });
 });

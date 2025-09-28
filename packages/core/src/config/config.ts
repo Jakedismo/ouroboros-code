@@ -23,7 +23,10 @@ import { ShellTool } from '../tools/shell.js';
 import { WriteFileTool } from '../tools/write-file.js';
 import { WebFetchTool } from '../tools/web-fetch.js';
 import { ReadManyFilesTool } from '../tools/read-many-files.js';
+import type { PlanState } from '../core/planTypes.js';
+import { clonePlanState } from '../core/planTypes.js';
 import { MemoryTool, setGeminiMdFilename } from '../tools/memoryTool.js';
+import { UpdatePlanTool } from '../tools/update-plan.js';
 import { WebSearchTool } from '../tools/web-search.js';
 import { AgentsClient } from '../core/agentsClient.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
@@ -314,6 +317,11 @@ export class Config {
   private readonly fileExclusions: FileExclusions;
   private readonly eventEmitter?: EventEmitter;
   private toolExecutionBridge?: ToolExecutionBridge;
+  private planState: PlanState = { entries: [] };
+  private toolApprovalHandlers?: {
+    approve(callId: string, options?: { alwaysApprove?: boolean }): void;
+    reject(callId: string, options?: { alwaysReject?: boolean }): void;
+  };
 
   constructor(params: ConfigParameters) {
     this.sessionId = params.sessionId;
@@ -531,6 +539,30 @@ export class Config {
   setToolExecutionBridge(handler?: ToolExecutionBridge): void {
     this.toolExecutionBridge = handler;
   }
+
+  getPlanState(): PlanState {
+    return clonePlanState(this.planState);
+  }
+
+  setPlanState(plan: PlanState): void {
+    this.planState = clonePlanState(plan);
+  }
+
+  setToolApprovalHandlers(handlers?: {
+    approve(callId: string, options?: { alwaysApprove?: boolean }): void;
+    reject(callId: string, options?: { alwaysReject?: boolean }): void;
+  }): void {
+    this.toolApprovalHandlers = handlers;
+  }
+
+  approveToolCall(callId: string, options?: { alwaysApprove?: boolean }): void {
+    this.toolApprovalHandlers?.approve(callId, options);
+  }
+
+  rejectToolCall(callId: string, options?: { alwaysReject?: boolean }): void {
+    this.toolApprovalHandlers?.reject(callId, options);
+  }
+
 
   async executeToolCall(
     request: ToolCallRequestInfo,
@@ -1055,6 +1087,7 @@ export class Config {
     registerCoreTool(ReadManyFilesTool, this);
     registerCoreTool(ShellTool, this);
     registerCoreTool(MemoryTool);
+    registerCoreTool(UpdatePlanTool, this);
     registerCoreTool(WebSearchTool, this);
 
     await registry.discoverAllTools();

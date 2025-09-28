@@ -63,6 +63,39 @@ describe('Core System Prompt (prompts.ts)', () => {
     expect(prompt).toMatchSnapshot();
   });
 
+  it('should use GPT-5 prompt when provider is openai with gpt-5 model', () => {
+    const mockConfig = {
+      getProvider: () => 'openai',
+      getModel: () => 'gpt-5',
+      getSystemPrompt: () => '',
+    };
+    const prompt = getCoreSystemPrompt(undefined, mockConfig);
+    expect(prompt).toContain('You are a coding agent running in the Ourorobos-Code');
+    expect(prompt).not.toContain('You are an interactive CLI agent');
+  });
+
+  it('should use GPT-5 Codex prompt when provider is openai with gpt-5-codex model', () => {
+    const mockConfig = {
+      getProvider: () => 'openai',
+      getModel: () => 'gpt-5-codex',
+      getSystemPrompt: () => '',
+    };
+    const prompt = getCoreSystemPrompt(undefined, mockConfig);
+    expect(prompt).toContain('You are Codex, based on GPT-5.');
+    expect(prompt).not.toContain('You are an interactive CLI agent');
+  });
+
+  it('should append user memory for openai prompts', () => {
+    const mockConfig = {
+      getProvider: () => 'openai',
+      getModel: () => 'gpt-5',
+      getSystemPrompt: () => '',
+    };
+    const prompt = getCoreSystemPrompt('Remember this', mockConfig);
+    expect(prompt).toContain('Remember this');
+    expect(prompt).toContain('---');
+  });
+
   it('should append userMemory with separator when provided', () => {
     vi.stubEnv('SANDBOX', undefined);
     const memory = 'This is custom user memory.\nBe extra polite.';
@@ -270,3 +303,31 @@ describe('Core System Prompt (prompts.ts)', () => {
     });
   });
 });
+
+
+describe('manual prompt dump', () => {
+  it('logs the full system prompt for each provider/model', async () => {
+    const cases: Array<{ provider: 'openai' | 'anthropic' | 'gemini'; model: string }> = [
+      { provider: 'openai', model: 'gpt-5' },
+      { provider: 'openai', model: 'gpt-5-codex' },
+      { provider: 'anthropic', model: 'claude-sonnet-4-20250514[1m]' },
+      { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+      { provider: 'anthropic', model: 'claude-opus-4-1-20250805' },
+      { provider: 'gemini', model: 'gemini-2.5-pro' },
+    ];
+
+    for (const testCase of cases) {
+      const mockConfig = {
+        getProvider: () => testCase.provider,
+        getModel: () => testCase.model,
+        getSystemPrompt: () => '',
+      };
+      const prompt = getCoreSystemPrompt(undefined, mockConfig as any);
+      console.log(`
+[Prompt Dump] provider=${testCase.provider} model=${testCase.model}
+${prompt}
+`);
+    }
+  });
+});
+

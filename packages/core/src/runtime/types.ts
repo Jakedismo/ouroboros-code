@@ -16,9 +16,16 @@ export interface UnifiedAgentToolCall {
   arguments: unknown;
 }
 
+
+export interface UnifiedAgentToolApproval {
+  callId: string;
+  name: string;
+  args: Record<string, unknown>;
+}
 export type UnifiedAgentsStreamEvent =
   | { type: 'text-delta'; delta: string }
   | { type: 'tool-call'; toolCall: UnifiedAgentToolCall }
+  | { type: 'tool-approval'; approval: UnifiedAgentToolApproval }
   | { type: 'final'; message: UnifiedAgentMessage }
   | { type: 'error'; error: Error }
   | { type: 'usage'; usage: Record<string, unknown> };

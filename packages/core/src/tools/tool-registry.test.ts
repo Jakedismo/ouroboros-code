@@ -324,6 +324,7 @@ describe('ToolRegistry', () => {
             format: 'uuid',
           },
         },
+        additionalProperties: false,
       });
     });
 
@@ -338,6 +339,7 @@ describe('ToolRegistry', () => {
         parametersJsonSchema: {
           type: 'object',
           properties: {},
+          additionalProperties: false,
         },
       };
 

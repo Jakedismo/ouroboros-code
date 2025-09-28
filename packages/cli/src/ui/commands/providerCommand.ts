@@ -21,6 +21,7 @@ const PROVIDER_CONFIGS = {
     defaultModel: 'claude-sonnet-4-20250514[1m]',
     availableModels: [
       'claude-sonnet-4-20250514[1m]',
+      'claude-sonnet-4-20250514',
       'claude-opus-4-1-20250805',
     ],
     description: 'Anthropic Claude Sonnet & Opus with expanded reasoning windows',
@@ -94,31 +95,34 @@ Use \`/provider\` to see all options.`,
   },
 };
 
+function getConfig(context: any) {
+  return context?.services?.config ?? context?.config ?? null;
+}
+
 function getCurrentProvider(context: any): string | null {
-  // Get current provider from config's getProvider method
-  if (context.config && typeof context.config.getProvider === 'function') {
-    return context.config.getProvider();
+  const config = getConfig(context);
+  if (config && typeof config.getProvider === 'function') {
+    return config.getProvider();
   }
-  
-  // Fallback to environment or default
-  return context.config?.provider || process.env['OUROBOROS_PROVIDER'] || 'gemini';
+  if (config && typeof config.provider === 'string') {
+    return config.provider;
+  }
+  return process.env['OUROBOROS_PROVIDER'] || 'gemini';
 }
 
 async function switchProvider(context: any, provider: ProviderType, config: typeof PROVIDER_CONFIGS[ProviderType]) {
   try {
-    // Actually switch the provider in the config
-    if (context.config && typeof context.config.setProvider === 'function') {
-      await context.config.setProvider(provider);
+    const cfg = getConfig(context);
+    if (cfg && typeof cfg.setProvider === 'function') {
+      await cfg.setProvider(provider);
       console.log(`[Provider] Successfully switched to ${provider} with model ${config.defaultModel}`);
-      
-      // Also switch to the default model for this provider
-      if (typeof context.config.setModel === 'function') {
-        await context.config.setModel(config.defaultModel);
+
+      if (typeof cfg.setModel === 'function') {
+        await cfg.setModel(config.defaultModel);
         console.log(`[Provider] Set default model to ${config.defaultModel}`);
       }
     }
 
-    // Emit provider change event for immediate UI updates
     appEvents.emit(AppEvent.ProviderChanged, { provider, model: config.defaultModel });
 
     const successItem: Omit<HistoryItemInfo, 'id'> = {

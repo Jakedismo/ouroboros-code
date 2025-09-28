@@ -993,6 +993,48 @@ describe('useGeminiStream', () => {
     });
   });
 
+  it('schedules tool calls immediately when stream emits tool call request', async () => {
+    const stream = (async function* () {
+      yield {
+        candidates: [
+          {
+            index: 0,
+            content: {
+              role: 'model',
+              parts: [
+                {
+                  functionCall: {
+                    id: 'call-1',
+                    name: 'read_file',
+                    args: { path: 'README.md' },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      } as any;
+    })();
+    mockSendMessageStream.mockReturnValue(stream);
+
+    const { result } = renderTestHook();
+
+    await act(async () => {
+      await result.current.submitQuery('please read file');
+    });
+
+    await waitFor(() => {
+      expect(mockScheduleToolCalls).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callId: 'call-1',
+          name: 'read_file',
+          args: { path: 'README.md' },
+        }),
+        expect.any(AbortSignal),
+      );
+    });
+  });
+
   describe('Slash Command Handling', () => {
     it('should schedule a tool call when the command processor returns a schedule_tool action', async () => {
       const clientToolRequest: SlashCommandProcessorResult = {

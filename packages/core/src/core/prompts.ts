@@ -18,8 +18,21 @@ import { WriteFileTool } from '../tools/write-file.js';
 import process from 'node:process';
 import { isGitRepository } from '../utils/gitUtils.js';
 import { MemoryTool, GEMINI_CONFIG_DIR } from '../tools/memoryTool.js';
+import { GPT5_SYSTEM_PROMPT } from './systemPrompt.gpt5.js';
+import { GPT5_CODEX_SYSTEM_PROMPT } from './systemPrompt.gpt5Codex.js';
 
 export function getCoreSystemPrompt(userMemory?: string, config?: any): string {
+  const provider = typeof config?.getProvider === 'function' ? config.getProvider() : undefined;
+  const model = typeof config?.getModel === 'function' ? config.getModel() : undefined;
+  const normalizedModel = normalizeModelIdentifier(model);
+
+  if (provider === 'openai') {
+    const basePrompt = normalizedModel.startsWith('gpt-5-codex')
+      ? GPT5_CODEX_SYSTEM_PROMPT.trim()
+      : GPT5_SYSTEM_PROMPT.trim();
+    return finalizePrompt(basePrompt, userMemory, config);
+  }
+
   // if GEMINI_SYSTEM_MD is set (and not 0|false), override system prompt from file
   // default path is .gemini/system.md but can be modified via custom path in GEMINI_SYSTEM_MD
   let systemMdEnabled = false;
@@ -287,23 +300,27 @@ Your core function is efficient and safe assistance. Balance extreme conciseness
     }
   }
 
-  const memorySuffix =
-    userMemory && userMemory.trim().length > 0
-      ? `\n\n---\n\n${userMemory.trim()}`
-      : '';
+  return finalizePrompt(basePrompt, userMemory, config);
+}
 
-  // Add agent system prompt if available
-  let agentPromptSuffix = '';
-  if (config && config.getSystemPrompt) {
+function normalizeModelIdentifier(model: string | undefined): string {
+  if (!model) {
+    return '';
+  }
+  return model.startsWith('models/') ? model.slice('models/'.length) : model;
+}
+
+function finalizePrompt(basePrompt: string, userMemory: string | undefined, config?: any): string {
+  if (config && typeof config.getSystemPrompt === 'function') {
     const agentPrompt = config.getSystemPrompt();
-    // Check if this is an agent-modified prompt (different from base)
     if (agentPrompt && agentPrompt !== basePrompt && agentPrompt.includes('ACTIVE SPECIALIST AGENTS')) {
-      // Use the full agent-modified prompt instead of just appending
       return agentPrompt;
     }
   }
 
-  return `${basePrompt}${memorySuffix}${agentPromptSuffix}`;
+  const trimmedMemory = userMemory?.trim();
+  const memorySuffix = trimmedMemory ? `\n\n---\n\n${trimmedMemory}` : '';
+  return `${basePrompt}${memorySuffix}`;
 }
 
 /**

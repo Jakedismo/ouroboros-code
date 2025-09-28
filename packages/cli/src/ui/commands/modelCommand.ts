@@ -28,6 +28,11 @@ const MODEL_CONFIGS = {
       capabilities: ['reasoning', 'analysis', 'writing'],
       contextWindow: '1M tokens',
     },
+    'claude-sonnet-4-20250514': {
+      description: 'Claude Sonnet 4 (May 2025) balanced for everyday coding and docs',
+      capabilities: ['reasoning', 'coding', 'analysis'],
+      contextWindow: '1M tokens',
+    },
     'claude-opus-4-1-20250805': {
       description: 'Claude Opus 4.1 (Aug 2025) for maximum depth and oversight',
       capabilities: ['reasoning', 'analysis', 'coding'],
@@ -124,26 +129,31 @@ Use \`/model\` to see detailed information about each model.`,
   },
 };
 
+function getConfig(context: any) {
+  return context?.services?.config ?? context?.config ?? null;
+}
+
 function getCurrentProvider(context: any): string | null {
-  if (context.config && typeof context.config.getProvider === 'function') {
-    return context.config.getProvider();
+  const config = getConfig(context);
+  if (config && typeof config.getProvider === 'function') {
+    return config.getProvider();
   }
-  return context.config?.provider || process.env['OUROBOROS_PROVIDER'] || 'gemini';
+  if (config && typeof config.provider === 'string') {
+    return config.provider;
+  }
+  return process.env['OUROBOROS_PROVIDER'] || 'gemini';
 }
 
 function getCurrentModel(context: any, provider: string): string | null {
-  // Get current model from config's getModel method
-  if (context.config && typeof context.config.getModel === 'function') {
-    return context.config.getModel();
+  const config = getConfig(context);
+  if (config && typeof config.getModel === 'function') {
+    return config.getModel();
   }
-  
-  // Fallback to provider defaults
   const providerDefaults = {
     openai: 'gpt-5',
     anthropic: 'claude-sonnet-4-20250514[1m]',
     gemini: 'gemini-2.5-pro',
   } as const;
-  
   return providerDefaults[provider as keyof typeof providerDefaults] || null;
 }
 
@@ -159,15 +169,14 @@ function getProviderDisplayName(provider: string): string {
 
 async function switchModel(context: any, provider: string, modelName: string, modelConfig: any) {
   try {
-    // Actually switch the model in the config
-    if (context.config && typeof context.config.setModel === 'function') {
-      await context.config.setModel(modelName);
+    const config = getConfig(context);
+    if (config && typeof config.setModel === 'function') {
+      await config.setModel(modelName);
       console.log(`[Model] Successfully switched to ${modelName} for provider ${provider}`);
     } else {
       console.warn('[Model] Config.setModel not available, model switch may not persist');
     }
 
-    // Emit provider change event for immediate UI updates (model change affects status bar)
     appEvents.emit(AppEvent.ProviderChanged, { provider, model: modelName });
 
     const successItem: Omit<HistoryItemInfo, 'id'> = {

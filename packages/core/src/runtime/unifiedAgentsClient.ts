@@ -8,8 +8,10 @@ import {
   type ModelProvider,
   type ModelSettings,
   type RunStreamEvent,
+  type StreamedRunResult,
+  type RunToolApprovalItem,
 } from '@openai/agents';
-import type { Config } from '../config/config.js';
+import { ApprovalMode, type Config } from '../config/config.js';
 import {
   createDefaultConnectorRegistry,
   type ProviderConnector,
@@ -37,10 +39,33 @@ export interface UnifiedAgentsClientOptions {
 export class UnifiedAgentsClient {
   private readonly connectors: ProviderConnectorRegistry;
   private readonly options: UnifiedAgentsClientOptions;
+  private readonly pendingToolApprovals = new Map<
+    string,
+    { item: RunToolApprovalItem; stream: StreamedRunResult<unknown, Agent<any, any>> }
+  >();
 
   constructor(private readonly config: Config, options: UnifiedAgentsClientOptions = {}) {
     this.connectors = options.connectorRegistry ?? createDefaultConnectorRegistry();
     this.options = options;
+  }
+
+  private isDebugEnabled(extraEnv?: string): boolean {
+    if (this.config.getDebugMode?.() === true) {
+      return true;
+    }
+    if (extraEnv && process.env[extraEnv]) {
+      return true;
+    }
+    if (process.env['OUROBOROS_DEBUG']) {
+      return true;
+    }
+    return false;
+  }
+
+  private debugLog(tag: string, ...args: unknown[]): void {
+    if (this.isDebugEnabled()) {
+      console.debug(`[UnifiedAgentsClient][${tag}]`, ...args);
+    }
   }
 
   getConfig(): Config {
@@ -49,6 +74,10 @@ export class UnifiedAgentsClient {
 
   getConnectors(): ProviderConnectorRegistry {
     return this.connectors;
+  }
+
+  private getApprovalMode(): ApprovalMode {
+    return this.config.getApprovalMode?.() ?? ApprovalMode.DEFAULT;
   }
 
   async createSession(sessionConfig: UnifiedAgentSessionConfig): Promise<UnifiedAgentSession> {
@@ -91,11 +120,28 @@ export class UnifiedAgentsClient {
       modelSettings: this.buildModelSettings(session.providerId, options) as ModelSettings,
     });
 
-    const streamResult = await runner.run(agent, inputItems, { stream: true });
+    if (this.isDebugEnabled('OUROBOROS_DEBUG_PROMPT')) {
+      this.debugLog(
+        'prompt',
+        session.providerId,
+        session.model,
+        (session.systemPrompt ?? '').slice(0, 800),
+      );
+    }
+
+    const streamResult = (await runner.run(agent, inputItems, {
+      stream: true,
+    })) as StreamedRunResult<unknown, Agent<any, any>>;
     const streamedChunks: string[] = [];
 
+    this.pendingToolApprovals.clear();
+
     for await (const event of streamResult as AsyncIterable<RunStreamEvent>) {
-      const handled = this.handleRunStreamEvent(event, streamedChunks);
+      const handled = this.handleRunStreamEvent(
+        event,
+        streamedChunks,
+        streamResult,
+      );
       if (handled) {
         yield handled;
       }
@@ -249,14 +295,23 @@ export class UnifiedAgentsClient {
   private handleRunStreamEvent(
     event: RunStreamEvent,
     streamedChunks: string[],
+    streamResult: StreamedRunResult<unknown, Agent<any, any>>,
   ): UnifiedAgentsStreamEvent | null {
     if ((event as { type?: string }).type === 'run_item_stream_event') {
-      return this.handleRunItemStreamEvent(event as any, streamedChunks);
+      return this.handleRunItemStreamEvent(
+        event as any,
+        streamedChunks,
+        streamResult,
+      );
     }
     return null;
   }
 
-  private handleRunItemStreamEvent(event: any, streamedChunks: string[]): UnifiedAgentsStreamEvent | null {
+  private handleRunItemStreamEvent(
+    event: any,
+    streamedChunks: string[],
+    streamResult: StreamedRunResult<unknown, Agent<any, any>>,
+  ): UnifiedAgentsStreamEvent | null {
     const name: string | undefined = event?.name;
     const item = event?.item;
 
@@ -269,6 +324,17 @@ export class UnifiedAgentsClient {
       if (text) {
         streamedChunks.push(text);
         return { type: 'text-delta', delta: text };
+      }
+      return null;
+    }
+
+    if (name === 'tool_approval_requested') {
+      const approvalEvent = this.handleToolApprovalRequested(
+        item as RunToolApprovalItem,
+        streamResult,
+      );
+      if (approvalEvent) {
+        return approvalEvent;
       }
       return null;
     }
@@ -290,6 +356,89 @@ export class UnifiedAgentsClient {
     return null;
   }
 
+  private handleToolApprovalRequested(
+    approvalItem: RunToolApprovalItem,
+    streamResult: StreamedRunResult<unknown, Agent<any, any>>,
+  ): UnifiedAgentsStreamEvent | null {
+    const callId = this.extractApprovalCallId(approvalItem);
+    if (!callId) {
+      return null;
+    }
+
+    if (this.getApprovalMode() === ApprovalMode.YOLO) {
+      try {
+        streamResult.state.approve(approvalItem, { alwaysApprove: true });
+      } catch (error) {
+        console.warn('Failed to auto-approve tool request in YOLO mode', error);
+      }
+      return null;
+    }
+
+    this.pendingToolApprovals.set(callId, { item: approvalItem, stream: streamResult });
+    const rawItem = approvalItem.rawItem as Record<string, unknown> | undefined;
+    const name = typeof rawItem?.['name'] === 'string' ? (rawItem['name'] as string) : 'unknown_tool';
+    const args = this.parseToolArguments(rawItem?.['arguments']);
+
+    return {
+      type: 'tool-approval',
+      approval: {
+        callId,
+        name,
+        args,
+      },
+    };
+  }
+
+  approveToolCall(callId: string, options?: { alwaysApprove?: boolean }): void {
+    const pending = this.pendingToolApprovals.get(callId);
+    if (!pending) {
+      return;
+    }
+
+    try {
+      pending.stream.state.approve(pending.item, {
+        alwaysApprove: options?.alwaysApprove ?? false,
+      });
+      if (this.isDebugEnabled('OUROBOROS_DEBUG_TOOL_CALLS')) {
+        this.debugLog('tool-approve', callId, options ?? {});
+      }
+    } catch (error) {
+      console.warn('Failed to approve tool call', error);
+    } finally {
+      this.pendingToolApprovals.delete(callId);
+    }
+  }
+
+  rejectToolCall(callId: string, options?: { alwaysReject?: boolean }): void {
+    const pending = this.pendingToolApprovals.get(callId);
+    if (!pending) {
+      return;
+    }
+
+    try {
+      pending.stream.state.reject(pending.item, {
+        alwaysReject: options?.alwaysReject ?? false,
+      });
+      if (this.isDebugEnabled('OUROBOROS_DEBUG_TOOL_CALLS')) {
+        this.debugLog('tool-reject', callId, options ?? {});
+      }
+    } catch (error) {
+      console.warn('Failed to reject tool call', error);
+    } finally {
+      this.pendingToolApprovals.delete(callId);
+    }
+  }
+
+  private extractApprovalCallId(approvalItem: RunToolApprovalItem): string | undefined {
+    const rawItem = approvalItem?.rawItem as Record<string, unknown> | undefined;
+    if (!rawItem) {
+      return undefined;
+    }
+
+    const callId = rawItem['callId'] ?? rawItem['id'];
+    return typeof callId === 'string' ? callId : undefined;
+  }
+
   private createToolCallRequestFromRunItem(item: any) {
     const rawItem = this.getRawItem(item);
     if (!rawItem || typeof rawItem !== 'object') {
@@ -309,6 +458,10 @@ export class UnifiedAgentsClient {
       `call-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     const args = this.parseToolArguments(raw['arguments']);
+
+    if (this.isDebugEnabled('OUROBOROS_DEBUG_TOOL_CALLS')) {
+      this.debugLog('tool-request', name, args);
+    }
 
     return {
       callId,

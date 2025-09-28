@@ -29,6 +29,7 @@ import { ShellTool } from '../tools/shell.js';
 import { MemoryTool } from '../tools/memoryTool.js';
 import { WebFetchTool } from '../tools/web-fetch.js';
 import { WebSearchTool } from '../tools/web-search.js';
+import { UpdatePlanTool } from '../tools/update-plan.js';
 
 // ES modules equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +48,7 @@ const CORE_TOOL_SUGGESTIONS = [
   MemoryTool?.Name ?? 'save_memory',
   WebFetchTool?.Name ?? 'web_fetch',
   WebSearchTool?.Name ?? 'google_web_search',
+  UpdatePlanTool?.Name ?? 'update_plan',
 ].filter((name): name is string => typeof name === 'string' && name.length > 0);
 
 export interface AgentPersona {

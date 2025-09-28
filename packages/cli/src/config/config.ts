@@ -532,7 +532,7 @@ export async function loadHierarchicalGeminiMemory(
  */
 const SUPPORTED_PROVIDER_MODELS: Record<string, string[]> = {
   openai: ['gpt-5', 'gpt-5-codex'],
-  anthropic: ['claude-sonnet-4-20250514[1m]', 'claude-opus-4-1-20250805'],
+  anthropic: ['claude-sonnet-4-20250514[1m]', 'claude-sonnet-4-20250514', 'claude-opus-4-1-20250805'],
   gemini: ['gemini-2.5-pro'],
 };
 

@@ -63,6 +63,8 @@ const mockConfig = {
   getUsageStatisticsEnabled: () => true,
   getDebugMode: () => false,
   getAllowedTools: vi.fn(() => []),
+  approveToolCall: vi.fn(),
+  rejectToolCall: vi.fn(),
   getContentGeneratorConfig: () => ({
     model: 'test-model',
     authType: 'oauth-personal',
@@ -170,6 +172,8 @@ describe('useReactToolScheduler in YOLO Mode', () => {
     mockToolRegistry.getTool.mockClear();
     (mockToolRequiresConfirmation.execute as Mock).mockClear();
     (mockToolRequiresConfirmation.shouldConfirmExecute as Mock).mockClear();
+    (mockConfig.approveToolCall as Mock).mockClear();
+    (mockConfig.rejectToolCall as Mock).mockClear();
 
     // IMPORTANT: Enable YOLO mode for this test suite
     (mockConfig.getApprovalMode as Mock).mockReturnValue(ApprovalMode.YOLO);
@@ -260,6 +264,9 @@ describe('useReactToolScheduler in YOLO Mode', () => {
       const item = typeof call[0] === 'function' ? call[0]({}) : call[0];
       return item?.tools?.[0]?.confirmationDetails;
     });
+    expect(mockConfig.approveToolCall).toHaveBeenCalledWith('yoloCall', {
+      alwaysApprove: true,
+    });
     expect(confirmationCall).toBeUndefined();
   });
 });
@@ -311,6 +318,8 @@ describe('useReactToolScheduler', () => {
     (mockToolWithLiveOutput.shouldConfirmExecute as Mock).mockClear();
     (mockToolRequiresConfirmation.execute as Mock).mockClear();
     (mockToolRequiresConfirmation.shouldConfirmExecute as Mock).mockClear();
+    (mockConfig.approveToolCall as Mock).mockClear();
+    (mockConfig.rejectToolCall as Mock).mockClear();
 
     mockOnUserConfirmForToolConfirmation = vi.fn();
     (

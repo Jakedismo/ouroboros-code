@@ -17,9 +17,11 @@ import type {
   ThoughtSummary,
   ToolCallRequestInfo,
   ToolCallResponseInfo,
+  ToolCallConfirmationDetails,
   ToolExecutionMetadata,
   GeminiErrorEventValue,
 } from '@ouroboros/ouroboros-code-core';
+import { ToolConfirmationOutcome } from '@ouroboros/ouroboros-code-core';
 import {
   GeminiEventType as ServerGeminiEventType,
   getErrorMessage,
@@ -209,6 +211,37 @@ export const useGeminiStream = (
         metadata?: ToolExecutionMetadata;
       }
     >(),
+  );
+
+  const pendingToolApprovalsRef = useRef(new Map<string, ToolCallConfirmationDetails>());
+  const [pendingApprovalIds, setPendingApprovalIds] = useState<string[]>([]);
+
+  const registerPendingApproval = useCallback(
+    (callId: string, details: ToolCallConfirmationDetails) => {
+      pendingToolApprovalsRef.current.set(callId, details);
+      setPendingApprovalIds((prev: string[]) =>
+        prev.includes(callId) ? prev : [...prev, callId],
+      );
+    },
+    [],
+  );
+
+  const clearPendingApproval = useCallback(
+    (callId: string) => {
+      const existed = pendingToolApprovalsRef.current.delete(callId);
+      if (!existed) {
+        return;
+      }
+      setPendingApprovalIds((prev: string[]) => prev.filter((id: string) => id !== callId));
+      const pendingItem = pendingHistoryItemRef.current;
+      if (
+        pendingItem?.type === 'tool_group' &&
+        pendingItem.tools.some((tool) => tool.callId === callId)
+      ) {
+        setPendingHistoryItem(null);
+      }
+    },
+    [pendingHistoryItemRef, setPendingHistoryItem],
   );
 
   const clearMultiAgentStatus = useCallback(() => {
@@ -435,6 +468,9 @@ export const useGeminiStream = (
   );
 
   const streamingState = useMemo(() => {
+    if (pendingApprovalIds.length > 0) {
+      return StreamingState.WaitingForConfirmation;
+    }
     if (toolCalls.some((tc) => tc.status === 'awaiting_approval')) {
       return StreamingState.WaitingForConfirmation;
     }
@@ -455,7 +491,7 @@ export const useGeminiStream = (
       return StreamingState.Responding;
     }
     return StreamingState.Idle;
-  }, [isResponding, toolCalls]);
+  }, [isResponding, pendingApprovalIds, toolCalls]);
 
   useEffect(() => {
     if (
@@ -479,6 +515,21 @@ export const useGeminiStream = (
   }, [streamingState, config, history]);
 
   const cancelOngoingRequest = useCallback(() => {
+    if (streamingState === StreamingState.WaitingForConfirmation) {
+      const pendingIds = [...pendingApprovalIds];
+      let handled = false;
+      for (const callId of pendingIds) {
+        const details = pendingToolApprovalsRef.current.get(callId);
+        if (!details) {
+          continue;
+        }
+        handled = true;
+        void details.onConfirm(ToolConfirmationOutcome.Cancel);
+      }
+      if (handled) {
+        return;
+      }
+    }
     if (streamingState !== StreamingState.Responding) {
       return;
     }
@@ -502,6 +553,7 @@ export const useGeminiStream = (
     setIsResponding(false);
   }, [
     streamingState,
+    pendingApprovalIds,
     addItem,
     setPendingHistoryItem,
     onCancelSubmit,
@@ -514,7 +566,11 @@ export const useGeminiStream = (
         cancelOngoingRequest();
       }
     },
-    { isActive: streamingState === StreamingState.Responding },
+    {
+      isActive:
+        streamingState === StreamingState.Responding ||
+        streamingState === StreamingState.WaitingForConfirmation,
+    },
   );
 
   useKeypress(
@@ -824,6 +880,45 @@ export const useGeminiStream = (
     [addItem, pendingHistoryItemRef, setPendingHistoryItem, config, setThought],
   );
 
+  const handleToolConfirmationEvent = useCallback(
+    (eventValue: { request: ToolCallRequestInfo; details: ToolCallConfirmationDetails }) => {
+      const { request, details } = eventValue;
+      const callId = request.callId;
+      const argsSummary = (() => {
+        try {
+          const serialized = JSON.stringify(request.args ?? {}, null, 2);
+          return serialized.length > 0 ? serialized : '(no arguments)';
+        } catch (_error) {
+          return String(request.args ?? '');
+        }
+      })();
+
+      const wrappedDetails: ToolCallConfirmationDetails = {
+        ...details,
+        onConfirm: async (outcome: ToolConfirmationOutcome) => {
+          await details.onConfirm(outcome);
+          clearPendingApproval(callId);
+        },
+      };
+
+      registerPendingApproval(callId, wrappedDetails);
+      setPendingHistoryItem({
+        type: 'tool_group',
+        tools: [
+          {
+            callId,
+            name: request.name,
+            description: argsSummary,
+            resultDisplay: undefined,
+            status: ToolCallStatus.Confirming,
+            confirmationDetails: wrappedDetails,
+          },
+        ],
+      });
+    },
+    [registerPendingApproval, clearPendingApproval, setPendingHistoryItem],
+  );
+
   const handleCitationEvent = useCallback(
     (text: string, userMessageTimestamp: number) => {
       if (!settings?.merged?.ui?.showCitations) {
@@ -922,6 +1017,46 @@ export const useGeminiStream = (
       console.log('[processGeminiStreamEvents] Starting to process stream...');
       let geminiMessageBuffer = '';
       const toolCallRequests: ToolCallRequestInfo[] = [];
+
+      const flushAssistantResponse = async () => {
+        if (toolCallRequests.length === 0 && !geminiMessageBuffer.trim()) {
+          return false;
+        }
+
+        const assistantParts: Array<
+          { text?: string; functionCall?: { id: string; name: string; args: Record<string, unknown> } }
+        > = [];
+
+        if (geminiMessageBuffer.trim()) {
+          assistantParts.push({ text: geminiMessageBuffer });
+        }
+
+        if (toolCallRequests.length > 0) {
+          console.log(
+            '[useGeminiStream] Recording tool call(s) in history:',
+            toolCallRequests.map((call) => call.name).join(', '),
+          );
+          toolCallRequests.forEach((toolCall) => {
+            assistantParts.push({
+              functionCall: {
+                id: toolCall.callId,
+                name: toolCall.name,
+                args: toolCall.args,
+              },
+            });
+          });
+        }
+
+        await agentsClient.addHistory({
+          role: 'model',
+          parts: assistantParts as any,
+        });
+
+        geminiMessageBuffer = '';
+        toolCallRequests.length = 0;
+        return true;
+      };
+
       console.log('[processGeminiStreamEvents] About to iterate over stream...');
       for await (const event of stream) {
         console.log('[processGeminiStreamEvents] Received event type:', event.type);
@@ -938,7 +1073,11 @@ export const useGeminiStream = (
             break;
           case ServerGeminiEventType.ToolCallRequest:
             toolCallRequests.push(event.value);
-            break;
+            await flushAssistantResponse();
+            clearPendingApproval(event.value.callId);
+            console.log('[useGeminiStream] Scheduling tool call immediately');
+            scheduleToolCalls(event.value, signal);
+            return StreamProcessingStatus.Completed;
           case ServerGeminiEventType.UserCancelled:
             handleUserCancelledEvent(userMessageTimestamp);
             break;
@@ -949,6 +1088,8 @@ export const useGeminiStream = (
             handleChatCompressionEvent(event.value);
             break;
           case ServerGeminiEventType.ToolCallConfirmation:
+            handleToolConfirmationEvent(event.value);
+            break;
           case ServerGeminiEventType.ToolCallResponse:
             // do nothing
             break;
@@ -978,45 +1119,7 @@ export const useGeminiStream = (
       }
       
       console.log('[useGeminiStream] After processing stream - toolCallRequests:', toolCallRequests.length, 'buffer length:', geminiMessageBuffer.length);
-      
-      // CRITICAL FIX: Add assistant's response to history with tool calls
-      // This ensures OpenAI has the proper message sequence
-      if (toolCallRequests.length > 0 || geminiMessageBuffer.trim()) {
-        const assistantParts: any[] = [];
-        
-        // Add text content if any
-        if (geminiMessageBuffer.trim()) {
-          assistantParts.push({ text: geminiMessageBuffer });
-        }
-        
-        // Add function calls if any
-        if (toolCallRequests.length > 0) {
-          console.log('[useGeminiStream] Adding assistant message with', toolCallRequests.length, 'tool calls to history');
-          toolCallRequests.forEach(toolCall => {
-            assistantParts.push({
-              functionCall: {
-                id: toolCall.callId,
-                name: toolCall.name,
-                args: toolCall.args
-              }
-            });
-          });
-        }
-        
-        // Add assistant's complete response to history
-        agentsClient.addHistory({
-          role: 'model',
-          parts: assistantParts
-        });
-        console.log('[useGeminiStream] Added assistant response to history with', assistantParts.length, 'parts');
-      } else {
-        console.log('[useGeminiStream] No assistant message to add to history');
-      }
-      
-      if (toolCallRequests.length > 0) {
-        console.log('[useGeminiStream] Scheduling tool calls...');
-        await scheduleToolCalls(toolCallRequests, signal);
-      }
+      await flushAssistantResponse();
       return StreamProcessingStatus.Completed;
     },
     [
@@ -1338,10 +1441,6 @@ export const useGeminiStream = (
 
   const handleCompletedTools = useCallback(
     async (completedToolCallsFromScheduler: TrackedToolCall[]) => {
-      if (isResponding) {
-        return;
-      }
-
       for (const completed of completedToolCallsFromScheduler) {
         if ('response' in completed) {
           const resolver = toolExecutionResolversRef.current.get(

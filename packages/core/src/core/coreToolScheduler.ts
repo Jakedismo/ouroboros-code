@@ -684,6 +684,7 @@ export class CoreToolScheduler {
 
         try {
           if (signal.aborted) {
+            this.config.rejectToolCall(reqInfo.callId);
             this.setStatusInternal(
               reqInfo.callId,
               'cancelled',
@@ -701,6 +702,9 @@ export class CoreToolScheduler {
               ToolConfirmationOutcome.ProceedAlways,
             );
             this.setStatusInternal(reqInfo.callId, 'scheduled');
+            this.config.approveToolCall(reqInfo.callId, {
+              alwaysApprove: this.config.getApprovalMode() === ApprovalMode.YOLO,
+            });
             continue;
           }
 
@@ -714,6 +718,9 @@ export class CoreToolScheduler {
               ToolConfirmationOutcome.ProceedAlways,
             );
             this.setStatusInternal(reqInfo.callId, 'scheduled');
+            this.config.approveToolCall(reqInfo.callId, {
+              alwaysApprove: this.config.getApprovalMode() === ApprovalMode.YOLO,
+            });
           } else {
             // Allow IDE to resolve confirmation
             if (
@@ -801,6 +808,7 @@ export class CoreToolScheduler {
     this.setToolCallOutcome(callId, outcome);
 
     if (outcome === ToolConfirmationOutcome.Cancel || signal.aborted) {
+      this.config.rejectToolCall(callId);
       this.setStatusInternal(
         callId,
         'cancelled',
@@ -846,6 +854,9 @@ export class CoreToolScheduler {
         );
       }
       this.setStatusInternal(callId, 'scheduled');
+      this.config.approveToolCall(callId, {
+        alwaysApprove: this.config.getApprovalMode() === ApprovalMode.YOLO,
+      });
     }
     this.attemptExecutionOfScheduledCalls(signal);
   }
@@ -1053,6 +1064,9 @@ export class CoreToolScheduler {
             ToolConfirmationOutcome.ProceedAlways,
           );
           this.setStatusInternal(pendingTool.request.callId, 'scheduled');
+          this.config.approveToolCall(pendingTool.request.callId, {
+            alwaysApprove: this.config.getApprovalMode() === ApprovalMode.YOLO,
+          });
         }
       } catch (error) {
         console.error(

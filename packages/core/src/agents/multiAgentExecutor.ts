@@ -83,7 +83,7 @@ export interface MultiAgentExecutionResult {
 const MAX_EXECUTION_PASSES = 6;
 const MAX_AGENTS_PER_RUN = 6;
 
-const DEFAULT_MODEL_FALLBACK = 'gpt-5';
+const DEFAULT_MODEL_FALLBACK = 'gpt-5-codex';
 
 export class MultiAgentExecutor {
   private readonly defaultModel: string;
