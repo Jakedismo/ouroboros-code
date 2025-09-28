@@ -479,15 +479,41 @@ export class Turn {
 
     const roleKey = typeof content.role === 'string' ? content.role : 'user';
     const role = roleMap[roleKey] ?? 'user';
+
+    const metadata: Record<string, unknown> = {};
+    let toolCallId: string | undefined;
+    if (Array.isArray(content.parts)) {
+      for (const part of content.parts) {
+        const functionResponse = (part as Record<string, unknown>)?.['functionResponse'];
+        if (functionResponse && typeof functionResponse === 'object') {
+          metadata['functionResponse'] = functionResponse;
+          const responseRecord = functionResponse as Record<string, unknown>;
+          if (typeof responseRecord['callId'] === 'string') {
+            toolCallId = responseRecord['callId'] as string;
+          } else if (typeof responseRecord['id'] === 'string') {
+            toolCallId = responseRecord['id'] as string;
+          }
+          break;
+        }
+      }
+    }
+
     const text = this.extractTextFromParts(content.parts);
     if (!text) {
       return null;
     }
 
-    return {
+    const message: UnifiedAgentMessage = {
       role,
       content: text,
     };
+    if (toolCallId) {
+      message.toolCallId = toolCallId;
+    }
+    if (Object.keys(metadata).length > 0) {
+      message.metadata = metadata;
+    }
+    return message;
   }
 
   private normalizeRequestParts(req: PartListUnion): Part[] {

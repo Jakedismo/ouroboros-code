@@ -1,4 +1,4 @@
-import type { Model, ModelProvider } from '@openai/agents';
+import type { AgentInputItem, Model, ModelProvider } from '@openai/agents';
 
 export type UnifiedAgentRole = 'system' | 'user' | 'assistant' | 'tool';
 
@@ -38,6 +38,8 @@ export interface UnifiedAgentSession {
   modelHandle?: Model;
   modelProvider?: ModelProvider;
   systemPrompt?: string;
+  historyItems?: AgentInputItem[];
+  lastMessageCount?: number;
 }
 
 export interface UnifiedAgentSessionConfig {

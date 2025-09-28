@@ -38,6 +38,10 @@ vi.mock('@openai/agents', () => {
           approve: approveSpy,
           reject: rejectSpy,
         },
+        history: [
+          { role: 'user', content: 'list files' },
+          { role: 'assistant', content: 'final text' },
+        ],
         completed: Promise.resolve(),
         async *[Symbol.asyncIterator]() {
           yield {

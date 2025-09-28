@@ -1253,7 +1253,7 @@ export const useGeminiStream = (
         return;
       }
 
-      console.log('[DEBUG] About to prepare query for Gemini...');
+      console.log('[DEBUG] About to prepare query for Ouroboros...');
       const { queryToSend, shouldProceed } = await prepareQueryForGemini(
         query,
         userMessageTimestamp,
