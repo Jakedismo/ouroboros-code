@@ -993,6 +993,53 @@ describe('useGeminiStream', () => {
     });
   });
 
+  it('skips re-scheduling when bridge already registered the tool resolver', async () => {
+    const stream = (async function* () {
+      yield {
+        candidates: [
+          {
+            index: 0,
+            content: {
+              role: 'model',
+              parts: [
+                {
+                  functionCall: {
+                    id: 'call-bridge-1',
+                    name: 'read_file',
+                    args: { path: 'README.md' },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      } as any;
+    })();
+
+    const { result } = renderTestHook();
+
+    const bridge = (mockConfig.setToolExecutionBridge as Mock).mock.calls[0][0];
+    const request = {
+      callId: 'call-bridge-1',
+      name: 'read_file',
+      args: { path: 'README.md' },
+      isClientInitiated: false,
+      prompt_id: 'prompt-1',
+    } as any;
+    void bridge(request, new AbortController().signal);
+
+    mockScheduleToolCalls.mockClear();
+    mockSendMessageStream.mockReturnValue(stream);
+
+    await act(async () => {
+      await result.current.submitQuery('please read file');
+    });
+
+    await waitFor(() => {
+      expect(mockScheduleToolCalls).not.toHaveBeenCalled();
+    });
+  });
+
   it('schedules tool calls immediately when stream emits tool call request', async () => {
     const stream = (async function* () {
       yield {

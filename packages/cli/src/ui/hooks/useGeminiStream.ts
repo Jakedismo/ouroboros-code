@@ -1075,9 +1075,13 @@ export const useGeminiStream = (
             toolCallRequests.push(event.value);
             await flushAssistantResponse();
             clearPendingApproval(event.value.callId);
-            console.log('[useGeminiStream] Scheduling tool call immediately');
-            scheduleToolCalls(event.value, signal);
-            return StreamProcessingStatus.Completed;
+            if (event.value && !toolExecutionResolversRef.current.has(event.value.callId)) {
+              console.log('[useGeminiStream] Scheduling tool call (resolver not registered yet)');
+              scheduleToolCalls(event.value, signal);
+            } else {
+              console.log('[useGeminiStream] Tool execution already scheduled via bridge, skipping re-schedule');
+            }
+            break;
           case ServerGeminiEventType.UserCancelled:
             handleUserCancelledEvent(userMessageTimestamp);
             break;

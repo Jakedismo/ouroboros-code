@@ -43,6 +43,7 @@ export class UnifiedAgentsClient {
     string,
     { item: RunToolApprovalItem; stream: StreamedRunResult<unknown, Agent<any, any>> }
   >();
+  private readonly lastNonEmptyMessageBySession = new Map<string, string>();
 
   constructor(private readonly config: Config, options: UnifiedAgentsClientOptions = {}) {
     this.connectors = options.connectorRegistry ?? createDefaultConnectorRegistry();
@@ -112,7 +113,7 @@ export class UnifiedAgentsClient {
     }
 
     const agent = this.createAgent(session, options);
-    const inputItems = this.convertMessagesToInput(messages, session.systemPrompt);
+    const inputItems = this.convertMessagesToInput(messages, session.id, session.systemPrompt);
 
     const runner = new Runner({
       modelProvider: session.modelProvider,
@@ -248,32 +249,145 @@ export class UnifiedAgentsClient {
 
   private convertMessagesToInput(
     messages: UnifiedAgentMessage[],
-    systemPrompt?: string,
+    sessionId?: string,
+    initialPrompt?: string,
   ): AgentInputItem[] {
     const converted: AgentInputItem[] = [];
-    if (systemPrompt) {
-      converted.push(system(systemPrompt));
+    const seenToolResults = new Set<string>();
+    const firstNonEmpty = messages
+      .map((msg) => (msg.content ?? '').trim())
+      .find((content) => content.length > 0);
+
+    if (sessionId) {
+      if (firstNonEmpty && firstNonEmpty.length > 0) {
+        this.lastNonEmptyMessageBySession.set(sessionId, firstNonEmpty);
+      } else if (initialPrompt && initialPrompt.trim().length > 0 && !this.lastNonEmptyMessageBySession.has(sessionId)) {
+        this.lastNonEmptyMessageBySession.set(sessionId, initialPrompt.trim());
+      }
     }
 
     for (const message of messages) {
-      switch (message.role) {
-        case 'system':
-          converted.push(system(message.content));
-          break;
-        case 'user':
-          converted.push(user(message.content));
-          break;
-        case 'assistant':
-          converted.push(assistant(message.content));
-          break;
-        case 'tool':
-          // Tool call messages are not yet supported in the prototype runtime
-          break;
-        default:
-          converted.push(user(message.content));
+      const mapped = this.mapMessageToAgentInput(message, {
+        seenToolResults,
+        sessionId,
+      });
+      if (mapped) {
+        converted.push(mapped);
+      } else if (sessionId) {
+        const rawText = (message.content ?? '').trim();
+        if (rawText.length > 0 && message.role !== 'tool') {
+          this.lastNonEmptyMessageBySession.set(sessionId, rawText);
+        }
       }
     }
+
+    if (converted.length === 0) {
+      let fallbackText = sessionId ? this.lastNonEmptyMessageBySession.get(sessionId) : undefined;
+      if (!fallbackText || fallbackText.trim().length === 0) {
+        fallbackText = firstNonEmpty && firstNonEmpty.length > 0
+          ? firstNonEmpty
+          : initialPrompt?.trim();
+      }
+      if (!fallbackText || fallbackText.trim().length === 0) {
+        fallbackText = 'Please continue the task based on prior context.';
+      }
+      converted.push(user(fallbackText));
+      if (sessionId) {
+        this.lastNonEmptyMessageBySession.set(sessionId, fallbackText);
+      }
+      if (this.isDebugEnabled('OUROBOROS_DEBUG_PROMPT') || process.env['OUROBOROS_DEBUG']) {
+        this.debugLog('fallback-input', fallbackText);
+      }
+    }
+
     return converted;
+  }
+
+  private mapMessageToAgentInput(
+    message: UnifiedAgentMessage,
+    options: { seenToolResults?: Set<string>; sessionId?: string } = {},
+  ): AgentInputItem | null {
+    const text = (message.content ?? '').trim();
+
+    switch (message.role) {
+      case 'system': {
+        if (options.sessionId && text.length > 0) {
+          this.lastNonEmptyMessageBySession.set(options.sessionId, text);
+        }
+        return text.length > 0 ? system(text) : null;
+      }
+      case 'assistant': {
+        if (options.sessionId && text.length > 0) {
+          this.lastNonEmptyMessageBySession.set(options.sessionId, text);
+        }
+        return text.length > 0 ? assistant(text) : null;
+      }
+      case 'tool': {
+        const functionResponse = message.metadata?.['functionResponse'] as Record<string, unknown> | undefined;
+        if (!functionResponse) {
+          return null;
+        }
+
+        const status = typeof functionResponse['status'] === 'string'
+          ? (functionResponse['status'] as string)
+          : 'completed';
+        if (status !== 'completed') {
+          return null;
+        }
+
+        const callId = typeof functionResponse['callId'] === 'string'
+          ? (functionResponse['callId'] as string)
+          : typeof functionResponse['id'] === 'string'
+            ? (functionResponse['id'] as string)
+            : message.toolCallId ?? 'tool-call';
+        if (callId && options.seenToolResults?.has(callId)) {
+          return null;
+        }
+        if (callId) {
+          options.seenToolResults?.add(callId);
+        }
+
+        const name = typeof functionResponse['name'] === 'string'
+          ? (functionResponse['name'] as string)
+          : 'tool';
+        const rawOutput = functionResponse['response'];
+        let outputText: string;
+        if (typeof rawOutput === 'string') {
+          outputText = rawOutput;
+        } else if (rawOutput && typeof rawOutput === 'object') {
+          try {
+            outputText = JSON.stringify(rawOutput);
+          } catch {
+            outputText = String(rawOutput);
+          }
+        } else if (text.length > 0) {
+          outputText = text;
+        } else {
+          outputText = '';
+        }
+
+        if (options.sessionId && outputText.trim().length > 0) {
+          this.lastNonEmptyMessageBySession.set(options.sessionId, outputText);
+        }
+        return {
+          type: 'function_call_result',
+          status,
+          name,
+          callId,
+          output: {
+            type: 'text',
+            text: outputText,
+          },
+        } as AgentInputItem;
+      }
+      case 'user':
+      default: {
+        if (options.sessionId && text.length > 0) {
+          this.lastNonEmptyMessageBySession.set(options.sessionId, text);
+        }
+        return text.length > 0 ? user(text) : null;
+      }
+    }
   }
 
   private buildModelSettings(
