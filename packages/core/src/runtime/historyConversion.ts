@@ -39,25 +39,33 @@ function extractThought(part: Part): string | null {
   return null;
 }
 
-function extractFunctionResponseText(functionResponse: unknown): string | null {
+/**
+ * Extract function response data, preserving structured JSON when possible
+ * Returns tuple: [displayText, structuredData]
+ */
+function extractFunctionResponseData(functionResponse: unknown): [string | null, unknown | null] {
   if (!isRecord(functionResponse)) {
-    return null;
+    return [null, null];
   }
 
   const response = functionResponse['response'];
+
+  // If response is already a string, use it directly
   if (typeof response === 'string' && response.trim().length > 0) {
-    return response.trim();
+    return [response.trim(), null];
   }
 
+  // If response is structured data
   if (isRecord(response)) {
     const output = response['output'];
     if (typeof output === 'string' && output.trim().length > 0) {
-      return output.trim();
+      // Preserve the full response structure in metadata
+      return [output.trim(), response];
     }
 
     const errorText = response['error'];
     if (typeof errorText === 'string' && errorText.trim().length > 0) {
-      return errorText.trim();
+      return [errorText.trim(), response];
     }
 
     const content = response['content'];
@@ -75,24 +83,41 @@ function extractFunctionResponseText(functionResponse: unknown): string | null {
         .filter(Boolean)
         .join('\n');
       if (rendered.trim().length > 0) {
-        return rendered.trim();
+        // Preserve structured content array
+        return [rendered.trim(), response];
       }
+    }
+
+    // Return structured response with JSON.stringify fallback for display
+    try {
+      const displayText = JSON.stringify(response, null, 2);
+      return [displayText, response]; // Preserve structure!
+    } catch (_error) {
+      return [null, response];
     }
   }
 
+  // Last resort: stringify the entire functionResponse
   try {
-    return JSON.stringify(functionResponse);
+    const displayText = JSON.stringify(functionResponse, null, 2);
+    return [displayText, functionResponse]; // Preserve structure!
   } catch (_error) {
-    return null;
+    return [null, null];
   }
 }
 
-function extractTextFromParts(parts: Part[] | undefined): string {
+/**
+ * Extract text and structured data from parts
+ * Returns tuple: [text, structuredToolData]
+ */
+function extractFromParts(parts: Part[] | undefined): [string, Record<string, unknown> | null] {
   if (!Array.isArray(parts) || parts.length === 0) {
-    return '';
+    return ['', null];
   }
 
   const textSegments: string[] = [];
+  let structuredToolData: Record<string, unknown> | null = null;
+
   for (const part of parts) {
     if (!part) {
       continue;
@@ -120,14 +145,18 @@ function extractTextFromParts(parts: Part[] | undefined): string {
       continue;
     }
 
-    const functionResponseText = extractFunctionResponseText(record['functionResponse']);
-    if (functionResponseText) {
-      textSegments.push(functionResponseText);
-      continue;
+    // Extract function response with structured data preservation
+    const [displayText, structuredData] = extractFunctionResponseData(record['functionResponse']);
+    if (displayText) {
+      textSegments.push(displayText);
+      // Store structured data if available (GAP #1 FIX: Preserve typed payloads!)
+      if (structuredData && !structuredToolData) {
+        structuredToolData = { toolResponse: structuredData };
+      }
     }
   }
 
-  return textSegments.join('\n').trim();
+  return [textSegments.join('\n').trim(), structuredToolData];
 }
 
 export function convertContentToUnifiedMessage(
@@ -156,9 +185,15 @@ export function convertContentToUnifiedMessage(
     }
   }
 
-  const text = extractTextFromParts(content.parts as Part[] | undefined);
+  // Extract text AND structured data (GAP #1 FIX!)
+  const [text, structuredToolData] = extractFromParts(content.parts as Part[] | undefined);
   if (!text) {
     return null;
+  }
+
+  // Preserve structured tool data in metadata for downstream planning
+  if (structuredToolData) {
+    Object.assign(metadata, structuredToolData);
   }
 
   const message: UnifiedAgentMessage = {
