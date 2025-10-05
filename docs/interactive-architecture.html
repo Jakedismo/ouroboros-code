@@ -450,9 +450,9 @@
       </section>
 
       <section>
-        <h2>Alignment with OpenAI Agents SDK Principles</h2>
+        <h2>Alignment with OpenAI Agents SDK Best Practices</h2>
         <p>
-          The following scorecard compares Ouroboros implementation patterns with the principles recommended by the OpenAI Agents SDK: function-style tool definitions, stateful conversations, streaming-first delivery, safety controls, and provider interoperability.
+          The following scorecard compares Ouroboros implementation patterns with the best practices recommended by the OpenAI Agents SDK. Each score represents the percentage of SDK features properly adopted. See <a href="./openai-agents-sdk-gap-analysis.md" target="_blank">full gap analysis document</a> for technical details.
         </p>
         <div class="alignment-scoreboard" id="scoreboard"></div>
       </section>
@@ -469,25 +469,43 @@
       <section>
         <h2>Further Reading</h2>
         <details open>
-          <summary>Key source files</summary>
+          <summary>📚 Gap Analysis Documentation</summary>
           <ul>
-            <li>CLI orchestration entry point: <code>packages/cli/src/ui/App.tsx</code></li>
-            <li>Unified Agents runtime bridge: <code>packages/core/src/runtime/unifiedAgentsClient.ts</code></li>
-            <li>Agents content generator: <code>packages/core/src/runtime/agentsContentGenerator.ts</code></li>
-            <li>Multi-agent orchestrator: <code>packages/core/src/agents/multiAgentExecutor.ts</code></li>
-            <li>Conversation history conversion: <code>packages/core/src/runtime/historyConversion.ts</code></li>
-            <li>Tool prompt injector: <code>packages/core/src/agents/toolInjector.ts</code></li>
+            <li><strong><a href="./openai-agents-sdk-gap-analysis.md" target="_blank">Complete OpenAI Agents SDK Gap Analysis</a></strong> — Detailed technical comparison with code examples and migration paths</li>
+            <li><a href="./unified-agents-architecture.md" target="_blank">Unified Agents Architecture</a> — Current integration overview</li>
+            <li><a href="../ouroboros/agents-sdk-migration-final-steps.md" target="_blank">Migration Final Steps</a> — Roadmap for completing SDK alignment</li>
           </ul>
         </details>
         <details>
-          <summary>Recommended validation rituals</summary>
+          <summary>🔍 Key source files affected by gaps</summary>
+          <ul>
+            <li><strong>Memory Management:</strong> <code>packages/core/src/runtime/historyConversion.ts</code> (Gap #1, #2)</li>
+            <li><strong>Session Storage:</strong> <code>packages/core/src/runtime/unifiedAgentsClient.ts</code> (Gap #3, #5)</li>
+            <li><strong>Tool Definitions:</strong> <code>packages/core/src/tools/*.ts</code> (14 files, Gap #2)</li>
+            <li><strong>Tool Adapter:</strong> <code>packages/core/src/runtime/toolAdapter.ts</code> (Gap #2, #4)</li>
+            <li><strong>Structured Outputs:</strong> <code>packages/core/src/runtime/agentsContentGenerator.ts</code> (Gap #6)</li>
+            <li><strong>CLI Integration:</strong> <code>packages/cli/src/ui/hooks/useGeminiStream.ts</code></li>
+          </ul>
+        </details>
+        <details>
+          <summary>✅ Validation & Testing</summary>
           <p>
-            Run focused Vitest suites after modifying runtime or orchestration logic:
+            Run focused tests after implementing gap fixes:
           </p>
           <ul>
-            <li><code>npx vitest run packages/core/src/runtime/historyConversion.test.ts</code> — verifies conversation memory mapping.</li>
-            <li><code>npx vitest run packages/core/src/agents/multiAgentExecutor.test.ts</code> — covers delegated specialist execution.</li>
-            <li><code>npm run test --workspaces --if-present</code> — executes all registered workspace suites.</li>
+            <li><code>npx vitest run packages/core/src/runtime/historyConversion.test.ts</code> — Verify session memory handling (Gap #1, #2)</li>
+            <li><code>npx vitest run packages/core/src/runtime/toolAdapter.test.ts</code> — Verify tool definition patterns (Gap #2)</li>
+            <li><code>npm run test:integration:all</code> — Full integration test suite</li>
+            <li><code>npm run test:connectors</code> — Multi-provider smoke tests (set RUN_CONNECTOR_MATRIX=true)</li>
+          </ul>
+        </details>
+        <details>
+          <summary>🔗 OpenAI Agents SDK References</summary>
+          <ul>
+            <li><a href="https://openai.github.io/openai-agents-python/" target="_blank">OpenAI Agents SDK Documentation</a></li>
+            <li><a href="https://openai.github.io/openai-agents-python/sessions/" target="_blank">Sessions Guide</a> — How session storage should work</li>
+            <li><a href="https://openai.github.io/openai-agents-python/tools/" target="_blank">Tools Guide</a> — Function tool definition patterns</li>
+            <li><a href="https://cookbook.openai.com/examples/agents_sdk/session_memory" target="_blank">Session Memory Cookbook</a> — Memory management examples</li>
           </ul>
         </details>
       </section>
@@ -653,107 +671,179 @@
 
       const alignmentData = [
         {
-          id: 'tools',
-          title: 'Function-Tool Compliance',
-          score: 0.86,
-          description:
-            'Tool registries are wrapped with the Agents SDK `tool()` helper, exposing JSON argument hints and adding LocalShell/Image generation coverage.',
-          gap:
-            'Remaining work: ensure every CLI slash command is mirrored as a callable tool so orchestrated specialists can invoke them without manual prompt nudges.',
-        },
-        {
           id: 'memory',
-          title: 'Conversation Memory Fidelity',
-          score: 0.78,
+          title: 'Session-Based Memory Management',
+          score: 0.35,
           description:
-            'historyConversion extracts nested function responses, error payloads, and thought text so subsequent turns stay grounded.',
+            'Ouroboros uses OpenAI Agents SDK for execution but does not use SDK Sessions for automatic conversation history management.',
           gap:
-            'Current adapter flattens structured tool JSON into strings; preserving typed payloads would unlock richer planner reasoning and automatic tool retries.',
+            'Gap #1: Manual history conversion via convertContentHistoryToUnifiedMessages() instead of SDK Sessions. Flattens structured tool JSON into strings (historyConversion.ts:83-87), losing typed payloads needed for downstream planning and automatic tool retries.',
+          codeRefs: 'historyConversion.ts:179-190, unifiedAgentsClient.ts:50'
         },
         {
-          id: 'streaming',
-          title: 'Streaming & Finalisation',
-          score: 0.9,
+          id: 'tools',
+          title: 'Tool Definition Patterns',
+          score: 0.60,
           description:
-            'UnifiedAgentsClient streams deltas, tool approvals, and usage telemetry, and AgentsContentGenerator relays them through legacy GenerateContent streams.',
+            'Tools use custom BaseDeclarativeTool class hierarchy with manual JSON schema definitions, then converted to Zod, then adapted to Agents SDK.',
           gap:
-            'Embedding endpoints remain unimplemented; adding parity would align with the SDK guidance on multi-modal surface coverage.',
+            'Gap #2: Custom class-based tools instead of @function_tool decorator pattern. Manual schema definitions can drift from implementation. Extra conversion layers (JSON schema → Zod → SDK) add complexity.',
+          codeRefs: 'tools/read-file.ts, runtime/toolAdapter.ts:64-72'
         },
         {
-          id: 'safety',
-          title: 'Safety & Approvals',
-          score: 0.82,
+          id: 'sessions',
+          title: 'Persistent Session Storage',
+          score: 0.25,
           description:
-            'Tool approvals respect config-driven YOLO/manual modes and auto-approve low-risk calls while logging decisions for audit.',
+            'Sessions are ephemeral, created per-request with timestamp-based IDs. No persistent storage backend for conversation history.',
           gap:
-            'Approval UX inside the CLI still relies on textual prompts; integrating structured confirmation dialogs would reduce misuse risk.',
+            'Gap #3: Creates session ID from timestamp+random (unifiedAgentsClient.ts:100) instead of using SQLiteSession or OpenAI Conversations API. History managed externally in CLI, can\'t resume conversations after restart.',
+          codeRefs: 'unifiedAgentsClient.ts:88-108'
         },
         {
-          id: 'interoperability',
-          title: 'Provider Interoperability',
-          score: 0.74,
+          id: 'serialization',
+          title: 'Tool Result Serialization',
+          score: 0.55,
           description:
-            'Connectors wrap OpenAI, Anthropic, and Gemini models via Vercel AI SDK adapters with graceful optional dependency errors.',
+            'Tools return custom ToolResult type with multiple display formats (llmContent, returnDisplay, responseParts). Complex conversion to strings for LLM.',
           gap:
-            'Connector smoke tests for multi-turn tool loops remain TODO, leaving regressions undetected when optional packages update.',
+            'Gap #4: Custom result types instead of simple strings/objects that SDK auto-serializes. Fallback chain (responseParts → resultDisplay → default) obscures return flow. Can\'t use Pydantic-style typed results.',
+          codeRefs: 'runtime/toolAdapter.ts:129-136'
+        },
+        {
+          id: 'lifecycle',
+          title: 'Agent & Runner Lifecycle',
+          score: 0.70,
+          description:
+            'Creates new Agent and Runner instances per request instead of reusing them across conversation turns.',
+          gap:
+            'Gap #5: No caching of Agent/Runner instances. Extra object creation overhead prevents leveraging SDK optimizations for stateful conversations.',
+          codeRefs: 'unifiedAgentsClient.ts:119-128'
+        },
+        {
+          id: 'structured',
+          title: 'Structured Outputs',
+          score: 0.40,
+          description:
+            'Relies on prompt engineering for JSON responses instead of using SDK\'s native response_format parameter with schema validation.',
+          gap:
+            'Gap #6: Injects JSON schema into system prompt manually (agentsContentGenerator.ts). No native validation, unreliable JSON, extra token cost. Should use Agent response_format parameter.',
+          codeRefs: 'runtime/agentsContentGenerator.ts'
         },
       ];
 
       const gaps = [
         {
-          id: 'slash-tools',
-          title: 'Slash commands missing tool parity',
-          category: 'tooling',
+          id: 'session-storage',
+          title: 'No persistent session storage backend',
+          category: 'memory',
+          priority: 'P1',
           summary:
-            'Slash commands such as /analyze and /docgen are documented but not registered as callable function tools, so orchestrated specialists cannot invoke them autonomously.',
+            'Session IDs are ephemeral (timestamp+random), no SQLiteSession or OpenAI Conversations API integration. History managed in CLI layer, can\'t resume after restart.',
           impact:
-            'Limits Agents SDK-driven delegation because orchestrators must embed manual instructions instead of invoking deterministic tools.',
+            'CRITICAL: Cannot resume conversations across app restarts. Checkpoint/restore must manually reconstruct state. Multi-turn context limited to single session lifetime. Can\'t leverage SDK\'s conversation state API.',
           remediation:
-            'Expose slash-command handlers via the tool adapter so they can be scheduled like other workspace operations.',
+            'Implement SessionManager using SQLiteSession with file persistence. Store session DB in .ouroboros/sessions/. Update CLI to persist session IDs. Integrate with checkpoint system.',
+          effort: 'High',
+          codeLocation: 'packages/core/src/runtime/unifiedAgentsClient.ts:88-108'
         },
         {
           id: 'structured-memory',
-          title: 'Structured tool payload loss',
+          title: 'Structured tool JSON flattened to strings',
           category: 'memory',
+          priority: 'P1',
           summary:
-            'historyConversion collapses JSON outputs into strings, losing shape information that could guide downstream planners.',
+            'historyConversion.ts:83-87 uses JSON.stringify() as fallback, losing typed payloads. SDK can\'t access structured tool outputs for automatic retries or validation.',
           impact:
-            'Prevents advanced Agents SDK features (automatic tool retries, output validation) from using typed results.',
+            'HIGH: Prevents automatic tool retries. Limits planner reasoning (no typed payloads). Can\'t use SDK\'s output validation. Reduces multi-agent coordination quality.',
           remediation:
-            'Augment UnifiedAgentMessage metadata with serialised JSON and extend mapMessageToAgentInput to forward it intact.',
+            'Preserve structured JSON in UnifiedAgentMessage.metadata field. Update mapMessageToAgentInput to forward typed payloads. Add Zod schemas for tool results.',
+          effort: 'Medium',
+          codeLocation: 'packages/core/src/runtime/historyConversion.ts:83-87, 159-177'
+        },
+        {
+          id: 'tool-definitions',
+          title: 'Custom tool class hierarchy instead of function tools',
+          category: 'tooling',
+          priority: 'P1',
+          summary:
+            'All 14 tools use BaseDeclarativeTool/BaseToolInvocation pattern. Manual JSON schema definitions. Conversion chain: JSON schema → Zod → SDK.',
+          impact:
+            'MEDIUM: More boilerplate per tool (50+ lines vs 10 lines). Schemas can drift from implementation. Extra conversion layers add complexity. Harder to maintain consistency.',
+          remediation:
+            'Convert tools to functionTool() pattern. Use Zod schemas directly. Remove BaseToolInvocation classes. Simplify return values to strings/objects.',
+          effort: 'High',
+          codeLocation: 'packages/core/src/tools/*.ts (14 files), runtime/toolAdapter.ts'
+        },
+        {
+          id: 'result-serialization',
+          title: 'Complex ToolResult type with multiple display formats',
+          category: 'tooling',
+          priority: 'P2',
+          summary:
+            'Tools return ToolResult with llmContent, returnDisplay, responseParts. Multiple conversion layers. Fallback chain obscures simple return flow.',
+          impact:
+            'MEDIUM: More complex tool implementations. Inconsistent error handling. Harder to debug. Can\'t use Pydantic-style typed results. Extra serialization overhead.',
+          remediation:
+            'Simplify tools to return string | object. Let SDK handle serialization. Use standard exceptions. Remove toolResponsePartsToString conversion.',
+          effort: 'Medium',
+          codeLocation: 'packages/core/src/runtime/toolAdapter.ts:129-143, tools/tools.ts'
+        },
+        {
+          id: 'agent-runner-lifecycle',
+          title: 'Agent and Runner recreated per request',
+          category: 'runtime',
+          priority: 'P2',
+          summary:
+            'Creates new Agent instance per streamResponse call. Creates new Runner per call. No caching. Can\'t leverage SDK reuse optimizations.',
+          impact:
+            'LOW-MEDIUM: Extra object creation overhead. Potential memory leaks. Can\'t cache tool definitions. Harder to implement agent-level state.',
+          remediation:
+            'Add agentCache and runnerCache Map in UnifiedAgentsClient. Key by provider:model. Reuse instances across conversation turns.',
+          effort: 'Low',
+          codeLocation: 'packages/core/src/runtime/unifiedAgentsClient.ts:119-128'
+        },
+        {
+          id: 'structured-outputs',
+          title: 'Prompt-based JSON instead of response_format',
+          category: 'runtime',
+          priority: 'P2',
+          summary:
+            'Injects JSON schema into system prompt manually. No native validation. LLM may violate schema. Extra tokens consumed.',
+          impact:
+            'MEDIUM: Unreliable JSON generation. No compile-time type safety. Extra token cost (schema in prompt). Manual parsing/validation. Frequent agent selection failures.',
+          remediation:
+            'Use Agent response_format parameter with Zod schemas. Remove manual schema injection. Add type-safe result parsing.',
+          effort: 'Low',
+          codeLocation: 'packages/core/src/runtime/agentsContentGenerator.ts'
         },
         {
           id: 'embedding-gap',
-          title: 'Embedding support absent',
+          title: 'Embedding support not implemented',
           category: 'runtime',
+          priority: 'P3',
           summary:
-            'AgentsContentGenerator throws for embedContent, leaving the SDK's multimodal retrieval workflows unsupported.',
+            'AgentsContentGenerator.embedContent() throws "not supported yet". Can\'t use SDK\'s multimodal retrieval workflows.',
           impact:
-            'Prevents downstream integrations (IDE companion, server) from unifying around the same runtime for semantic search.',
+            'LOW: Prevents IDE companion semantic search. No vector-based tool selection. Can\'t leverage SDK embedding features.',
           remediation:
-            'Implement embedContent via provider connectors or route to a fallback embedding service.',
+            'Implement embedContent via provider connectors. Add OpenAI embeddings API integration. Support fallback embedding service.',
+          effort: 'Medium',
+          codeLocation: 'packages/core/src/runtime/agentsContentGenerator.ts:79-81'
         },
         {
-          id: 'approval-ux',
-          title: 'Manual approval UX lacks structure',
-          category: 'safety',
+          id: 'genai-dependency',
+          title: '@google/genai dependency still present',
+          category: 'dependencies',
+          priority: 'P1',
           summary:
-            'Tool approvals are handled through console text prompts without dedicated UI affordances, increasing the risk of operator error.',
+            'Migration plan calls for complete removal but @google/genai remains in 12 files. Completion criteria not met.',
           impact:
-            'Users may miss approval prompts during high-throughput runs, undermining the SDK's safety guidance.',
+            'MEDIUM: Increases bundle size. Confuses architecture. Two parallel systems. Technical debt. Blocks final migration completion.',
           remediation:
-            'Extend the design system with modal confirmation components that map to approval events emitted by UnifiedAgentsClient.',
-        },
-        {
-          id: 'connector-tests',
-          title: 'Connector smoke coverage pending',
-          category: 'testing',
-          summary:
-            'TODO items call for end-to-end connector tests covering multi-turn tool loops when Anthropic/Gemini adapters are installed.',
-          impact:
-            'Optional provider regressions may slip into releases without automated guardrails.',
-          remediation:
-            'Automate the connector matrix workflow with sandbox credentials and run it on a schedule.',
+            'Complete migration steps from agents-sdk-migration-final-steps.md. Remove all @google/genai imports. Update package.json. Verify tests.',
+          effort: 'High',
+          codeLocation: '12 files including partUtils.ts, tools.ts, genaiCompat.ts'
         },
       ];
 
@@ -872,10 +962,15 @@
         const gap = document.createElement('p');
         gap.className = 'score-gap';
         gap.innerHTML = `<strong>Gap:</strong> ${item.gap}`;
+        const codeRefs = document.createElement('p');
+        codeRefs.style.fontSize = '0.85rem';
+        codeRefs.style.color = 'var(--text-muted)';
+        codeRefs.innerHTML = `<strong>Code:</strong> <code style="font-size:0.85rem">${item.codeRefs}</code>`;
         wrapper.appendChild(head);
         wrapper.appendChild(progress);
         wrapper.appendChild(description);
         wrapper.appendChild(gap);
+        wrapper.appendChild(codeRefs);
         scoreboard.appendChild(wrapper);
       });
 
@@ -909,18 +1004,39 @@
           .forEach((gap) => {
             const card = document.createElement('article');
             card.className = 'gap-card';
+            const header = document.createElement('div');
+            header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px';
             const title = document.createElement('h4');
             title.textContent = gap.title;
+            title.style.margin = '0';
+            const badges = document.createElement('div');
+            badges.style.cssText = 'display:flex;gap:8px';
+            const priorityBadge = document.createElement('span');
+            priorityBadge.className = 'pill';
+            priorityBadge.textContent = gap.priority;
+            priorityBadge.style.fontSize = '0.75rem';
+            const effortBadge = document.createElement('span');
+            effortBadge.className = 'pill';
+            effortBadge.textContent = `Effort: ${gap.effort}`;
+            effortBadge.style.fontSize = '0.75rem';
+            badges.appendChild(priorityBadge);
+            badges.appendChild(effortBadge);
+            header.appendChild(title);
+            header.appendChild(badges);
             const summary = document.createElement('p');
             summary.textContent = gap.summary;
             const impact = document.createElement('p');
             impact.innerHTML = `<strong>Impact:</strong> ${gap.impact}`;
             const remediation = document.createElement('p');
             remediation.innerHTML = `<strong>Remediation:</strong> ${gap.remediation}`;
-            card.appendChild(title);
+            const codeLocation = document.createElement('p');
+            codeLocation.innerHTML = `<strong>Code Location:</strong> <code style="font-size:0.85rem">${gap.codeLocation}</code>`;
+            codeLocation.style.fontSize = '0.85rem';
+            card.appendChild(header);
             card.appendChild(summary);
             card.appendChild(impact);
             card.appendChild(remediation);
+            card.appendChild(codeLocation);
             gapList.appendChild(card);
           });
       }
