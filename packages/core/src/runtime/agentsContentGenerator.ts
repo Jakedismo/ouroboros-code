@@ -16,6 +16,7 @@ import type {
 import type { Config } from '../config/config.js';
 import type { ContentGenerator } from '../core/contentGenerator.js';
 import type { UnifiedAgentMessage, UnifiedAgentStreamOptions, UnifiedAgentToolCall } from './types.js';
+import type { AnyDeclarativeTool } from '../tools/tools.js';
 import { UnifiedAgentsClient } from './unifiedAgentsClient.js';
 import {
   convertContentHistoryToUnifiedMessages,
@@ -28,6 +29,7 @@ interface AgentsContentGeneratorOptions {
 
 export class AgentsContentGenerator implements ContentGenerator {
   private readonly client: UnifiedAgentsClient;
+  private runtimePrimerCache?: string;
 
   constructor(
     private readonly config: Config,
@@ -228,11 +230,17 @@ export class AgentsContentGenerator implements ContentGenerator {
   private buildSystemPrompt(request: GenerateContentParameters): string | undefined {
     const basePrompt = this.extractSystemPrompt(request.config?.systemInstruction);
     const schemaInstruction = this.describeExpectedResponse(request);
+    const runtimePrimer = this.getRuntimePrimer();
 
-    if (basePrompt && schemaInstruction) {
-      return `${basePrompt}\n\n${schemaInstruction}`;
+    const segments = [basePrompt, runtimePrimer, schemaInstruction].filter(
+      (segment): segment is string => typeof segment === 'string' && segment.trim().length > 0,
+    );
+
+    if (segments.length === 0) {
+      return undefined;
     }
-    return basePrompt || schemaInstruction || undefined;
+
+    return segments.join('\n\n');
   }
 
   private applySchemaInstruction(
@@ -450,5 +458,93 @@ export class AgentsContentGenerator implements ContentGenerator {
     }
 
     return undefined;
+  }
+
+  private getRuntimePrimer(): string {
+    if (typeof this.runtimePrimerCache === 'string') {
+      return this.runtimePrimerCache;
+    }
+
+    const workspaceRoot = this.config.getTargetDir?.() ?? this.config.getProjectRoot?.() ?? process.cwd();
+    const registry = this.config.getToolRegistry?.();
+    const tools = registry && typeof registry.getAllTools === 'function'
+      ? (registry.getAllTools() as AnyDeclarativeTool[])
+      : [];
+
+    const toolSummaries = tools
+      .map((tool) => this.describeTool(tool))
+      .filter(Boolean)
+      .join('\n');
+
+    const primerSections = [
+      '# Ouroboros Coding Agent Operations Briefing',
+      `- You are a hands-on software engineer operating directly inside the repository rooted at \`${workspaceRoot}\`. Inspect and modify files there to satisfy the user.`,
+      '- Always ground decisions in repository evidence. Prefer local inspection and commands before turning to the network tools.',
+      '- Conversation history persists across turns. Reference prior tool output and user context instead of repeating the same calls.',
+      '- Keep tool arguments explicit, especially absolute paths inside the workspace. Confirm edits with targeted reads and follow up with verification commands.',
+      '',
+      '## Available Tooling Cheat Sheet',
+      toolSummaries.length > 0
+        ? toolSummaries
+        : '- Tool schemas are already registered. Call the appropriate function tools as needed; supply JSON arguments that match their parameter names.',
+    ];
+
+    const primer = primerSections
+      .filter((section) => typeof section === 'string' && section.trim().length > 0)
+      .join('\n');
+
+    this.runtimePrimerCache = primer;
+    return primer;
+  }
+
+  private describeTool(tool: AnyDeclarativeTool): string {
+    const name = tool.displayName ?? tool.name;
+    const description = typeof tool.description === 'string' ? tool.description.trim() : '';
+    const schema = (tool.schema?.parametersJsonSchema ?? tool.schema?.parameters) as
+      | Record<string, unknown>
+      | undefined;
+
+    if (!schema || typeof schema !== 'object') {
+      return `- ${name}${description ? ` – ${description}` : ''}`;
+    }
+
+    const properties = (schema['properties'] ?? {}) as Record<string, any>;
+    const requiredList = Array.isArray(schema['required'])
+      ? (schema['required'] as string[])
+      : [];
+
+    const required = requiredList
+      .map((key) => this.describeToolParameter(key, properties[key]))
+      .filter(Boolean)
+      .join(', ');
+    const optional = Object.keys(properties)
+      .filter((key) => !requiredList.includes(key))
+      .map((key) => this.describeToolParameter(key, properties[key]))
+      .filter(Boolean)
+      .join(', ');
+
+    const segments = [`- ${name}${description ? ` – ${description}` : ''}`];
+    if (required) {
+      segments.push(`  - Required: ${required}`);
+    }
+    if (optional) {
+      segments.push(`  - Optional: ${optional}`);
+    }
+
+    return segments.join('\n');
+  }
+
+  private describeToolParameter(key: string, schema: unknown): string | undefined {
+    const record = schema && typeof schema === 'object' ? (schema as Record<string, unknown>) : undefined;
+    const typeValue = typeof record?.['type'] === 'string' ? (record?.['type'] as string) : undefined;
+    const description = typeof record?.['description'] === 'string' ? record?.['description'] as string : undefined;
+    const type = Array.isArray(record?.['enum'])
+      ? `enum(${(record?.['enum'] as unknown[])
+        .slice(0, 4)
+        .map((value) => JSON.stringify(value))
+        .join(', ')}${(record?.['enum'] as unknown[]).length > 4 ? ', …' : ''})`
+      : typeValue ?? 'value';
+    const summary = description ? `${key}: ${type} – ${description}` : `${key}: ${type}`;
+    return summary.trim();
   }
 }

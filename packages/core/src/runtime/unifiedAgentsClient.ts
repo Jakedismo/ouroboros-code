@@ -346,10 +346,19 @@ export class UnifiedAgentsClient {
           return null;
         }
 
-        const status = typeof functionResponse['status'] === 'string'
+        const statusRaw = typeof functionResponse['status'] === 'string'
           ? (functionResponse['status'] as string)
-          : 'completed';
-        if (status !== 'completed') {
+          : undefined;
+        const status = statusRaw ? statusRaw.toLowerCase() : 'completed';
+        const terminalStatuses = new Set([
+          'completed',
+          'complete',
+          'success',
+          'succeeded',
+          'ok',
+          'done',
+        ]);
+        if (!terminalStatuses.has(status)) {
           return null;
         }
 

@@ -54,6 +54,30 @@ function extractFunctionResponseText(functionResponse: unknown): string | null {
     if (typeof output === 'string' && output.trim().length > 0) {
       return output.trim();
     }
+
+    const errorText = response['error'];
+    if (typeof errorText === 'string' && errorText.trim().length > 0) {
+      return errorText.trim();
+    }
+
+    const content = response['content'];
+    if (Array.isArray(content)) {
+      const rendered = content
+        .map((entry) => {
+          if (typeof entry === 'string') {
+            return entry.trim();
+          }
+          if (isRecord(entry) && typeof entry['text'] === 'string') {
+            return (entry['text'] as string).trim();
+          }
+          return '';
+        })
+        .filter(Boolean)
+        .join('\n');
+      if (rendered.trim().length > 0) {
+        return rendered.trim();
+      }
+    }
   }
 
   try {
