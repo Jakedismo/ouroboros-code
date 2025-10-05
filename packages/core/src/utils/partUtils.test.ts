@@ -157,6 +157,13 @@ describe('partUtils', () => {
       expect(getResponseText(result)).toBe('hello');
     });
 
+    it('should include thought text when provided by function calls', () => {
+      const result = mockResponse([
+        { functionCall: { name: 'plan', thought: 'Thinking about the next step.' } },
+      ]);
+      expect(getResponseText(result)).toBe('Thinking about the next step.');
+    });
+
     it('should return null when candidate has no parts', () => {
       const result = mockResponse([]);
       expect(getResponseText(result)).toBeNull();

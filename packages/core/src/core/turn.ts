@@ -10,7 +10,6 @@ import type {
   PartListUnion,
   GenerateContentResponse,
   FinishReason,
-  Content,
 } from '../runtime/genaiCompat.js';
 import {
   ToolConfirmationOutcome,
@@ -30,6 +29,7 @@ import type { AgentsClient } from './agentsClient.js';
 import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
 import { hasCycleInSchema } from '../tools/tools.js';
 import type { UnifiedAgentMessage, UnifiedAgentToolApproval, UnifiedAgentToolCall } from '../runtime/types.js';
+import { convertContentHistoryToUnifiedMessages } from '../runtime/historyConversion.js';
 import type { ToolResponseParts } from '../types/toolResponses.js';
 
 // Define a structure for tools passed to the server
@@ -457,63 +457,7 @@ export class Turn {
   }
 
   private buildUnifiedAgentMessages(): UnifiedAgentMessage[] {
-    const history = this.agentsClient.getHistory();
-    const messages: UnifiedAgentMessage[] = [];
-    for (const entry of history) {
-      const unified = this.convertContentToUnifiedMessage(entry);
-      if (unified) {
-        messages.push(unified);
-      }
-    }
-    return messages;
-  }
-
-  private convertContentToUnifiedMessage(content: Content): UnifiedAgentMessage | null {
-    const roleMap: Record<string, UnifiedAgentMessage['role']> = {
-      user: 'user',
-      model: 'assistant',
-      system: 'system',
-      function: 'tool',
-      tool: 'tool',
-    };
-
-    const roleKey = typeof content.role === 'string' ? content.role : 'user';
-    const role = roleMap[roleKey] ?? 'user';
-
-    const metadata: Record<string, unknown> = {};
-    let toolCallId: string | undefined;
-    if (Array.isArray(content.parts)) {
-      for (const part of content.parts) {
-        const functionResponse = (part as Record<string, unknown>)?.['functionResponse'];
-        if (functionResponse && typeof functionResponse === 'object') {
-          metadata['functionResponse'] = functionResponse;
-          const responseRecord = functionResponse as Record<string, unknown>;
-          if (typeof responseRecord['callId'] === 'string') {
-            toolCallId = responseRecord['callId'] as string;
-          } else if (typeof responseRecord['id'] === 'string') {
-            toolCallId = responseRecord['id'] as string;
-          }
-          break;
-        }
-      }
-    }
-
-    const text = this.extractTextFromParts(content.parts);
-    if (!text) {
-      return null;
-    }
-
-    const message: UnifiedAgentMessage = {
-      role,
-      content: text,
-    };
-    if (toolCallId) {
-      message.toolCallId = toolCallId;
-    }
-    if (Object.keys(metadata).length > 0) {
-      message.metadata = metadata;
-    }
-    return message;
+    return convertContentHistoryToUnifiedMessages(this.agentsClient.getHistory());
   }
 
   private normalizeRequestParts(req: PartListUnion): Part[] {
@@ -533,30 +477,6 @@ export class Turn {
     }
 
     return [{ text: String(req) }];
-  }
-
-  private extractTextFromParts(parts: Part[] | undefined): string {
-    if (!parts || parts.length === 0) {
-      return '';
-    }
-    const textParts: string[] = [];
-    for (const part of parts) {
-      const maybeText = (part as any).text;
-      if (typeof maybeText === 'string' && maybeText.trim().length > 0) {
-        textParts.push(maybeText.trim());
-        continue;
-      }
-
-      const functionResponse = (part as any).functionResponse;
-      if (functionResponse && typeof functionResponse === 'object') {
-        try {
-          textParts.push(JSON.stringify(functionResponse));
-        } catch {
-          // Ignore serialization issues
-        }
-      }
-    }
-    return textParts.join('\n').trim();
   }
 
   private createToolApprovalConfirmation(
