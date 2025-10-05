@@ -6,13 +6,29 @@
 
 /// <reference types="vitest" />
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const resolveFromConfig = (...segments: string[]) => resolve(__dirname, ...segments);
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      'signal-exit': resolveFromConfig('./src/test-utils/signal-exit-shim.ts'),
+      '@ouroboros/ouroboros-code-core': resolveFromConfig('../core/src/index.ts'),
+      '@lvce-editor/ripgrep': resolveFromConfig('./src/test-utils/ripgrep-shim.ts'),
+    },
+  },
   test: {
     include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)', 'config.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/cypress/**'],
     environment: 'jsdom',
     globals: true,
+    deps: {
+      inline: ['ink-testing-library', 'ink', 'signal-exit'],
+    },
     reporters: ['default', 'junit'],
     silent: true,
     outputFile: {
