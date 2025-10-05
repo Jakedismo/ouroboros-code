@@ -151,7 +151,7 @@ export async function runNonInteractive(
       );
     }
 
-    let currentMessages: AgentMessage[] = [
+    const messageQueue: AgentMessage[] = [
       { role: 'user', parts: ensureAgentContentArray(processedQuery) },
     ];
 
@@ -163,7 +163,7 @@ export async function runNonInteractive(
       if (inputManager && inputManager.hasPendingCommands()) {
         const command = inputManager.getNextCommand();
         if (command) {
-          const handled = await handleInputCommand(command, currentMessages, config);
+          const handled = await handleInputCommand(command, messageQueue, config);
           if (handled === 'exit') {
             shouldExit = true;
             break;
@@ -192,7 +192,27 @@ export async function runNonInteractive(
         generationConfig.tools = [{ functionDeclarations: toolDeclarations }];
       }
 
-      const messageParts = (currentMessages[0]?.parts ?? []) as PartListUnion;
+      if (messageQueue.length === 0) {
+        if (config.isAutonomousMode() && inputManager) {
+          await new Promise<void>((resolve) => {
+            const checkForInput = setInterval(() => {
+              if (inputManager.hasPendingCommands() || shouldExit || messageQueue.length > 0) {
+                clearInterval(checkForInput);
+                resolve();
+              }
+            }, 100);
+          });
+          continue;
+        }
+        break;
+      }
+
+      const nextMessage = messageQueue.shift();
+      if (!nextMessage) {
+        continue;
+      }
+
+      const messageParts = (nextMessage.parts ?? []) as PartListUnion;
       const response = await agentsClient.sendMessage(
         {
           message: messageParts,
@@ -254,14 +274,14 @@ export async function runNonInteractive(
             text: 'All tool calls failed. Please analyze the errors and try an alternative approach.',
           });
         }
-        currentMessages = [{ role: 'user', parts: toolResponseParts }];
+        messageQueue.unshift({ role: 'user', parts: toolResponseParts });
       } else {
         // In autonomous mode, wait for more input instead of exiting
         if (config.isAutonomousMode() && inputManager) {
           // Wait for new input
           await new Promise<void>((resolve) => {
             const checkForInput = setInterval(() => {
-              if (inputManager.hasPendingCommands() || shouldExit) {
+              if (inputManager.hasPendingCommands() || shouldExit || messageQueue.length > 0) {
                 clearInterval(checkForInput);
                 resolve();
               }
