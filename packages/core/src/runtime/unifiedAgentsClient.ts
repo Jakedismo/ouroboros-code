@@ -26,9 +26,11 @@ import type {
   UnifiedAgentsStreamEvent,
   UnifiedAgentStreamOptions,
 } from './types.js';
+import { SessionManager, type SessionStorage } from './sessionManager.js';
 
 export interface UnifiedAgentsClientOptions {
   connectorRegistry?: ProviderConnectorRegistry;
+  sessionManager?: SessionManager;
   onToolExecuted?: (payload: {
     session: UnifiedAgentSession;
     request: ToolCallRequestInfo;
@@ -39,6 +41,8 @@ export interface UnifiedAgentsClientOptions {
 export class UnifiedAgentsClient {
   private readonly connectors: ProviderConnectorRegistry;
   private readonly options: UnifiedAgentsClientOptions;
+  private readonly sessionManager?: SessionManager;
+  private readonly sessionStorages = new Map<string, SessionStorage>();
   private readonly pendingToolApprovals = new Map<
     string,
     {
@@ -51,6 +55,7 @@ export class UnifiedAgentsClient {
 
   constructor(private readonly config: Config, options: UnifiedAgentsClientOptions = {}) {
     this.connectors = options.connectorRegistry ?? createDefaultConnectorRegistry();
+    this.sessionManager = options.sessionManager;
     this.options = options;
   }
 
@@ -96,8 +101,38 @@ export class UnifiedAgentsClient {
       this.resolveModelProvider(connector, context, sessionConfig.model),
     ]);
 
+    // Use persistent session ID if SessionManager is available
+    let sessionId: string;
+    let sessionStorage: SessionStorage | undefined;
+
+    if (this.sessionManager) {
+      // Check if session ID is provided in metadata (for session restoration)
+      const providedSessionId = typeof sessionConfig.metadata?.['sessionId'] === 'string'
+        ? (sessionConfig.metadata['sessionId'] as string)
+        : undefined;
+
+      if (providedSessionId) {
+        // Restore existing session
+        sessionId = providedSessionId;
+        sessionStorage = this.sessionManager.getOrCreateSession(sessionId);
+        this.debugLog('session-restored', sessionId);
+      } else {
+        // Create new persistent session
+        sessionId = `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        sessionStorage = this.sessionManager.getOrCreateSession(sessionId);
+        this.debugLog('session-created', sessionId);
+      }
+
+      // Cache the session storage
+      this.sessionStorages.set(sessionId, sessionStorage);
+    } else {
+      // Fall back to ephemeral session ID if no SessionManager
+      sessionId = `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      this.debugLog('session-ephemeral', sessionId);
+    }
+
     return {
-      id: `session-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      id: sessionId,
       providerId: sessionConfig.providerId,
       model: sessionConfig.model,
       metadata: sessionConfig.metadata,
@@ -116,8 +151,27 @@ export class UnifiedAgentsClient {
       throw new Error('UnifiedAgentsClient session is missing model context.');
     }
 
+    // Retrieve existing conversation history from session storage
+    const sessionStorage = this.sessionStorages.get(session.id);
+    let inputItems: AgentInputItem[];
+
+    if (sessionStorage) {
+      // Load persisted conversation items
+      const persistedItems = await sessionStorage.getItems();
+
+      // Convert new messages to input items
+      const newItems = this.convertMessagesToInput(messages, session.id, session.systemPrompt);
+
+      // Combine persisted + new items
+      inputItems = [...persistedItems, ...newItems];
+
+      this.debugLog('session-load', session.id, `${persistedItems.length} persisted + ${newItems.length} new`);
+    } else {
+      // No session storage - use ephemeral conversion
+      inputItems = this.convertMessagesToInput(messages, session.id, session.systemPrompt);
+    }
+
     const agent = this.createAgent(session, options);
-    const inputItems = this.convertMessagesToInput(messages, session.id, session.systemPrompt);
 
     this.clearPendingApprovalsForSession(session.id);
 
@@ -159,6 +213,22 @@ export class UnifiedAgentsClient {
 
     const finalText =
       this.extractFinalOutputText(streamResult) || streamedChunks.filter(Boolean).join('\n');
+
+    // Persist conversation items to session storage after turn completes
+    if (sessionStorage) {
+      try {
+        // Get final result items from the completed run
+        const resultItems = streamResult.items ?? [];
+
+        // Add new conversation items to session storage
+        await sessionStorage.addItems(resultItems);
+
+        this.debugLog('session-persist', session.id, `${resultItems.length} items stored`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`Failed to persist session ${session.id}:`, message);
+      }
+    }
 
     yield {
       type: 'final',

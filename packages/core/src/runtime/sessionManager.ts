@@ -7,7 +7,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentInputItem } from '@openai/agents';
-import { Logger } from '../utils/logger.js';
+import type { Logger } from '../core/logger.js';
 
 /**
  * Session storage interface following OpenAI Agents SDK patterns

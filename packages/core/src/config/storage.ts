@@ -54,6 +54,10 @@ export class Storage {
     return path.join(Storage.getGlobalGeminiDir(), TMP_DIR_NAME);
   }
 
+  static getSessionStorageDir(): string {
+    return path.join(Storage.getGlobalGeminiDir(), 'sessions');
+  }
+
   getGeminiDir(): string {
     return resolveConfigDir(this.targetDir);
   }

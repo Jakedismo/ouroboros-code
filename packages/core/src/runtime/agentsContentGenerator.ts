@@ -22,6 +22,8 @@ import {
   convertContentHistoryToUnifiedMessages,
   convertContentToUnifiedMessage,
 } from './historyConversion.js';
+import { SessionManager } from './sessionManager.js';
+import { Storage } from '../config/storage.js';
 
 interface AgentsContentGeneratorOptions {
   defaultModel?: string;
@@ -29,13 +31,21 @@ interface AgentsContentGeneratorOptions {
 
 export class AgentsContentGenerator implements ContentGenerator {
   private readonly client: UnifiedAgentsClient;
+  private readonly sessionManager: SessionManager;
   private runtimePrimerCache?: string;
 
   constructor(
     private readonly config: Config,
     private readonly options: AgentsContentGeneratorOptions,
   ) {
-    this.client = new UnifiedAgentsClient(config);
+    // Create SessionManager with global storage directory
+    const storageDir = Storage.getSessionStorageDir();
+    this.sessionManager = new SessionManager(storageDir);
+
+    // Inject SessionManager into UnifiedAgentsClient
+    this.client = new UnifiedAgentsClient(config, {
+      sessionManager: this.sessionManager,
+    });
   }
 
   async generateContent(
@@ -98,10 +108,16 @@ export class AgentsContentGenerator implements ContentGenerator {
       request,
     );
     const streamOptions = this.buildStreamOptions(request);
+
+    // Pass session ID through metadata for persistence
+    const sessionId = this.config.getSessionId();
     const session = await this.client.createSession({
       providerId,
       model,
       systemPrompt,
+      metadata: {
+        sessionId, // Used for session restoration
+      },
     });
 
     if (!streaming) {
