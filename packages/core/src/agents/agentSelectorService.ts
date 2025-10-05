@@ -80,6 +80,19 @@ export class AgentSelectorService {
   private multiAgentExecutor: MultiAgentExecutor | null = null;
   private lastExecutionSummary: MultiAgentExecutionResult | null = null;
 
+  private getProviderDefaultModel(): string {
+    const provider = this.config?.getProvider();
+    switch (provider) {
+      case 'anthropic':
+        return 'claude-sonnet-4-20250514[1m]';
+      case 'gemini':
+        return 'gemini-2.5-pro';
+      case 'openai':
+      default:
+        return 'gpt-5';
+    }
+  }
+
   private constructor() {}
 
   static getInstance(): AgentSelectorService {
@@ -101,7 +114,7 @@ export class AgentSelectorService {
     this.agentManager = AgentManager.getInstance();
 
     const defaultModel =
-      this.selectedModel || config.getModel() || 'gpt-5-nano';
+      this.selectedModel || config.getModel() || this.getProviderDefaultModel();
     this.multiAgentExecutor = new MultiAgentExecutor(config, {
       defaultModel,
       client: this.unifiedClient,
@@ -275,8 +288,9 @@ export class AgentSelectorService {
     const candidates: string[] = [];
     const provider = this.config?.getProvider();
 
-    if (provider === 'openai') {
-      candidates.push('gpt-5-nano');
+    const providerDefault = this.getProviderDefaultModel();
+    if (providerDefault) {
+      candidates.push(providerDefault);
     }
 
     if (this.selectedModel) {
@@ -632,17 +646,19 @@ Select the most appropriate agents for this user request:`;
     selectedAgents: AgentPersona[],
     userPrompt: string,
   ): AgentPersona[] {
-    // If no agents selected, use fallback heuristics
-    if (selectedAgents.length === 0) {
+    const uniqueAgents = selectedAgents.filter((agent, index, array) =>
+      array.findIndex((candidate) => candidate.id === agent.id) === index,
+    );
+
+    if (uniqueAgents.length === 0) {
       return this.fallbackSelection(userPrompt);
     }
 
-    // Limit to maximum 3 agents to avoid overwhelming the system
-    if (selectedAgents.length > 3) {
-      return selectedAgents.slice(0, 3);
+    if (uniqueAgents.length > 3) {
+      return uniqueAgents.slice(0, 3);
     }
 
-    return selectedAgents;
+    return uniqueAgents;
   }
 
   /**
