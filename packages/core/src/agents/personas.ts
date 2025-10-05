@@ -30,6 +30,8 @@ import { MemoryTool } from '../tools/memoryTool.js';
 import { WebFetchTool } from '../tools/web-fetch.js';
 import { WebSearchTool } from '../tools/web-search.js';
 import { UpdatePlanTool } from '../tools/update-plan.js';
+import { LocalShellTool } from '../tools/local-shell.js';
+import { ImageGenerationTool } from '../tools/image-generation.js';
 
 // ES modules equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -45,10 +47,12 @@ const CORE_TOOL_SUGGESTIONS = [
   EditTool?.Name ?? 'replace',
   WriteFileTool?.Name ?? 'write_file',
   ShellTool?.Name ?? 'run_shell_command',
+  LocalShellTool?.Name ?? 'local_shell',
   MemoryTool?.Name ?? 'save_memory',
   WebFetchTool?.Name ?? 'web_fetch',
   WebSearchTool?.Name ?? 'google_web_search',
   UpdatePlanTool?.Name ?? 'update_plan',
+  ImageGenerationTool?.Name ?? 'generate_image',
 ].filter((name): name is string => typeof name === 'string' && name.length > 0);
 
 export interface AgentPersona {

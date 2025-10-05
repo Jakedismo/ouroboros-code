@@ -17,6 +17,10 @@ import type { Config } from '../config/config.js';
 import type { ContentGenerator } from '../core/contentGenerator.js';
 import type { UnifiedAgentMessage, UnifiedAgentStreamOptions, UnifiedAgentToolCall } from './types.js';
 import { UnifiedAgentsClient } from './unifiedAgentsClient.js';
+import {
+  convertContentHistoryToUnifiedMessages,
+  convertContentToUnifiedMessage,
+} from './historyConversion.js';
 
 interface AgentsContentGeneratorOptions {
   defaultModel?: string;
@@ -292,46 +296,20 @@ export class AgentsContentGenerator implements ContentGenerator {
 
     const first = contents[0] as Content | string;
     if (first && typeof first === 'object' && 'role' in first) {
-      return (contents as Content[]).map((content) => {
-        const parts = Array.isArray(content.parts) ? content.parts : [];
-        return {
-          role: this.mapRole(content.role),
-          content: this.serializeParts(parts as unknown[]),
-        };
-      });
+      const unifiedMessages = convertContentHistoryToUnifiedMessages(
+        contents as Content[],
+      );
+      if (unifiedMessages.length > 0) {
+        return unifiedMessages;
+      }
+      const fallback = convertContentToUnifiedMessage(first as Content);
+      if (fallback) {
+        return [fallback];
+      }
+      return [{ role: 'user', content: '' }];
     }
 
     return [{ role: 'user', content: (contents as string[]).join('\n') }];
-  }
-
-  private mapRole(role?: string): UnifiedAgentMessage['role'] {
-    switch (role) {
-      case 'model':
-        return 'assistant';
-      case 'tool':
-        return 'tool';
-      case 'user':
-      case 'system':
-        return role;
-      default:
-        return 'user';
-    }
-  }
-
-  private serializeParts(parts: unknown[]): string {
-    return parts
-      .map((part) => {
-        if (typeof part === 'string') return part;
-        if (part && typeof part === 'object') {
-          if ('text' in part && typeof (part as { text?: string }).text === 'string') {
-            return (part as { text?: string }).text as string;
-          }
-          return '';
-        }
-        return '';
-      })
-      .filter(Boolean)
-      .join('\n');
   }
 
   private serializeContentUnion(content: ContentListUnion): string {

@@ -6,9 +6,13 @@
 
 import React from 'react';
 import { Box, Text } from 'ink';
-import { Colors } from '../colors.js';
 import { ApprovalMode, type MCPServerConfig } from '@ouroboros/ouroboros-code-core';
 import { ContextSummaryDisplay } from './ContextSummaryDisplay.js';
+import {
+  Surface,
+  SectionHeading,
+  useDesignSystem,
+} from '../design-system/index.js';
 
 interface ContextPanelProps {
   model?: string;
@@ -31,41 +35,48 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   blockedMcpServers,
   compact = false,
 }) => {
+  const design = useDesignSystem();
+  const contextColor = design.colors.text.accent;
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={Colors.Gray} width="100%">
-      <Box paddingX={1}>
-        <Text color={Colors.AccentBlue} bold>
-          📚 Context
+    <Surface
+      variant="sunken"
+      borderTone="accent"
+      flexDirection="column"
+      width="100%"
+      paddingY={design.spacing.sm}
+      paddingX={design.spacing.sm}
+    >
+      <SectionHeading icon="📚" text={compact ? 'Context' : 'Workspace Context'} />
+      <Box marginTop={design.spacing.sm} flexDirection="column">
+        <Text color={design.colors.text.muted} wrap="truncate-end">
+          Provider:{' '}
+          <Text color={contextColor}>{provider ?? '—'}</Text>
         </Text>
-      </Box>
-      <Box paddingX={1}>
-        <Text wrap="truncate-end">
-          Provider: <Text color={Colors.AccentPurple}>{provider || '—'}</Text>
-        </Text>
-      </Box>
-      <Box paddingX={1}>
-        <Text wrap="truncate-end">
+        <Text color={design.colors.text.muted} wrap="truncate-end">
           Model:{' '}
-          <Text color={Colors.AccentPurple}>
-            {model ? (model.length > 18 ? model.substring(0, 18) + '...' : model) : '—'}
+          <Text color={contextColor}>
+            {model ? (model.length > 22 ? `${model.slice(0, 21)}…` : model) : '—'}
           </Text>
         </Text>
       </Box>
-      <Box padding={compact ? 0 : 1}>
+      <Box marginTop={compact ? design.spacing.xs : design.spacing.sm}>
         <ContextSummaryDisplay
           ideContext={undefined}
           geminiMdFileCount={geminiMdFileCount}
           contextFileNames={contextFileNames}
           mcpServers={mcpServers as Record<string, MCPServerConfig> | undefined}
-          blockedMcpServers={blockedMcpServers as Array<{ name: string; extensionName: string }> | undefined}
+          blockedMcpServers={
+            blockedMcpServers as Array<{ name: string; extensionName: string }> | undefined
+          }
           showToolDescriptions={false}
         />
       </Box>
-      <Box paddingX={1}>
-        <Text wrap="truncate-end">
-          Approval: <Text color={Colors.AccentPurple}>{approvalMode}</Text>
+      <Box marginTop={design.spacing.sm}>
+        <Text color={design.colors.text.muted} wrap="truncate-end">
+          Approval:{' '}
+          <Text color={contextColor}>{approvalMode}</Text>
         </Text>
       </Box>
-    </Box>
+    </Surface>
   );
 };

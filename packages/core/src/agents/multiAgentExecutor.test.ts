@@ -4,11 +4,99 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('@openai/agents', () => {
+  class Agent {
+    tools: any[];
+    constructor(config: any) {
+      Object.assign(this, config);
+      this.tools = config.tools ?? [];
+    }
+  }
+
+  class Runner {
+    async run(agent: any) {
+      return {
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: 'run_item_stream_event',
+            name: 'message_output_created',
+            item: {
+              toJSON() {
+                return {
+                  rawItem: {
+                    content: [{ type: 'output_text', text: '' }],
+                  },
+                };
+              },
+            },
+          };
+        },
+        completed: Promise.resolve(),
+        output: [],
+        finalOutput: '',
+        state: {
+          approve() {},
+          reject() {},
+        },
+      } as any;
+    }
+  }
+
+  function tool(config: any) {
+    return { ...config, invoke: config.execute };
+  }
+
+  function user(content: string) {
+    return { role: 'user', content };
+  }
+
+  function system(content: string) {
+    return { role: 'system', content };
+  }
+
+  function assistant(content: string) {
+    return { role: 'assistant', content };
+  }
+
+  return { Agent, Runner, tool, user, system, assistant };
+});
+
+vi.mock('@lvce-editor/ripgrep', () => ({
+  rgPath: '/tmp/ripgrep',
+}));
+
+vi.mock('../tools/shell.ts', () => ({
+  ShellTool: class ShellTool {
+    static Name = 'shell';
+    static displayName = 'Shell';
+    static description = 'Stub shell tool.';
+    static schema = { parametersJsonSchema: {} };
+  },
+}));
+
+vi.mock('./toolInjector.js', () => ({
+  injectToolExamples: (prompt: string) => `${prompt}\nTool Operations Playbook`,
+}));
+
+vi.mock('../runtime/providerConnectors.js', () => ({
+  createDefaultConnectorRegistry: () => new Map(),
+}));
+
+vi.mock('@openai/agents-openai', () => ({
+  OpenAIProvider: class OpenAIProvider {},
+}));
+
+vi.mock('@openai/agents-extensions', () => ({
+  AiSdkModel: class AiSdkModel {},
+}));
+
 import { MultiAgentExecutor } from './multiAgentExecutor.js';
 import type { Config } from '../config/config.js';
 import type {
   UnifiedAgentMessage,
+  UnifiedAgentStreamOptions,
   UnifiedAgentsStreamEvent,
 } from '../runtime/types.js';
 import { getAgentById } from './personas.js';
@@ -20,6 +108,7 @@ describe('MultiAgentExecutor', () => {
 
   class FakeUnifiedClient {
     promptsByAgent = new Map<string, string[]>();
+    delegateOrder: string[] = [];
 
     async createSession(sessionConfig: {
       systemPrompt?: string;
@@ -37,6 +126,7 @@ describe('MultiAgentExecutor', () => {
     async *streamResponse(
       session: any,
       messages: UnifiedAgentMessage[],
+      options: UnifiedAgentStreamOptions = {},
     ): AsyncGenerator<UnifiedAgentsStreamEvent> {
       const prompt = [
         session.systemPrompt,
@@ -56,6 +146,15 @@ describe('MultiAgentExecutor', () => {
         agentId === 'orchestrator' || prompt.includes('SPECIALIST RESPONSES');
 
       if (isOrchestrator) {
+        const delegateTool = options.toolsAugmentation?.find(
+          (tool) => tool.name === 'delegate_to_specialist',
+        );
+        if (delegateTool) {
+          for (const targetId of this.delegateOrder) {
+            await delegateTool.execute({ agent_id: targetId });
+          }
+        }
+
         const finalText =
           'Final consolidated plan:\n\n- Apply service decomposition\n- Harden testing pipeline\n\n---\n\nReasoning: Combined architecture and QA insights to craft rollout.';
         yield {
@@ -119,6 +218,7 @@ describe('MultiAgentExecutor', () => {
     expect(qa).toBeTruthy();
 
     const { executor, client } = createExecutor();
+    client.delegateOrder = ['systems-architect', 'code-quality-analyst'];
     const result = await executor.execute('Improve the system reliability.', [
       architect!,
       qa!,
@@ -147,7 +247,8 @@ describe('MultiAgentExecutor', () => {
     const architect = getAgentById('systems-architect');
     expect(architect).toBeTruthy();
 
-    const { executor } = createExecutor();
+    const { executor, client } = createExecutor();
+    client.delegateOrder = ['systems-architect', 'code-quality-analyst'];
     const result = await executor.execute('Focus on architecture first.', [
       architect!,
     ]);
