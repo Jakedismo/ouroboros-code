@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { tool as createAgentsTool, type Tool as AgentsTool } from '@openai/agents';
+import { z } from 'zod';
 import type { Config } from '../config/config.js';
 import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
 import type {
@@ -19,6 +21,7 @@ import { toolResponsePartsToString } from '../utils/toolResponseStringifier.js';
 interface MultiAgentExecutorOptions {
   defaultModel?: string;
   client?: UnifiedAgentsClient;
+  disableDelegation?: boolean;
 }
 
 export interface MultiAgentExecutionHooks {
@@ -88,6 +91,7 @@ const DEFAULT_MODEL_FALLBACK = 'gpt-5-codex';
 export class MultiAgentExecutor {
   private readonly defaultModel: string;
   private readonly providedClient?: UnifiedAgentsClient;
+  private readonly disableDelegation: boolean;
 
   constructor(
     private readonly config: Config,
@@ -95,6 +99,7 @@ export class MultiAgentExecutor {
   ) {
     this.defaultModel = options.defaultModel ?? DEFAULT_MODEL_FALLBACK;
     this.providedClient = options.client;
+    this.disableDelegation = options.disableDelegation ?? false;
   }
 
   async execute(
@@ -102,40 +107,179 @@ export class MultiAgentExecutor {
     seedAgents: AgentPersona[],
     hooks?: MultiAgentExecutionHooks,
   ): Promise<MultiAgentExecutionResult> {
-    const toolEventLog = new Map<string, AgentToolEvent[]>();
-    const unifiedClient =
-      this.providedClient ??
-      new UnifiedAgentsClient(this.config, {
-        onToolExecuted: ({ session, request, response }) => {
-          const meta = session.metadata;
-          const agentId =
-            meta && typeof meta['agentId'] === 'string'
-              ? (meta['agentId'] as string)
-              : undefined;
-          if (!agentId) return;
-          const list = toolEventLog.get(agentId) ?? [];
-          const event: AgentToolEvent = {
-            callId: request.callId,
-            toolName: request.name,
-            arguments: request.args,
-            outputText: toolResponsePartsToString(response.responseParts),
-            resultDisplay: response.resultDisplay,
-            errorMessage: response.error?.message,
-            errorType: response.errorType,
-            timestamp: Date.now(),
-          };
-          list.push(event);
-          toolEventLog.set(agentId, list);
+    if (!this.disableDelegation) {
+      const toolEventLog = new Map<string, AgentToolEvent[]>();
+      const unifiedClient = this.createUnifiedClient(toolEventLog, hooks);
 
-          if (hooks?.onToolEvent) {
-            const persona = getAgentById(agentId);
-            if (persona) {
-              void hooks.onToolEvent({ agent: persona, event });
-            }
+      try {
+        return await this.executeWithDelegation(
+          userPrompt,
+          seedAgents,
+          unifiedClient,
+          toolEventLog,
+          hooks,
+        );
+      } catch (error) {
+        console.warn(
+          'Delegated multi-agent execution failed, falling back to sequential mode.',
+          error,
+        );
+      }
+    }
+
+    const fallbackToolEventLog = new Map<string, AgentToolEvent[]>();
+    const fallbackClient = this.createUnifiedClient(
+      fallbackToolEventLog,
+      hooks,
+    );
+
+    return this.executeSequential(
+      userPrompt,
+      seedAgents,
+      fallbackClient,
+      fallbackToolEventLog,
+      hooks,
+    );
+  }
+
+  private createUnifiedClient(
+    toolEventLog: Map<string, AgentToolEvent[]>,
+    hooks?: MultiAgentExecutionHooks,
+  ): UnifiedAgentsClient {
+    if (this.providedClient) {
+      return this.providedClient;
+    }
+
+    return new UnifiedAgentsClient(this.config, {
+      onToolExecuted: ({ session, request, response }) => {
+        const meta = session.metadata;
+        const agentId =
+          meta && typeof meta['agentId'] === 'string'
+            ? (meta['agentId'] as string)
+            : undefined;
+        if (!agentId) return;
+        const list = toolEventLog.get(agentId) ?? [];
+        const event: AgentToolEvent = {
+          callId: request.callId,
+          toolName: request.name,
+          arguments: request.args,
+          outputText: toolResponsePartsToString(response.responseParts),
+          resultDisplay: response.resultDisplay,
+          errorMessage: response.error?.message,
+          errorType: response.errorType,
+          timestamp: Date.now(),
+        };
+        list.push(event);
+        toolEventLog.set(agentId, list);
+
+        if (hooks?.onToolEvent) {
+          const persona = getAgentById(agentId);
+          if (persona) {
+            void hooks.onToolEvent({ agent: persona, event });
           }
-        },
-      });
+        }
+      },
+    });
+  }
 
+  private async executeWithDelegation(
+    userPrompt: string,
+    seedAgents: AgentPersona[],
+    unifiedClient: UnifiedAgentsClient,
+    toolEventLog: Map<string, AgentToolEvent[]>,
+    hooks?: MultiAgentExecutionHooks,
+  ): Promise<MultiAgentExecutionResult> {
+    if (seedAgents.length === 0) {
+      throw new Error('Delegated execution requires at least one specialist agent.');
+    }
+
+    const startedAt = Date.now();
+    const executed = new Map<string, AgentRunResult>();
+    const timeline: Array<{ wave: number; agents: AgentPersona[] }> = [];
+    const availableAgents = new Map<string, AgentPersona>();
+
+    for (const agent of seedAgents) {
+      availableAgents.set(agent.id, agent);
+    }
+
+    const delegationTool = this.createDelegationTool({
+      userPrompt,
+      unifiedClient,
+      toolEventLog,
+      executed,
+      timeline,
+      hooks,
+      availableAgents,
+    });
+
+    const session = await unifiedClient.createSession({
+      providerId: this.config.getProvider(),
+      model: this.defaultModel,
+      systemPrompt: this.buildOrchestratorSystemPrompt(seedAgents),
+      metadata: {
+        agentId: 'orchestrator',
+        agentName: 'Master Orchestrator',
+      },
+    });
+
+    const streamOptions: UnifiedAgentStreamOptions = {
+      temperature: 0.4,
+      toolsAugmentation: [delegationTool],
+    };
+
+    if (this.config.getProvider() !== 'openai') {
+      streamOptions.maxOutputTokens = 4096;
+    }
+
+    const messages: UnifiedAgentMessage[] = [
+      {
+        role: 'user',
+        content: this.buildOrchestratorUserPrompt(userPrompt, seedAgents),
+      },
+    ];
+
+    let accumulated = '';
+
+    for await (const event of unifiedClient.streamResponse(
+      session,
+      messages,
+      streamOptions,
+    )) {
+      if (event.type === 'text-delta' && event.delta) {
+        accumulated += event.delta;
+      }
+      if (event.type === 'final') {
+        accumulated = event.message.content ?? accumulated;
+      }
+    }
+
+    const agentResults = Array.from(executed.values());
+
+    if (agentResults.length === 0) {
+      throw new Error('Orchestrator session finished without consulting any specialists.');
+    }
+
+    const [finalResponse, aggregateReasoning] = this.splitFinalResponse(
+      accumulated.trim(),
+    );
+
+    return {
+      agentResults,
+      finalResponse,
+      aggregateReasoning,
+      timeline,
+      totalAgents: agentResults.length,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  private async executeSequential(
+    userPrompt: string,
+    seedAgents: AgentPersona[],
+    unifiedClient: UnifiedAgentsClient,
+    toolEventLog: Map<string, AgentToolEvent[]>,
+    hooks?: MultiAgentExecutionHooks,
+  ): Promise<MultiAgentExecutionResult> {
     const executed = new Map<string, AgentRunResult>();
     const queue: AgentPersona[] = [...seedAgents];
     const timeline: Array<{ wave: number; agents: AgentPersona[] }> = [];
@@ -223,6 +367,7 @@ export class MultiAgentExecutor {
     previousResults: AgentRunResult[],
     wave: number,
     hooks?: MultiAgentExecutionHooks,
+    directive?: string,
   ): Promise<AgentRunResult | null> {
     try {
       const { rawText, parsed } = await this.executeAgentSession(
@@ -232,6 +377,7 @@ export class MultiAgentExecutor {
         previousResults,
         wave,
         hooks,
+        directive,
       );
       const agentToolEvents = toolEventLog.get(agent.id) ?? [];
 
@@ -271,6 +417,7 @@ export class MultiAgentExecutor {
     previousResults: AgentRunResult[],
     wave: number,
     hooks?: MultiAgentExecutionHooks,
+    directive?: string,
   ): Promise<{ rawText: string; parsed: any }> {
     const session = await unifiedClient.createSession({
       providerId: this.config.getProvider(),
@@ -296,6 +443,7 @@ export class MultiAgentExecutor {
       agent,
       userPrompt,
       previousResults,
+      directive,
     );
 
     let accumulated = '';
@@ -364,10 +512,187 @@ export class MultiAgentExecutor {
     agent: AgentPersona,
     userPrompt: string,
     previousResults: AgentRunResult[],
+    directive?: string,
   ): UnifiedAgentMessage[] {
     const priorInsights = this.formatPriorInsights(previousResults, agent.id);
-    const instructions = `USER TASK:\n${userPrompt}\n\n${priorInsights}\nFINAL RESPONSE FORMAT:\nReturn a JSON object like:\n{\n  "analysis": "key findings...",\n  "solution": "proposed implementation or answer",\n  "confidence": 0.0-1.0,\n  "handoff": ["optional-agent-id", ...]\n}\nIf no handoff is needed, respond with an empty array.`;
+    const directiveBlock = directive && directive.trim().length > 0
+      ? `\nSPECIALIST DIRECTIVE:\n${directive.trim()}`
+      : '';
+    const instructions = `USER TASK:\n${userPrompt}\n\n${priorInsights}${directiveBlock}\nFINAL RESPONSE FORMAT:\nReturn a JSON object like:\n{\n  "analysis": "key findings...",\n  "solution": "proposed implementation or answer",\n  "confidence": 0.0-1.0,\n  "handoff": ["optional-agent-id", ...]\n}\nIf no handoff is needed, respond with an empty array.`;
     return [{ role: 'user', content: instructions }];
+  }
+
+  private createDelegationTool(context: {
+    userPrompt: string;
+    unifiedClient: UnifiedAgentsClient;
+    toolEventLog: Map<string, AgentToolEvent[]>;
+    executed: Map<string, AgentRunResult>;
+    timeline: Array<{ wave: number; agents: AgentPersona[] }>;
+    hooks?: MultiAgentExecutionHooks;
+    availableAgents: Map<string, AgentPersona>;
+  }): AgentsTool {
+    const executor = this;
+    const schema = z
+      .object({
+        agent_id: z
+          .string()
+          .min(1)
+          .describe('ID of the specialist to consult (e.g., systems-architect).'),
+        instructions: z
+          .string()
+          .trim()
+          .max(4000)
+          .optional()
+          .describe('Optional directive for the specialist run.'),
+      })
+      .strict();
+
+    let waveCounter = 0;
+
+    return createAgentsTool({
+      name: 'delegate_to_specialist',
+      description:
+        'Execute a specialist agent by ID. Returns JSON describing their analysis, solution, confidence, and handoff suggestions.',
+      parameters: schema,
+      strict: true,
+      async execute(input: unknown): Promise<string> {
+        const parsed = schema.safeParse(input);
+        if (!parsed.success) {
+          return JSON.stringify({
+            status: 'error',
+            message: 'Invalid parameters for delegate_to_specialist.',
+            issues: parsed.error.issues.map((issue) => issue.message),
+          });
+        }
+
+        if (waveCounter >= MAX_AGENTS_PER_RUN) {
+          return JSON.stringify({
+            status: 'error',
+            message: `Maximum of ${MAX_AGENTS_PER_RUN} specialist runs reached.`,
+          });
+        }
+
+        const agentId = parsed.data.agent_id;
+        const directive = parsed.data.instructions;
+        const persona =
+          context.availableAgents.get(agentId) ?? getAgentById(agentId);
+
+        if (!persona) {
+          return JSON.stringify({
+            status: 'error',
+            message: `Unknown specialist agent: ${agentId}`,
+          });
+        }
+
+        context.availableAgents.set(persona.id, persona);
+
+        waveCounter += 1;
+        const wave = waveCounter;
+        context.timeline.push({ wave, agents: [persona] });
+
+        const previousResults = Array.from(context.executed.values());
+
+        if (context.hooks?.onAgentStart) {
+          const pendingAgents = Array.from(context.availableAgents.values()).filter(
+            (candidate) => candidate.id !== persona.id && !context.executed.has(candidate.id),
+          );
+          await context.hooks.onAgentStart({
+            agent: persona,
+            wave,
+            pendingAgents,
+            previousResults,
+          });
+        }
+
+        const result = await executor.runSingleAgent(
+          persona,
+          context.userPrompt,
+          context.unifiedClient,
+          context.toolEventLog,
+          previousResults,
+          wave,
+          context.hooks,
+          directive,
+        );
+
+        if (!result) {
+          return JSON.stringify({
+            status: 'error',
+            message: `Failed to run specialist ${persona.id}.`,
+          });
+        }
+
+        context.executed.set(result.agent.id, result);
+
+        if (context.hooks?.onAgentComplete) {
+          const remainingAgents = Array.from(context.availableAgents.values()).filter(
+            (candidate) => !context.executed.has(candidate.id),
+          ).length;
+          await context.hooks.onAgentComplete({
+            agent: persona,
+            wave,
+            result,
+            completedAgents: context.executed.size,
+            remainingAgents,
+          });
+        }
+
+        for (const handoffId of result.handoffAgentIds) {
+          const recommended = getAgentById(handoffId);
+          if (recommended) {
+            context.availableAgents.set(recommended.id, recommended);
+          }
+        }
+
+        return JSON.stringify({
+          status: 'completed',
+          agent_id: result.agent.id,
+          name: result.agent.name,
+          analysis: result.analysis,
+          solution: result.solution,
+          confidence: result.confidence,
+          handoff: result.handoffAgentIds,
+          raw_text: result.rawText,
+        });
+      },
+    });
+  }
+
+  private buildOrchestratorSystemPrompt(selectedAgents: AgentPersona[]): string {
+    const roster = this.formatAgentRoster(selectedAgents);
+    return [
+      'You are the Ouroboros master orchestrator responsible for coordinating specialist agents to solve the task.',
+      'Use the `delegate_to_specialist` tool to run specialists in the order you deem most effective. The tool returns their JSON analysis, solution, confidence, and handoff suggestions.',
+      `Run at most ${MAX_AGENTS_PER_RUN} specialists during a single orchestration pass.`,
+      roster,
+      'After collecting the required expertise, synthesize a single actionable response. Close with a reasoning summary separated by "\n\n---\n\nReasoning:".',
+    ].join('\n\n');
+  }
+
+  private buildOrchestratorUserPrompt(
+    userPrompt: string,
+    selectedAgents: AgentPersona[],
+  ): string {
+    const roster = this.formatAgentRoster(selectedAgents);
+    return [
+      `USER PROMPT:\n${userPrompt}`,
+      roster,
+      'Plan the sequence of specialists, call `delegate_to_specialist` for each, and optionally consult additional agents recommended through handoff suggestions. Provide clear directives when delegating.',
+      'Once all necessary specialists have been consulted, deliver the final response with Markdown formatting followed by the reasoning marker.',
+    ].join('\n\n');
+  }
+
+  private formatAgentRoster(agents: AgentPersona[]): string {
+    if (agents.length === 0) {
+      return 'Available specialists: none provided.';
+    }
+
+    const lines = agents.map((agent, index) => {
+      const specialties = agent.specialties.slice(0, 3).join(', ');
+      return `${index + 1}. ${agent.id} — ${agent.name} (${specialties})`;
+    });
+
+    return `Available specialists:\n${lines.join('\n')}`;
   }
 
   private formatPriorInsights(

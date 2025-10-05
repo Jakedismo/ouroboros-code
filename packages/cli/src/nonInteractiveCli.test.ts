@@ -111,8 +111,7 @@ describe('runNonInteractive', () => {
       'prompt-id-1',
     );
     expect(processStdoutSpy).toHaveBeenCalledWith('Hello World');
-    expect(processStdoutSpy).toHaveBeenCalledWith('
-');
+    expect(processStdoutSpy).toHaveBeenCalledWith('\\n');
     expect(mockShutdownTelemetry).toHaveBeenCalled();
   });
 
@@ -145,8 +144,7 @@ describe('runNonInteractive', () => {
     const secondCallArgs = mockAgentsClient.sendMessage.mock.calls[1][0];
     expect(secondCallArgs.message).toEqual(toolResponse);
     expect(processStdoutSpy).toHaveBeenCalledWith('Final answer');
-    expect(processStdoutSpy).toHaveBeenCalledWith('
-');
+    expect(processStdoutSpy).toHaveBeenCalledWith('\\n');
   });
 
   it('should handle error during tool execution and send fallback message', async () => {
@@ -254,12 +252,9 @@ describe('runNonInteractive', () => {
     const rawInput = 'Summarize @file.txt';
     const processedParts: AgentContentFragment[] = [
       { text: 'Summarize @file.txt' },
-      { text: '
---- Content from referenced files ---
-' },
+      { text: '\n--- Content from referenced files ---\n' },
       { text: 'This is the content of the file.' },
-      { text: '
---- End of content ---' },
+      { text: '\n--- End of content ---' },
     ];
 
     mockHandleAtCommand.mockResolvedValue({
