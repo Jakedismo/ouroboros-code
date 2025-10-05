@@ -41,7 +41,11 @@ export class UnifiedAgentsClient {
   private readonly options: UnifiedAgentsClientOptions;
   private readonly pendingToolApprovals = new Map<
     string,
-    { item: RunToolApprovalItem; stream: StreamedRunResult<unknown, Agent<any, any>> }
+    {
+      sessionId: string;
+      item: RunToolApprovalItem;
+      stream: StreamedRunResult<unknown, Agent<any, any>>;
+    }
   >();
   private readonly lastNonEmptyMessageBySession = new Map<string, string>();
 
@@ -115,6 +119,8 @@ export class UnifiedAgentsClient {
     const agent = this.createAgent(session, options);
     const inputItems = this.convertMessagesToInput(messages, session.id, session.systemPrompt);
 
+    this.clearPendingApprovalsForSession(session.id);
+
     const runner = new Runner({
       modelProvider: session.modelProvider,
       model: session.modelHandle,
@@ -135,13 +141,12 @@ export class UnifiedAgentsClient {
     })) as StreamedRunResult<unknown, Agent<any, any>>;
     const streamedChunks: string[] = [];
 
-    this.pendingToolApprovals.clear();
-
     for await (const event of streamResult as AsyncIterable<RunStreamEvent>) {
       const handled = this.handleRunStreamEvent(
         event,
         streamedChunks,
         streamResult,
+        session,
       );
       if (handled) {
         yield handled;
@@ -149,6 +154,8 @@ export class UnifiedAgentsClient {
     }
 
     await streamResult.completed;
+
+    this.clearPendingApprovalsForSession(session.id);
 
     const finalText =
       this.extractFinalOutputText(streamResult) || streamedChunks.filter(Boolean).join('\n');
@@ -410,12 +417,14 @@ export class UnifiedAgentsClient {
     event: RunStreamEvent,
     streamedChunks: string[],
     streamResult: StreamedRunResult<unknown, Agent<any, any>>,
+    session: UnifiedAgentSession,
   ): UnifiedAgentsStreamEvent | null {
     if ((event as { type?: string }).type === 'run_item_stream_event') {
       return this.handleRunItemStreamEvent(
         event as any,
         streamedChunks,
         streamResult,
+        session,
       );
     }
     return null;
@@ -425,6 +434,7 @@ export class UnifiedAgentsClient {
     event: any,
     streamedChunks: string[],
     streamResult: StreamedRunResult<unknown, Agent<any, any>>,
+    session: UnifiedAgentSession,
   ): UnifiedAgentsStreamEvent | null {
     const name: string | undefined = event?.name;
     const item = event?.item;
@@ -446,6 +456,7 @@ export class UnifiedAgentsClient {
       const approvalEvent = this.handleToolApprovalRequested(
         item as RunToolApprovalItem,
         streamResult,
+        session.id,
       );
       if (approvalEvent) {
         return approvalEvent;
@@ -473,6 +484,7 @@ export class UnifiedAgentsClient {
   private handleToolApprovalRequested(
     approvalItem: RunToolApprovalItem,
     streamResult: StreamedRunResult<unknown, Agent<any, any>>,
+    sessionId: string,
   ): UnifiedAgentsStreamEvent | null {
     const callId = this.extractApprovalCallId(approvalItem);
     if (!callId) {
@@ -488,7 +500,11 @@ export class UnifiedAgentsClient {
       return null;
     }
 
-    this.pendingToolApprovals.set(callId, { item: approvalItem, stream: streamResult });
+    this.pendingToolApprovals.set(callId, {
+      sessionId,
+      item: approvalItem,
+      stream: streamResult,
+    });
     const rawItem = approvalItem.rawItem as Record<string, unknown> | undefined;
     const name = typeof rawItem?.['name'] === 'string' ? (rawItem['name'] as string) : 'unknown_tool';
     const args = this.parseToolArguments(rawItem?.['arguments']);
@@ -540,6 +556,14 @@ export class UnifiedAgentsClient {
       console.warn('Failed to reject tool call', error);
     } finally {
       this.pendingToolApprovals.delete(callId);
+    }
+  }
+
+  private clearPendingApprovalsForSession(sessionId: string): void {
+    for (const [callId, pending] of this.pendingToolApprovals) {
+      if (pending.sessionId === sessionId) {
+        this.pendingToolApprovals.delete(callId);
+      }
     }
   }
 
