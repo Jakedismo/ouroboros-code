@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createImageGenerationTool, ImageGenerationToolSDK } from './image-generation-sdk.js';
 import type { Config } from '../index.js';
 
-describe('ImageGenerationTool (SDK Pattern)', () => {
+describe('ImageGenerationTool (SDK Pattern - Hosted Tool)', () => {
   let mockConfig: Partial<Config>;
 
   beforeEach(() => {
@@ -16,38 +16,36 @@ describe('ImageGenerationTool (SDK Pattern)', () => {
   });
 
   describe('SDK Tool Creation', () => {
-    it('should create tool with correct name', () => {
+    it('should create hosted tool with correct name', () => {
       const tool = createImageGenerationTool(mockConfig as Config);
-      expect(tool.name).toBe('generate_image');
+      expect(tool.name).toBe('image_generation');
     });
 
-    it('should have comprehensive description', () => {
+    it('should be a hosted tool type', () => {
       const tool = createImageGenerationTool(mockConfig as Config);
-      expect(tool.description).toContain('placeholder SVG images');
-      expect(tool.description).toContain('customizable');
+      expect(tool.type).toBe('hosted_tool');
     });
 
-    it('should have parameters schema defined', () => {
+    it('should have providerData for hosted execution', () => {
       const tool = createImageGenerationTool(mockConfig as Config);
-      expect(tool.parameters).toBeDefined();
+      expect(tool).toHaveProperty('providerData');
     });
   });
 
   describe('Tool Execution', () => {
-    it('should be callable as SDK tool', () => {
+    it('should be a hosted tool (no direct invoke)', () => {
       const tool = createImageGenerationTool(mockConfig as Config);
 
-      expect(tool.invoke).toBeDefined();
-      expect(typeof tool.invoke).toBe('function');
+      // Hosted tools don't have invoke - they're executed by the SDK runtime
+      expect(tool.type).toBe('hosted_tool');
     });
 
-    it('should have SDK tool structure', () => {
+    it('should have hosted tool structure', () => {
       const tool = createImageGenerationTool(mockConfig as Config);
 
-      expect(tool.type).toBe('function');
-      expect(tool.name).toBe('generate_image');
-      expect(tool.description).toBeDefined();
-      expect(tool.parameters).toBeDefined();
+      expect(tool.type).toBe('hosted_tool');
+      expect(tool.name).toBe('image_generation');
+      expect(tool).toHaveProperty('providerData');
     });
   });
 
@@ -56,33 +54,31 @@ describe('ImageGenerationTool (SDK Pattern)', () => {
       const toolClass = new ImageGenerationToolSDK(mockConfig as Config);
 
       expect(toolClass).toBeDefined();
-      expect(ImageGenerationToolSDK.Name).toBe('generate_image');
+      expect(ImageGenerationToolSDK.Name).toBe('image_generation');
     });
 
     it('should create tool via factory method', () => {
       const toolClass = new ImageGenerationToolSDK(mockConfig as Config);
       const tool = toolClass.createTool();
 
-      expect(tool.name).toBe('generate_image');
-      expect(tool.invoke).toBeDefined();
+      expect(tool.name).toBe('image_generation');
+      expect(tool.type).toBe('hosted_tool');
     });
   });
 
   describe('SDK Pattern Compliance', () => {
-    it('should have invoke function (SDK pattern)', () => {
+    it('should be hosted_tool type (not function)', () => {
       const tool = createImageGenerationTool(mockConfig as Config);
 
-      expect(typeof tool.invoke).toBe('function');
+      expect(tool.type).toBe('hosted_tool');
     });
 
-    it('should match SDK tool structure', () => {
+    it('should match SDK hosted tool structure', () => {
       const tool = createImageGenerationTool(mockConfig as Config);
 
-      expect(tool.type).toBe('function');
+      expect(tool.type).toBe('hosted_tool');
       expect(tool.name).toBeDefined();
-      expect(tool.description).toBeDefined();
-      expect(tool.parameters).toBeDefined();
-      expect(tool.invoke).toBeDefined();
+      expect(tool).toHaveProperty('providerData');
     });
   });
 });
