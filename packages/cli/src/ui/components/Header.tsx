@@ -7,7 +7,7 @@
 import type React from 'react';
 import { Box, Text } from 'ink';
 import Gradient from 'ink-gradient';
-import { Colors } from '../colors.js';
+import { useDesignSystem } from '../design-system/index.js';
 import { shortAsciiLogo, longAsciiLogo, tinyAsciiLogo } from './AsciiArt.js';
 import { getAsciiArtWidth } from '../utils/textUtils.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
@@ -23,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   version,
   nightly,
 }) => {
+  const { colors } = useDesignSystem();
   const { columns: terminalWidth } = useTerminalSize();
   let displayTitle;
   const widthOfLongLogo = getAsciiArtWidth(longAsciiLogo);
@@ -41,7 +42,10 @@ export const Header: React.FC<HeaderProps> = ({
   const artWidth = getAsciiArtWidth(displayTitle);
 
   // Use theme-appropriate gradient colors for the 3D effect
-  const gradientColors = Colors.GradientColors || [Colors.AccentBlue, Colors.AccentPurple, Colors.AccentCyan];
+  const gradientColors =
+    colors.surface.gradient.length > 1
+      ? colors.surface.gradient
+      : undefined;
   
   return (
     <Box
@@ -50,21 +54,21 @@ export const Header: React.FC<HeaderProps> = ({
       flexShrink={0}
       flexDirection="column"
     >
-      {Colors.GradientColors ? (
+      {gradientColors ? (
         <Gradient colors={gradientColors}>
           <Text>{displayTitle}</Text>
         </Gradient>
       ) : (
-        <Text color={Colors.Primary}>{displayTitle}</Text>
+        <Text color={colors.text.accent}>{displayTitle}</Text>
       )}
       {nightly && (
         <Box width="100%" flexDirection="row" justifyContent="flex-end">
-          {Colors.GradientColors ? (
+          {gradientColors ? (
             <Gradient colors={gradientColors}>
               <Text>v{version}</Text>
             </Gradient>
           ) : (
-            <Text color={Colors.AccentPurple}>v{version}</Text>
+            <Text color={colors.text.link}>v{version}</Text>
           )}
         </Box>
       )}

@@ -39,6 +39,7 @@ class ThemeManager {
   private readonly availableThemes: Theme[];
   private activeTheme: Theme;
   private customThemes: Map<string, Theme> = new Map();
+  private listeners: Set<() => void> = new Set();
 
   constructor() {
     this.availableThemes = [
@@ -104,6 +105,8 @@ class ThemeManager {
     ) {
       this.activeTheme = this.customThemes.get(this.activeTheme.name)!;
     }
+
+    this.emitChange();
   }
 
   /**
@@ -117,6 +120,7 @@ class ThemeManager {
       return false;
     }
     this.activeTheme = theme;
+    this.emitChange();
     return true;
   }
 
@@ -319,6 +323,23 @@ class ThemeManager {
     // If it's not a built-in, not in cache, and not a valid file path,
     // it's not a valid theme.
     return undefined;
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private emitChange(): void {
+    for (const listener of this.listeners) {
+      try {
+        listener();
+      } catch (error) {
+        console.error('ThemeManager listener threw an error', error);
+      }
+    }
   }
 }
 

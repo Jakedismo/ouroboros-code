@@ -23,6 +23,8 @@ import { MemoryTool } from '../tools/memoryTool.js';
 import { WebFetchTool } from '../tools/web-fetch.js';
 import { WebSearchTool } from '../tools/web-search.js';
 import { RipGrepTool } from '../tools/ripGrep.js';
+import { LocalShellTool } from '../tools/local-shell.js';
+import { ImageGenerationTool } from '../tools/image-generation.js';
 
 const nameOf = (name: string | undefined, fallback: string): string =>
   typeof name === 'string' && name.length > 0 ? name : fallback;
@@ -38,12 +40,17 @@ const READ_MANY_FILES_TOOL_NAME = nameOf(
   'read_many_files',
 );
 const SHELL_TOOL_NAME = nameOf(ShellTool?.Name, 'run_shell_command');
+const LOCAL_SHELL_TOOL_NAME = nameOf(LocalShellTool?.Name, 'local_shell');
 const WRITE_FILE_TOOL_NAME = nameOf(WriteFileTool?.Name, 'write_file');
 const MEMORY_TOOL_NAME = nameOf(MemoryTool?.Name, 'save_memory');
 const WEB_FETCH_TOOL_NAME = nameOf(WebFetchTool?.Name, 'web_fetch');
 const WEB_SEARCH_TOOL_NAME = nameOf(
   WebSearchTool?.Name,
   'google_web_search',
+);
+const IMAGE_GENERATION_TOOL_NAME = nameOf(
+  ImageGenerationTool?.Name,
+  'generate_image',
 );
 
 
@@ -112,6 +119,8 @@ const CORE_TOOL_INSTRUCTIONS = `
   - Optional keys: description (string), directory (string)
   - Example: { "command": "npm test", "description": "Run unit tests", "directory": "packages/api" }
   - Supply a concise description explaining the command and keep commands non-interactive.
+- `${LOCAL_SHELL_TOOL_NAME}` – Alias for `${SHELL_TOOL_NAME}` when integrations expect the `local_shell` function.
+  - Shares the same parameters and guardrails as `${SHELL_TOOL_NAME}` within the workspace sandbox.
 - \`${MEMORY_TOOL_NAME}\` – Persist user-specific preferences, but only when the user asks you to remember something.
   - Required keys: fact (string)
   - Example: { "fact": "My favorite editor is VS Code" }
@@ -126,6 +135,10 @@ const CORE_TOOL_INSTRUCTIONS = `
   - Required keys: query (string)
   - Example: { "query": "latest Node.js LTS release" }
   - Treat this as a last resort once repository evidence and documentation fetched via \`${WEB_FETCH_TOOL_NAME}\` have been exhausted. Summarize results with source citations, and if search is unavailable, explain why instead of guessing.
+- `${IMAGE_GENERATION_TOOL_NAME}` – Generate a placeholder SVG to scaffold visual assets.
+  - Required keys: prompt (string)
+  - Optional keys: width (integer), height (integer), backgroundColor (string), textColor (string)
+  - Example: { "prompt": "Dark UI dashboard hero", "width": 1280, "height": 720 }
 
 ## Execution Tips
 - Build absolute paths by combining the workspace root (visible in directory listings) with the relative path referenced in the prompt or prior tool output.
@@ -203,9 +216,11 @@ export function injectToolExamples(agentPrompt: string, agentSpecialties: string
       EDIT_TOOL_NAME,
       WRITE_FILE_TOOL_NAME,
       SHELL_TOOL_NAME,
+      LOCAL_SHELL_TOOL_NAME,
       MEMORY_TOOL_NAME,
       WEB_FETCH_TOOL_NAME,
       WEB_SEARCH_TOOL_NAME,
+      IMAGE_GENERATION_TOOL_NAME,
     ];
     console.debug('[ToolInjector] injected examples for tools:', toolList.join(', '));
   }
@@ -225,10 +240,12 @@ export function getAvailableToolNames(): string[] {
     READ_FILE_TOOL_NAME,
     READ_MANY_FILES_TOOL_NAME,
     SHELL_TOOL_NAME,
+    LOCAL_SHELL_TOOL_NAME,
     WRITE_FILE_TOOL_NAME,
     MEMORY_TOOL_NAME,
     WEB_FETCH_TOOL_NAME,
     WEB_SEARCH_TOOL_NAME,
     RIPGREP_TOOL_NAME,
+    IMAGE_GENERATION_TOOL_NAME,
   ];
 }

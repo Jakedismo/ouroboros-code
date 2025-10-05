@@ -45,10 +45,15 @@ import { EditorSettingsDialog } from './components/EditorSettingsDialog.js';
 import { FolderTrustDialog } from './components/FolderTrustDialog.js';
 import { ShellConfirmationDialog } from './components/ShellConfirmationDialog.js';
 import { RadioButtonSelect } from './components/shared/RadioButtonSelect.js';
-import { Colors } from './colors.js';
+import { SessionStatusBar } from './components/SessionStatusBar.js';
+import {
+  CommandHintBar,
+  type CommandHint,
+} from './components/CommandHintBar.js';
 import { loadHierarchicalGeminiMemory } from '../config/config.js';
 import type { LoadedSettings } from '../config/settings.js';
 import { SettingScope } from '../config/settings.js';
+import { defaultKeyBindings } from '../config/keyBindings.js';
 import { Tips } from './components/Tips.js';
 import { ConsolePatcher } from './utils/ConsolePatcher.js';
 import { registerCleanup } from '../utils/cleanup.js';
@@ -99,14 +104,8 @@ import ansiEscapes from 'ansi-escapes';
 import { OverflowProvider } from './contexts/OverflowContext.js';
 import { ShowMoreLines } from './components/ShowMoreLines.js';
 import { PrivacyNotice } from './privacy/PrivacyNotice.js';
-// TUI components (simplified for now)
-// import { Sidebar } from './components/Sidebar.js';
-// import { ContextPanel } from './components/ContextPanel.js';
-// import { WorkflowProgressProvider } from './contexts/WorkflowProgressContext.js';
-// import {
-//   WorkflowProgressOverlay,
-//   WorkflowProgressMini,
-// } from './components/WorkflowProgressOverlay.js';
+import { Sidebar } from './components/Sidebar.js';
+import { ContextPanel } from './components/ContextPanel.js';
 import { appEvents, AppEvent } from '../utils/events.js';
 import { useSettingsCommand } from './hooks/useSettingsCommand.js';
 import { SettingsDialog } from './components/SettingsDialog.js';
@@ -116,6 +115,13 @@ import { isNarrowWidth } from './utils/isNarrowWidth.js';
 import { useWorkspaceMigration } from './hooks/useWorkspaceMigration.js';
 import { WorkspaceMigrationDialog } from './components/WorkspaceMigrationDialog.js';
 import { isWorkspaceTrusted } from '../config/trustedFolders.js';
+import {
+  DesignSystemProvider,
+  useDesignSystem,
+  Surface,
+  SectionHeading,
+} from './design-system/index.js';
+import { HistoryActivityRail } from './components/HistoryActivityRail.js';
 
 const CTRL_EXIT_PROMPT_DURATION_MS = 1000;
 // Maximum number of queued messages to display in UI to prevent performance issues
@@ -139,6 +145,27 @@ function isToolExecuting(pendingHistoryItems: HistoryItemWithoutId[]) {
   });
 }
 
+function formatUserTierLabel(tier: UserTierId | undefined): string {
+  if (!tier) {
+    return 'Unknown';
+  }
+  switch (tier) {
+    case UserTierId.STANDARD:
+      return 'Standard';
+    case UserTierId.LEGACY:
+      return 'Legacy';
+    case UserTierId.FREE:
+      return 'Free';
+    default:
+      return tier;
+  }
+}
+
+const formatMetaShortcut = (key: string): string =>
+  process.platform === 'darwin'
+    ? `⌘${key.toUpperCase()}`
+    : `Meta+${key.toUpperCase()}`;
+
 export const AppWrapper = (props: AppProps) => {
   const kittyProtocolStatus = useKittyKeyboardProtocol();
   return (
@@ -151,7 +178,9 @@ export const AppWrapper = (props: AppProps) => {
     >
       <SessionStatsProvider>
         <VimModeProvider settings={props.settings}>
-          <App {...props} />
+          <DesignSystemProvider>
+            <App {...props} />
+          </DesignSystemProvider>
         </VimModeProvider>
       </SessionStatsProvider>
     </KeypressProvider>
@@ -159,6 +188,7 @@ export const AppWrapper = (props: AppProps) => {
 };
 
 const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
+  const design = useDesignSystem();
   const isFocused = useFocus();
   useBracketedPaste();
   const [updateInfo, setUpdateInfo] = useState<UpdateObject | null>(null);
@@ -245,7 +275,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     onWorkspaceMigrationDialogClose,
   } = useWorkspaceMigration(settings);
   
-  // TUI state management (simplified for now)
+  // TUI layout toggles
   const [showSidebar, setShowSidebar] = useState<boolean>(false);
   const [showContextPanel, setShowContextPanel] = useState<boolean>(false);
   // const [showWorkflowProgress, setShowWorkflowProgress] = useState<boolean>(false);
@@ -719,6 +749,35 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     [pendingSlashCommandHistoryItems, pendingGeminiHistoryItems],
   );
 
+  const toolRunState = useMemo(
+    () => {
+      let pendingCount = 0;
+      const names: string[] = [];
+      for (const item of pendingHistoryItems) {
+        if (item.type !== 'tool_group') {
+          continue;
+        }
+        for (const tool of item.tools) {
+          if (
+            tool.status === ToolCallStatus.Executing ||
+            tool.status === ToolCallStatus.Pending ||
+            tool.status === ToolCallStatus.Confirming
+          ) {
+            pendingCount += 1;
+            if (tool.name) {
+              names.push(tool.name);
+            }
+          }
+        }
+      }
+      return {
+        pendingCount,
+        activeToolNames: Array.from(new Set(names)),
+      };
+    },
+    [pendingHistoryItems],
+  );
+
   // Message queue for handling input during streaming
   const { messageQueue, addMessage, clearQueue, getQueuedMessagesText } =
     useMessageQueue({
@@ -792,6 +851,43 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const { elapsedTime, currentLoadingPhrase } =
     useLoadingIndicator(streamingState);
   const showAutoAcceptIndicator = useAutoAcceptIndicator({ config, addItem });
+  const queueLength = messageQueue.length;
+  const userTierLabel = useMemo(() => formatUserTierLabel(userTier), [userTier]);
+  const sidebarShortcutLabel = formatMetaShortcut('s');
+  const contextShortcutLabel = formatMetaShortcut('k');
+  const commandHints = useMemo<CommandHint[]>(() => {
+    const hints: CommandHint[] = [
+      {
+        label: showSidebar ? 'Hide sidebar' : 'Show sidebar',
+        commandText: sidebarShortcutLabel,
+      },
+      {
+        label: showContextPanel ? 'Hide context' : 'Show context',
+        commandText: contextShortcutLabel,
+      },
+      { label: 'Theme', commandText: '/theme' },
+      { label: 'Auth', commandText: '/auth' },
+      { label: 'Settings', commandText: '/settings' },
+      {
+        label: 'Errors',
+        bindings: defaultKeyBindings[Command.SHOW_ERROR_DETAILS],
+      },
+      {
+        label: 'Clear',
+        bindings: defaultKeyBindings[Command.CLEAR_SCREEN],
+      },
+    ];
+    if (shellModeActive) {
+      hints.push({ label: 'Exit shell', bindings: defaultKeyBindings[Command.EXIT] });
+    }
+    return hints;
+  }, [
+    shellModeActive,
+    showSidebar,
+    showContextPanel,
+    sidebarShortcutLabel,
+    contextShortcutLabel,
+  ]);
 
   const handleExit = useCallback(
     (
@@ -1073,9 +1169,11 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   // Calculate layout dimensions accounting for sidebars
   const sidebarWidth = showSidebar ? 26 : 0;
   const contextPanelWidth = showContextPanel ? 34 : 0;
-  const gutterWidth = (showSidebar ? 2 : 0) + (showContextPanel ? 2 : 0);
+  const gutterWidth = (showSidebar ? 1 : 0) + (showContextPanel ? 1 : 0);
   const totalSideWidth = sidebarWidth + contextPanelWidth + gutterWidth;
-  const mainAreaWidth = Math.max(40, Math.floor(terminalWidth * 0.9) - totalSideWidth);
+  const maxContentWidth = Math.floor(terminalWidth * 0.9);
+  const availableWidth = terminalWidth - totalSideWidth;
+  const mainAreaWidth = Math.max(40, Math.min(maxContentWidth, availableWidth));
   const debugConsoleMaxHeight = Math.floor(Math.max(terminalHeight * 0.2, 5));
   // Arbitrary threshold to ensure that items in the static area are large
   // enough but not too large to make the terminal hard to use.
@@ -1086,8 +1184,20 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
 
   return (
     <StreamingContext.Provider value={streamingState}>
-      <Box flexDirection="column" width="90%">
-        {!agentsClientReady ? (
+      <Box flexDirection="row" width="100%" justifyContent="center">
+        {showSidebar && (
+          <Box width={sidebarWidth} marginRight={showSidebar ? 1 : 0}>
+            <Sidebar
+              model={currentModel}
+              provider={config.getProvider()}
+              branchName={branchName}
+              interactive={isInputActive}
+              compact={isNarrow}
+            />
+          </Box>
+        )}
+        <Box flexDirection="column" width={mainAreaWidth} flexGrow={1}>
+          {!agentsClientReady ? (
           <Box paddingTop={1}>
             <Text color="yellow">Initializing {config.getProvider()} provider...</Text>
           </Box>
@@ -1154,20 +1264,43 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
         <Box flexDirection="column" ref={mainControlsRef}>
           {/* Move UpdateNotification to render update notification above input area */}
           {updateInfo && <UpdateNotification message={updateInfo.message} />}
+          <SessionStatusBar
+            streamingState={streamingState}
+            queueLength={queueLength}
+            pendingToolCount={toolRunState.pendingCount}
+            activeToolNames={toolRunState.activeToolNames}
+            totalHistoryItems={history.length}
+            model={currentModel}
+            isTrustedWorkspace={isTrustedFolderState}
+            userTierLabel={userTierLabel}
+            shellModeActive={shellModeActive}
+            isCompact={isNarrow}
+          />
+          <HistoryActivityRail
+            history={history}
+            pendingItems={pendingHistoryItems}
+            isCompact={isNarrow}
+          />
           {startupWarnings.length > 0 && (
-            <Box
-              borderStyle="round"
-              borderColor={Colors.AccentYellow}
-              paddingX={1}
+            <Surface
+              variant="elevated"
+              borderTone="warning"
               marginY={1}
               flexDirection="column"
             >
-              {startupWarnings.map((warning, index) => (
-                <Text key={index} color={Colors.AccentYellow}>
-                  {warning}
-                </Text>
-              ))}
-            </Box>
+              <SectionHeading
+                icon="⚠️"
+                tone="warning"
+                text="Startup warnings"
+              />
+              <Box flexDirection="column" marginTop={1}>
+                {startupWarnings.map((warning, index) => (
+                  <Text key={index} color={design.colors.status.warning}>
+                    {warning}
+                  </Text>
+                ))}
+              </Box>
+            </Surface>
           )}
           {showWorkspaceMigrationDialog ? (
             <WorkspaceMigrationDialog
@@ -1232,7 +1365,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
             <Box flexDirection="column">
               {themeError && (
                 <Box marginBottom={1}>
-                  <Text color={Colors.AccentRed}>{themeError}</Text>
+                  <Text color={design.colors.status.error}>{themeError}</Text>
                 </Box>
               )}
               <ThemeDialog
@@ -1291,7 +1424,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
             <Box flexDirection="column">
               {editorError && (
                 <Box marginBottom={1}>
-                  <Text color={Colors.AccentRed}>{editorError}</Text>
+                  <Text color={design.colors.status.error}>{editorError}</Text>
                 </Box>
               )}
               <EditorSettingsDialog
@@ -1365,18 +1498,24 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
               >
                 <Box>
                   {process.env['GEMINI_SYSTEM_MD'] && (
-                    <Text color={Colors.AccentRed}>|⌐■_■| </Text>
+                    <Text color={design.colors.status.error}>|⌐■_■| </Text>
                   )}
                   {ctrlCPressedOnce ? (
-                    <Text color={Colors.AccentYellow}>
+                    <Text color={design.colors.status.warning}>
                       Press Ctrl+C again to exit.
                     </Text>
                   ) : ctrlDPressedOnce ? (
-                    <Text color={Colors.AccentYellow}>
+                    <Text color={design.colors.status.warning}>
                       Press Ctrl+D again to exit.
                     </Text>
                   ) : showEscapePrompt ? (
-                    <Text color={Colors.Gray}>Press Esc again to clear.</Text>
+                    <Text color={design.colors.text.muted}>
+                      Press Esc again to clear.
+                    </Text>
+                  ) : showContextPanel ? (
+                    <Text color={design.colors.text.muted}>
+                      Context panel open — press {contextShortcutLabel} to hide.
+                    </Text>
                   ) : (
                     <ContextSummaryDisplay
                       ideContext={ideContextState}
@@ -1415,39 +1554,37 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
               )}
 
               {isInputActive && (
-                <InputPrompt
-                  buffer={buffer}
-                  inputWidth={inputWidth}
-                  suggestionsWidth={suggestionsWidth}
-                  onSubmit={handleFinalSubmit}
-                  userMessages={userMessages}
-                  onClearScreen={handleClearScreen}
-                  config={config}
-                  slashCommands={slashCommands}
-                  commandContext={commandContext}
-                  shellModeActive={shellModeActive}
-                  setShellModeActive={setShellModeActive}
-                  onEscapePromptChange={handleEscapePromptChange}
-                  focus={isFocused}
-                  vimHandleInput={vimHandleInput}
-                  placeholder={placeholder}
-                />
+                <>
+                  <CommandHintBar hints={commandHints} isCompact={isNarrow} />
+                  <InputPrompt
+                    buffer={buffer}
+                    inputWidth={inputWidth}
+                    suggestionsWidth={suggestionsWidth}
+                    onSubmit={handleFinalSubmit}
+                    userMessages={userMessages}
+                    onClearScreen={handleClearScreen}
+                    config={config}
+                    slashCommands={slashCommands}
+                    commandContext={commandContext}
+                    shellModeActive={shellModeActive}
+                    setShellModeActive={setShellModeActive}
+                    onEscapePromptChange={handleEscapePromptChange}
+                    focus={isFocused}
+                    vimHandleInput={vimHandleInput}
+                    placeholder={placeholder}
+                  />
+                </>
               )}
             </>
           )}
 
           {initError && streamingState !== StreamingState.Responding && (
-            <Box
-              borderStyle="round"
-              borderColor={Colors.AccentRed}
-              paddingX={1}
-              marginBottom={1}
-            >
+            <Surface borderTone="danger" variant="elevated" marginBottom={1}>
               {history.find(
                 (item) =>
                   item.type === 'error' && item.text?.includes(initError),
               )?.text ? (
-                <Text color={Colors.AccentRed}>
+                <Text color={design.colors.status.error}>
                   {
                     history.find(
                       (item) =>
@@ -1457,16 +1594,16 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                 </Text>
               ) : (
                 <>
-                  <Text color={Colors.AccentRed}>
+                  <Text color={design.colors.status.error}>
                     Initialization Error: {initError}
                   </Text>
-                  <Text color={Colors.AccentRed}>
+                  <Text color={design.colors.status.error}>
                     {' '}
                     Please check API key and configuration.
                   </Text>
                 </>
               )}
-            </Box>
+            </Surface>
           )}
           {!settings.merged.ui?.hideFooter && (
             <Footer
@@ -1491,6 +1628,20 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
           )}
         </Box>
           </>
+        )}
+        {showContextPanel && (
+          <Box width={contextPanelWidth} marginLeft={showContextPanel ? 1 : 0}>
+            <ContextPanel
+              model={currentModel}
+              provider={config.getProvider()}
+              geminiMdFileCount={geminiMdFileCount}
+              contextFileNames={contextFileNames}
+              approvalMode={showAutoAcceptIndicator}
+              mcpServers={config.getMcpServers()}
+              blockedMcpServers={config.getBlockedMcpServers()}
+              compact={isNarrow}
+            />
+          </Box>
         )}
       </Box>
     </StreamingContext.Provider>

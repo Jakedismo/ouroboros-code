@@ -55,6 +55,23 @@ const flattenContent = (value: ContentLike): AgentContentFragment[] => {
   return [value as AgentContentFragment];
 };
 
+const extractThought = (fragment: Record<string, unknown>): string | undefined => {
+  const directThought = fragment['thought'];
+  if (typeof directThought === 'string' && directThought.trim().length > 0) {
+    return directThought;
+  }
+
+  const functionCall = fragment['functionCall'];
+  if (functionCall && typeof functionCall === 'object') {
+    const callThought = (functionCall as { thought?: unknown }).thought;
+    if (typeof callThought === 'string' && callThought.trim().length > 0) {
+      return callThought;
+    }
+  }
+
+  return undefined;
+};
+
 const extractText = (fragment: AgentContentFragment | LegacyPart | string): string | undefined => {
   if (typeof fragment === 'string') {
     return fragment;
@@ -62,8 +79,16 @@ const extractText = (fragment: AgentContentFragment | LegacyPart | string): stri
   if (isLegacyPart(fragment) && typeof fragment.text === 'string') {
     return fragment.text;
   }
-  if (isObject(fragment) && typeof (fragment as { text?: unknown }).text === 'string') {
-    return (fragment as { text: string }).text;
+  if (isObject(fragment)) {
+    const textual = (fragment as { text?: unknown }).text;
+    if (typeof textual === 'string') {
+      return textual;
+    }
+
+    const thought = extractThought(fragment as Record<string, unknown>);
+    if (thought) {
+      return thought;
+    }
   }
   return undefined;
 };
@@ -117,6 +142,13 @@ export function partToString(
   }
 
   if (isLegacyPart(value)) {
+    if (options?.verbose) {
+      const thoughtDescription = extractThought(value as Record<string, unknown>);
+      if (thoughtDescription) {
+        return `[Thought: ${thoughtDescription}]`;
+      }
+    }
+
     const text = extractText(value);
     if (text !== undefined) {
       return text;
@@ -128,6 +160,13 @@ export function partToString(
       }
     }
     return '';
+  }
+
+  if (options?.verbose && isObject(value)) {
+    const thought = extractThought(value as Record<string, unknown>);
+    if (thought) {
+      return `[Thought: ${thought}]`;
+    }
   }
 
   const text = extractText(value);

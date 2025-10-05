@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <title>Ouroboros Architecture Navigator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: dark light;
+        --bg-dark: #04050c;
+        --bg-light: #f6f8fc;
+        --surface-dark: rgba(23, 32, 51, 0.85);
+        --surface-light: rgba(255, 255, 255, 0.86);
+        --border-dark: rgba(118, 143, 255, 0.4);
+        --border-light: rgba(52, 64, 96, 0.18);
+        --accent: #7c5cff;
+        --accent-soft: rgba(124, 92, 255, 0.18);
+        --text-strong-dark: #f1f6ff;
+        --text-strong-light: #132042;
+        --text-muted-dark: rgba(241, 246, 255, 0.72);
+        --text-muted-light: rgba(19, 32, 66, 0.68);
+        --success: #2ecc71;
+        --warning: #ffb347;
+        --danger: #ff5c5c;
+        --card-radius: 18px;
+        --shadow-soft: 0 14px 44px rgba(12, 20, 46, 0.38);
+        --shadow-light: 0 18px 50px rgba(7, 18, 44, 0.12);
+        font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      }
+
+      [data-theme="dark"] {
+        --bg: radial-gradient(circle at top, rgba(41, 54, 109, 0.3), rgba(3, 4, 12, 0.92));
+        --surface: var(--surface-dark);
+        --border: var(--border-dark);
+        --text-strong: var(--text-strong-dark);
+        --text-muted: var(--text-muted-dark);
+        --shadow: var(--shadow-soft);
+      }
+
+      [data-theme="light"] {
+        --bg: radial-gradient(circle at top, rgba(146, 167, 255, 0.12), rgba(246, 248, 252, 0.95));
+        --surface: var(--surface-light);
+        --border: var(--border-light);
+        --text-strong: var(--text-strong-light);
+        --text-muted: var(--text-muted-light);
+        --shadow: var(--shadow-light);
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text-strong);
+        transition: background 0.6s ease, color 0.6s ease;
+      }
+
+      .page-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+        padding: clamp(18px, 4vw, 48px);
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .title-block {
+        display: grid;
+        gap: 6px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(1.6rem, 2.5vw, 2.6rem);
+        letter-spacing: -0.01em;
+      }
+
+      .tagline {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 1rem;
+      }
+
+      .theme-toggle {
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text-strong);
+        border-radius: 999px;
+        padding: 10px 20px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+        transition: transform 0.35s ease;
+      }
+
+      .theme-toggle:hover {
+        transform: translateY(-2px);
+      }
+
+      section {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--card-radius);
+        padding: clamp(18px, 3vw, 32px);
+        box-shadow: var(--shadow);
+        display: grid;
+        gap: 20px;
+      }
+
+      section h2 {
+        margin: 0;
+        font-size: clamp(1.25rem, 2vw, 1.8rem);
+      }
+
+      .layout-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+      }
+
+      .card {
+        border-radius: var(--card-radius);
+        padding: 18px;
+        background: linear-gradient(145deg, rgba(124, 92, 255, 0.12), transparent 65%);
+        border: 1px solid rgba(124, 92, 255, 0.28);
+        position: relative;
+        overflow: hidden;
+        min-height: 200px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .card::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at top right, rgba(124, 92, 255, 0.28), transparent 40%);
+        opacity: 0;
+        transition: opacity 0.4s ease;
+      }
+
+      .card:hover::after {
+        opacity: 1;
+      }
+
+      .card h3 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        padding: 6px 12px;
+        background: rgba(124, 92, 255, 0.12);
+        border: 1px solid rgba(124, 92, 255, 0.26);
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-strong);
+        text-transform: uppercase;
+      }
+
+      .architecture-explorer {
+        display: grid;
+        gap: 18px;
+      }
+
+      .architecture-explorer__panel {
+        display: grid;
+        grid-template-columns: minmax(200px, 260px) 1fr;
+        gap: 20px;
+      }
+
+      .node-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .node-button {
+        text-align: left;
+        background: rgba(12, 18, 46, 0.18);
+        border: 1px solid transparent;
+        color: var(--text-strong);
+        padding: 12px 16px;
+        border-radius: 14px;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: transform 0.25s ease, border 0.25s ease, background 0.25s ease;
+      }
+
+      .node-button[aria-pressed="true"] {
+        border: 1px solid rgba(124, 92, 255, 0.55);
+        background: rgba(124, 92, 255, 0.2);
+        transform: translateX(4px);
+      }
+
+      .node-button:hover {
+        border: 1px solid rgba(124, 92, 255, 0.35);
+      }
+
+      .node-details {
+        border-radius: 18px;
+        border: 1px solid rgba(124, 92, 255, 0.18);
+        background: rgba(2, 4, 12, 0.18);
+        padding: 20px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .node-details h3 {
+        margin: 0;
+        font-size: 1.3rem;
+      }
+
+      .node-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+
+      .node-text {
+        color: var(--text-muted);
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      .flow-diagram {
+        display: grid;
+        gap: 16px;
+      }
+
+      .flow-steps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+      }
+
+      .flow-step {
+        background: rgba(10, 14, 32, 0.24);
+        border: 1px solid rgba(124, 92, 255, 0.24);
+        border-radius: 16px;
+        padding: 16px;
+        display: grid;
+        gap: 8px;
+        cursor: pointer;
+        transition: transform 0.3s ease, border 0.3s ease;
+      }
+
+      .flow-step[aria-pressed="true"] {
+        transform: translateY(-4px);
+        border: 1px solid rgba(124, 92, 255, 0.6);
+      }
+
+      .flow-step strong {
+        font-size: 0.95rem;
+      }
+
+      .flow-step p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+      }
+
+      .flow-output {
+        border-radius: 16px;
+        border: 1px dashed rgba(124, 92, 255, 0.4);
+        background: rgba(124, 92, 255, 0.08);
+        padding: 18px;
+        min-height: 120px;
+        font-size: 0.95rem;
+        line-height: 1.6;
+      }
+
+      .alignment-scoreboard {
+        display: grid;
+        gap: 18px;
+      }
+
+      .score-item {
+        border-radius: 16px;
+        padding: 16px;
+        border: 1px solid rgba(124, 92, 255, 0.22);
+        background: rgba(15, 19, 44, 0.28);
+        display: grid;
+        gap: 10px;
+      }
+
+      .score-item header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .score-item header h3 {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+
+      .progress {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+      }
+
+      .progress-bar {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(124, 92, 255, 0.82), rgba(124, 92, 255, 0.42));
+        width: 0;
+        transition: width 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+      }
+
+      .score-description,
+      .score-gap {
+        margin: 0;
+        font-size: 0.95rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+
+      .score-gap strong {
+        color: var(--text-strong);
+      }
+
+      .gap-filter {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .gap-filter button {
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(124, 92, 255, 0.3);
+        background: rgba(124, 92, 255, 0.1);
+        color: var(--text-strong);
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: transform 0.25s ease, border 0.25s ease;
+      }
+
+      .gap-filter button[aria-pressed="true"] {
+        border-color: rgba(124, 92, 255, 0.7);
+        transform: translateY(-2px);
+      }
+
+      .gap-list {
+        display: grid;
+        gap: 16px;
+      }
+
+      .gap-card {
+        border-radius: 16px;
+        padding: 16px;
+        border: 1px solid rgba(255, 92, 92, 0.45);
+        background: rgba(255, 92, 92, 0.12);
+        display: grid;
+        gap: 10px;
+      }
+
+      .gap-card h4 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .gap-card p {
+        margin: 0;
+        font-size: 0.95rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+
+      details summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+
+      @media (max-width: 800px) {
+        .architecture-explorer__panel {
+          grid-template-columns: 1fr;
+        }
+
+        header {
+          justify-content: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header>
+        <div class="title-block">
+          <h1>Ouroboros Architecture Navigator</h1>
+          <p class="tagline">
+            Explore how the CLI, core runtime, multi-agent orchestration, and tool adapters interlock — then review our alignment with the OpenAI Agents SDK design principles.
+          </p>
+        </div>
+        <button type="button" class="theme-toggle" id="themeToggle">Toggle theme</button>
+      </header>
+
+      <section>
+        <h2>System at a Glance</h2>
+        <p>
+          Ouroboros Code is composed of a terminal-first interface, a provider-neutral runtime, orchestration utilities, and a library of workspace-aware tools. Each part is implemented in TypeScript and connected through the Unified Agents runtime.
+        </p>
+        <div class="layout-grid" id="summaryCards"></div>
+      </section>
+
+      <section class="architecture-explorer">
+        <h2>Architecture Explorer</h2>
+        <p>
+          Select a subsystem to view its responsibilities, key entry points, and the design commitments it must uphold during execution.
+        </p>
+        <div class="architecture-explorer__panel">
+          <div class="node-list" id="nodeList"></div>
+          <article class="node-details" id="nodeDetails">
+            <h3>Pick a component</h3>
+            <p class="node-text">
+              Use the navigator on the left to drill into the CLI shell, runtime pipeline, orchestration layer, or the tool adapters that bridge workspace operations into the Agents SDK.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Execution Flow Simulator</h2>
+        <p>
+          The simulator below highlights how a single user turn travels through the system. Tap a step to spotlight the runtime responsibilities and the cross-cutting concerns enforced by the Agents SDK.
+        </p>
+        <div class="flow-diagram">
+          <div class="flow-steps" id="flowSteps"></div>
+          <div class="flow-output" id="flowOutput">
+            Select any stage to visualise the data exchanged between layers.
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Alignment with OpenAI Agents SDK Principles</h2>
+        <p>
+          The following scorecard compares Ouroboros implementation patterns with the principles recommended by the OpenAI Agents SDK: function-style tool definitions, stateful conversations, streaming-first delivery, safety controls, and provider interoperability.
+        </p>
+        <div class="alignment-scoreboard" id="scoreboard"></div>
+      </section>
+
+      <section>
+        <h2>Gap Radar</h2>
+        <p>
+          Filter the open issues below to focus on the most impactful gaps between Ouroboros and the Agents SDK recommendations. Each card links to the affected subsystem so remediation work can be prioritised.
+        </p>
+        <div class="gap-filter" id="gapFilter"></div>
+        <div class="gap-list" id="gapList"></div>
+      </section>
+
+      <section>
+        <h2>Further Reading</h2>
+        <details open>
+          <summary>Key source files</summary>
+          <ul>
+            <li>CLI orchestration entry point: <code>packages/cli/src/ui/App.tsx</code></li>
+            <li>Unified Agents runtime bridge: <code>packages/core/src/runtime/unifiedAgentsClient.ts</code></li>
+            <li>Agents content generator: <code>packages/core/src/runtime/agentsContentGenerator.ts</code></li>
+            <li>Multi-agent orchestrator: <code>packages/core/src/agents/multiAgentExecutor.ts</code></li>
+            <li>Conversation history conversion: <code>packages/core/src/runtime/historyConversion.ts</code></li>
+            <li>Tool prompt injector: <code>packages/core/src/agents/toolInjector.ts</code></li>
+          </ul>
+        </details>
+        <details>
+          <summary>Recommended validation rituals</summary>
+          <p>
+            Run focused Vitest suites after modifying runtime or orchestration logic:
+          </p>
+          <ul>
+            <li><code>npx vitest run packages/core/src/runtime/historyConversion.test.ts</code> — verifies conversation memory mapping.</li>
+            <li><code>npx vitest run packages/core/src/agents/multiAgentExecutor.test.ts</code> — covers delegated specialist execution.</li>
+            <li><code>npm run test --workspaces --if-present</code> — executes all registered workspace suites.</li>
+          </ul>
+        </details>
+      </section>
+    </div>
+
+    <script>
+      const summaryData = [
+        {
+          title: 'CLI Shell',
+          badge: 'packages/cli',
+          description:
+            'Ink-based interface that streams model deltas, toggles contextual panels, and queues tool responses so autonomous sessions can continue uninterrupted.',
+        },
+        {
+          title: 'Unified Runtime',
+          badge: 'packages/core/runtime',
+          description:
+            'Provider-agnostic pipeline that adapts Ouroboros history to Agents SDK input items, streams responses, and enforces tool-approval policy across providers.',
+        },
+        {
+          title: 'Multi-Agent Orchestrator',
+          badge: 'packages/core/agents',
+          description:
+            'Delegation engine that schedules specialist personas, listens for tool telemetry, and falls back to sequential execution if delegation fails.',
+        },
+        {
+          title: 'Tool Stack',
+          badge: 'packages/core/tools',
+          description:
+            'Workspace-native tools (read, edit, search, shell, web, memory, image generation) exposed through Agents SDK-compliant function definitions with argument hints.',
+        },
+      ];
+
+      const nodes = [
+        {
+          id: 'cli-app',
+          title: 'CLI App Surface',
+          tags: ['streaming', 'workspace awareness'],
+          summary:
+            'Coordinates the Ink layout, streams assistant deltas, renders tool call progress, and surfaces keyboard shortcuts for contextual panels.',
+          detail:
+            'The App component subscribes to streaming events, message queues, Vim-mode contexts, and workspace trust signals. It composes Sidebar, ContextPanel, HistoryActivityRail, status bars, and input prompts to deliver a cohesive terminal experience.',
+          evidence: [
+            'Initialises streaming hooks, theme providers, and command dialogs.',
+            'Orchestrates Sidebar/ContextPanel layout with design-system surfaces.',
+            'Detects active tool executions to show progress indicators.',
+          ],
+        },
+        {
+          id: 'agents-client',
+          title: 'UnifiedAgentsClient',
+          tags: ['providers', 'tool approvals'],
+          summary:
+            'Builds Agents SDK sessions, adapts tool registries, streams model output, and handles tool approvals with YOLO/interactive guardrails.',
+          detail:
+            'The client resolves provider connectors, converts conversation history into AgentInputItems, normalises tool responses, and pushes streaming deltas, tool-call notices, and usage telemetry back to the caller.',
+          evidence: [
+            'Creates sessions with provider-specific connectors and API-key resolution.',
+            'Adapts Ouroboros tools to Agents SDK format with optional overrides/augmentations.',
+            'Caches the last meaningful user/assistant text to maintain conversational continuity.',
+          ],
+        },
+        {
+          id: 'agents-generator',
+          title: 'AgentsContentGenerator',
+          tags: ['prompting', 'streaming'],
+          summary:
+            'Implements the ContentGenerator interface by routing all requests through the unified Agents runtime, injecting system primers, and normalising streamed chunks.',
+          detail:
+            'Builds provider/model configuration, enhances system prompts with workspace primers and tool hints, converts content arrays into unified messages, and exposes streaming plus non-streaming generation paths.',
+          evidence: [
+            'Augments prompts with schema instructions when JSON or MIME targets are requested.',
+            'Collects text deltas, tool calls, and usage metrics from streamed sessions.',
+            'Maps Agents SDK function-call events back into the legacy GenerateContentResponse shape.',
+          ],
+        },
+        {
+          id: 'multi-agent',
+          title: 'MultiAgentExecutor',
+          tags: ['delegation', 'specialists'],
+          summary:
+            'Executes orchestrator-selected specialists, forwarding tool telemetry and preserving execution timelines across delegated waves.',
+          detail:
+            'Builds per-agent UnifiedAgentsClient sessions, captures tool-call output, triggers hooks for start/thinking/complete events, and limits execution to bounded passes with sequential fallback when delegation fails.',
+          evidence: [
+            'Injects agent metadata for tool telemetry and contextual prompts.',
+            'Records timeline waves and aggregate reasoning output.',
+            'Provides hook callbacks for UI visualisations and analytics.',
+          ],
+        },
+        {
+          id: 'history-conversion',
+          title: 'Conversation Memory Adapter',
+          tags: ['state', 'memory'],
+          summary:
+            'Translates legacy Content parts into unified Agents messages while extracting thoughts, tool responses, and call identifiers.',
+          detail:
+            'Normalises role mappings, captures nested function responses (including errors), and ensures fallback utterances keep the agent grounded when upstream messages are empty.',
+          evidence: [
+            'Extracts thoughts from function calls and merges multi-part responses.',
+            'Persists tool call IDs to prevent duplicate injections.',
+            'Caches the last non-empty utterance to preserve continuity.',
+          ],
+        },
+        {
+          id: 'tool-injector',
+          title: 'Tool Prompt Injector',
+          tags: ['tooling', 'guidance'],
+          summary:
+            'Appends workspace operations primer, tool cheat sheets, and slash-command guidance to specialist prompts.',
+          detail:
+            'Resolves runtime tool names, embeds JSON argument hints, emphasises repository-first investigation, and documents slash commands for deep analysis or testing.',
+          evidence: [
+            'Enumerates core workspace tools with argument schemas.',
+            'Highlights execution ordering (read → plan → edit → verify).',
+            'Documents LocalShellTool/ImageGenerationTool availability.',
+          ],
+        },
+      ];
+
+      const flowStages = [
+        {
+          id: 'input',
+          title: '1 · User prompt captured',
+          description:
+            'The Ink CLI captures input, updates command hints, and packages the request along with session metadata and queued tool events.',
+          output:
+            'App.tsx pipes the text buffer through useMessageQueue/useGeminiStream, ensuring pending tool executions are displayed while awaiting the Agents response.',
+        },
+        {
+          id: 'prompting',
+          title: '2 · Prompt assembled',
+          description:
+            'AgentsContentGenerator builds the system prompt, appends the workspace primer, injects schema hints, and converts the historical Content list into unified messages.',
+          output:
+            'convertContentHistoryToUnifiedMessages extracts structured tool results, retaining nested error/output strings so the new request is grounded in previous turns.',
+        },
+        {
+          id: 'runtime',
+          title: '3 · Unified runtime streaming',
+          description:
+            'UnifiedAgentsClient resolves the provider connector, wraps the tool registry in Agents SDK helpers, and streams Run events while handling approvals and telemetry.',
+          output:
+            'Tool-call requests trigger UI hooks, while text deltas aggregate into the final assistant response. Usage statistics are emitted when available.',
+        },
+        {
+          id: 'orchestration',
+          title: '4 · Specialist delegation (optional)',
+          description:
+            'If the orchestrator selects specialists, MultiAgentExecutor spins up per-agent sessions, forwards prompts augmented with tool primers, and collates wave-by-wave reasoning.',
+          output:
+            'Tool executions are logged per agent for the HistoryActivityRail and analytics hooks; sequential fallback maintains progress if delegation fails.',
+        },
+        {
+          id: 'delivery',
+          title: '5 · Response rendered',
+          description:
+            'The CLI receives the streamed assistant text, merges queued console/tool output, and renders the ContextPanel + Sidebar with design-system surfaces.',
+          output:
+            'SessionStatusBar summarises run stats, while HistoryActivityRail snapshots the conversation timeline for quick navigation.',
+        },
+      ];
+
+      const alignmentData = [
+        {
+          id: 'tools',
+          title: 'Function-Tool Compliance',
+          score: 0.86,
+          description:
+            'Tool registries are wrapped with the Agents SDK `tool()` helper, exposing JSON argument hints and adding LocalShell/Image generation coverage.',
+          gap:
+            'Remaining work: ensure every CLI slash command is mirrored as a callable tool so orchestrated specialists can invoke them without manual prompt nudges.',
+        },
+        {
+          id: 'memory',
+          title: 'Conversation Memory Fidelity',
+          score: 0.78,
+          description:
+            'historyConversion extracts nested function responses, error payloads, and thought text so subsequent turns stay grounded.',
+          gap:
+            'Current adapter flattens structured tool JSON into strings; preserving typed payloads would unlock richer planner reasoning and automatic tool retries.',
+        },
+        {
+          id: 'streaming',
+          title: 'Streaming & Finalisation',
+          score: 0.9,
+          description:
+            'UnifiedAgentsClient streams deltas, tool approvals, and usage telemetry, and AgentsContentGenerator relays them through legacy GenerateContent streams.',
+          gap:
+            'Embedding endpoints remain unimplemented; adding parity would align with the SDK guidance on multi-modal surface coverage.',
+        },
+        {
+          id: 'safety',
+          title: 'Safety & Approvals',
+          score: 0.82,
+          description:
+            'Tool approvals respect config-driven YOLO/manual modes and auto-approve low-risk calls while logging decisions for audit.',
+          gap:
+            'Approval UX inside the CLI still relies on textual prompts; integrating structured confirmation dialogs would reduce misuse risk.',
+        },
+        {
+          id: 'interoperability',
+          title: 'Provider Interoperability',
+          score: 0.74,
+          description:
+            'Connectors wrap OpenAI, Anthropic, and Gemini models via Vercel AI SDK adapters with graceful optional dependency errors.',
+          gap:
+            'Connector smoke tests for multi-turn tool loops remain TODO, leaving regressions undetected when optional packages update.',
+        },
+      ];
+
+      const gaps = [
+        {
+          id: 'slash-tools',
+          title: 'Slash commands missing tool parity',
+          category: 'tooling',
+          summary:
+            'Slash commands such as /analyze and /docgen are documented but not registered as callable function tools, so orchestrated specialists cannot invoke them autonomously.',
+          impact:
+            'Limits Agents SDK-driven delegation because orchestrators must embed manual instructions instead of invoking deterministic tools.',
+          remediation:
+            'Expose slash-command handlers via the tool adapter so they can be scheduled like other workspace operations.',
+        },
+        {
+          id: 'structured-memory',
+          title: 'Structured tool payload loss',
+          category: 'memory',
+          summary:
+            'historyConversion collapses JSON outputs into strings, losing shape information that could guide downstream planners.',
+          impact:
+            'Prevents advanced Agents SDK features (automatic tool retries, output validation) from using typed results.',
+          remediation:
+            'Augment UnifiedAgentMessage metadata with serialised JSON and extend mapMessageToAgentInput to forward it intact.',
+        },
+        {
+          id: 'embedding-gap',
+          title: 'Embedding support absent',
+          category: 'runtime',
+          summary:
+            'AgentsContentGenerator throws for embedContent, leaving the SDK's multimodal retrieval workflows unsupported.',
+          impact:
+            'Prevents downstream integrations (IDE companion, server) from unifying around the same runtime for semantic search.',
+          remediation:
+            'Implement embedContent via provider connectors or route to a fallback embedding service.',
+        },
+        {
+          id: 'approval-ux',
+          title: 'Manual approval UX lacks structure',
+          category: 'safety',
+          summary:
+            'Tool approvals are handled through console text prompts without dedicated UI affordances, increasing the risk of operator error.',
+          impact:
+            'Users may miss approval prompts during high-throughput runs, undermining the SDK's safety guidance.',
+          remediation:
+            'Extend the design system with modal confirmation components that map to approval events emitted by UnifiedAgentsClient.',
+        },
+        {
+          id: 'connector-tests',
+          title: 'Connector smoke coverage pending',
+          category: 'testing',
+          summary:
+            'TODO items call for end-to-end connector tests covering multi-turn tool loops when Anthropic/Gemini adapters are installed.',
+          impact:
+            'Optional provider regressions may slip into releases without automated guardrails.',
+          remediation:
+            'Automate the connector matrix workflow with sandbox credentials and run it on a schedule.',
+        },
+      ];
+
+      const summaryContainer = document.getElementById('summaryCards');
+      summaryData.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const badge = document.createElement('span');
+        badge.className = 'pill';
+        badge.textContent = item.badge;
+        const title = document.createElement('h3');
+        title.textContent = item.title;
+        const description = document.createElement('p');
+        description.textContent = item.description;
+        description.className = 'node-text';
+        card.appendChild(badge);
+        card.appendChild(title);
+        card.appendChild(description);
+        summaryContainer.appendChild(card);
+      });
+
+      const nodeList = document.getElementById('nodeList');
+      const nodeDetails = document.getElementById('nodeDetails');
+      let activeNode = null;
+
+      nodes.forEach((node) => {
+        const button = document.createElement('button');
+        button.className = 'node-button';
+        button.type = 'button';
+        button.textContent = node.title;
+        button.setAttribute('data-node', node.id);
+        button.addEventListener('click', () => {
+          if (activeNode === node.id) return;
+          activeNode = node.id;
+          document
+            .querySelectorAll('.node-button')
+            .forEach((btn) => btn.setAttribute('aria-pressed', btn.dataset.node === node.id ? 'true' : 'false'));
+          renderNodeDetails(node);
+        });
+        nodeList.appendChild(button);
+      });
+
+      function renderNodeDetails(node) {
+        nodeDetails.innerHTML = '';
+        const heading = document.createElement('h3');
+        heading.textContent = node.title;
+        const meta = document.createElement('div');
+        meta.className = 'node-meta';
+        node.tags.forEach((tag) => {
+          const span = document.createElement('span');
+          span.className = 'pill';
+          span.textContent = tag;
+          meta.appendChild(span);
+        });
+        const summary = document.createElement('p');
+        summary.className = 'node-text';
+        summary.textContent = node.summary;
+        const detail = document.createElement('p');
+        detail.className = 'node-text';
+        detail.textContent = node.detail;
+        const evidenceList = document.createElement('ul');
+        node.evidence.forEach((item) => {
+          const li = document.createElement('li');
+          li.textContent = item;
+          evidenceList.appendChild(li);
+        });
+        nodeDetails.appendChild(heading);
+        nodeDetails.appendChild(meta);
+        nodeDetails.appendChild(summary);
+        nodeDetails.appendChild(detail);
+        nodeDetails.appendChild(evidenceList);
+      }
+
+      const flowStepContainer = document.getElementById('flowSteps');
+      const flowOutput = document.getElementById('flowOutput');
+      let activeFlow = null;
+
+      flowStages.forEach((stage) => {
+        const button = document.createElement('button');
+        button.className = 'flow-step';
+        button.type = 'button';
+        button.innerHTML = `<strong>${stage.title}</strong><p>${stage.description}</p>`;
+        button.addEventListener('click', () => {
+          activeFlow = stage.id;
+          document
+            .querySelectorAll('.flow-step')
+            .forEach((btn) => btn.setAttribute('aria-pressed', btn === button ? 'true' : 'false'));
+          flowOutput.innerHTML = `<strong>${stage.title}</strong><p>${stage.output}</p>`;
+        });
+        flowStepContainer.appendChild(button);
+      });
+
+      const scoreboard = document.getElementById('scoreboard');
+      alignmentData.forEach((item) => {
+        const wrapper = document.createElement('article');
+        wrapper.className = 'score-item';
+        const head = document.createElement('header');
+        const title = document.createElement('h3');
+        title.textContent = item.title;
+        const scoreLabel = document.createElement('span');
+        scoreLabel.className = 'pill';
+        scoreLabel.textContent = `${Math.round(item.score * 100)}% aligned`;
+        head.appendChild(title);
+        head.appendChild(scoreLabel);
+        const progress = document.createElement('div');
+        progress.className = 'progress';
+        const progressBar = document.createElement('div');
+        progressBar.className = 'progress-bar';
+        requestAnimationFrame(() => {
+          progressBar.style.width = `${item.score * 100}%`;
+        });
+        progress.appendChild(progressBar);
+        const description = document.createElement('p');
+        description.className = 'score-description';
+        description.textContent = item.description;
+        const gap = document.createElement('p');
+        gap.className = 'score-gap';
+        gap.innerHTML = `<strong>Gap:</strong> ${item.gap}`;
+        wrapper.appendChild(head);
+        wrapper.appendChild(progress);
+        wrapper.appendChild(description);
+        wrapper.appendChild(gap);
+        scoreboard.appendChild(wrapper);
+      });
+
+      const gapFilter = document.getElementById('gapFilter');
+      const categories = ['all', ...new Set(gaps.map((gap) => gap.category))];
+      let activeCategory = 'all';
+
+      categories.forEach((category) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = category === 'all' ? 'Show all' : category;
+        button.addEventListener('click', () => {
+          activeCategory = category;
+          document
+            .querySelectorAll('.gap-filter button')
+            .forEach((btn) => btn.setAttribute('aria-pressed', btn === button ? 'true' : 'false'));
+          renderGaps();
+        });
+        if (category === 'all') {
+          button.setAttribute('aria-pressed', 'true');
+        }
+        gapFilter.appendChild(button);
+      });
+
+      const gapList = document.getElementById('gapList');
+
+      function renderGaps() {
+        gapList.innerHTML = '';
+        gaps
+          .filter((gap) => activeCategory === 'all' || gap.category === activeCategory)
+          .forEach((gap) => {
+            const card = document.createElement('article');
+            card.className = 'gap-card';
+            const title = document.createElement('h4');
+            title.textContent = gap.title;
+            const summary = document.createElement('p');
+            summary.textContent = gap.summary;
+            const impact = document.createElement('p');
+            impact.innerHTML = `<strong>Impact:</strong> ${gap.impact}`;
+            const remediation = document.createElement('p');
+            remediation.innerHTML = `<strong>Remediation:</strong> ${gap.remediation}`;
+            card.appendChild(title);
+            card.appendChild(summary);
+            card.appendChild(impact);
+            card.appendChild(remediation);
+            gapList.appendChild(card);
+          });
+      }
+
+      renderGaps();
+
+      document.getElementById('themeToggle').addEventListener('click', () => {
+        const root = document.documentElement;
+        const nextTheme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', nextTheme);
+      });
+    </script>
+  </body>
+</html>

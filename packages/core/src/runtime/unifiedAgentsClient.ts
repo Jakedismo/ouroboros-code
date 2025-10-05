@@ -231,7 +231,7 @@ export class UnifiedAgentsClient {
     const agentEmoji = typeof session.metadata?.['agentEmoji'] === 'string'
       ? (session.metadata['agentEmoji'] as string)
       : undefined;
-    const tools = adaptToolsToAgents({
+    const adaptedTools = adaptToolsToAgents({
       registry,
       config: this.config,
       getPromptId: () => session.id,
@@ -244,6 +244,17 @@ export class UnifiedAgentsClient {
               this.options.onToolExecuted?.({ session, request, response })
           : undefined,
     });
+
+    let tools = adaptedTools;
+
+    if (Array.isArray(options.toolsOverride) && options.toolsOverride.length > 0) {
+      tools = options.toolsOverride;
+    } else if (
+      Array.isArray(options.toolsAugmentation) &&
+      options.toolsAugmentation.length > 0
+    ) {
+      tools = [...adaptedTools, ...options.toolsAugmentation];
+    }
 
     return new Agent({
       name: 'ouroboros-unified-agent',
@@ -335,10 +346,19 @@ export class UnifiedAgentsClient {
           return null;
         }
 
-        const status = typeof functionResponse['status'] === 'string'
+        const statusRaw = typeof functionResponse['status'] === 'string'
           ? (functionResponse['status'] as string)
-          : 'completed';
-        if (status !== 'completed') {
+          : undefined;
+        const status = statusRaw ? statusRaw.toLowerCase() : 'completed';
+        const terminalStatuses = new Set([
+          'completed',
+          'complete',
+          'success',
+          'succeeded',
+          'ok',
+          'done',
+        ]);
+        if (!terminalStatuses.has(status)) {
           return null;
         }
 
