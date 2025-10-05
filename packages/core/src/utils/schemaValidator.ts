@@ -5,10 +5,11 @@
  */
 
 import Ajv from 'ajv';
-import addFormats from 'ajv-formats';
+import * as addFormats from 'ajv-formats';
 
 const ajValidator = new Ajv();
-addFormats(ajValidator);
+const addFormatsFunc = (addFormats as any).default || addFormats;
+addFormatsFunc(ajValidator);
 
 /**
  * Simple utility to validate objects against JSON Schemas
