@@ -6,11 +6,14 @@
 
 import React, { useMemo, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { Colors } from '../colors.js';
 import { appEvents, AppEvent } from '../../utils/events.js';
+import {
+  Surface,
+  SectionHeading,
+  useDesignSystem,
+} from '../design-system/index.js';
 
 interface SidebarProps {
-  visible: boolean;
   model?: string;
   provider?: string;
   branchName?: string;
@@ -20,15 +23,37 @@ interface SidebarProps {
 
 type QuickAction = { label: string; raw: string };
 
+const InfoRow = ({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) => {
+  const design = useDesignSystem();
+  return (
+    <Box flexDirection="column" marginBottom={design.spacing.xs}>
+      <Text color={design.colors.text.muted}>{label}</Text>
+      <Text
+        color={accent ? design.colors.text.accent : design.colors.text.primary}
+        wrap="truncate"
+      >
+        {value}
+      </Text>
+    </Box>
+  );
+};
+
 export const Sidebar: React.FC<SidebarProps> = ({
-  visible,
   model,
   provider,
   branchName,
   interactive = false,
   compact = false,
 }) => {
-  if (!visible) return null;
+  const design = useDesignSystem();
   const actions: QuickAction[] = useMemo(
     () => [
       { label: '/agent list', raw: '/agent list' },
@@ -43,7 +68,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   useInput(
     (input, key) => {
-      if (!interactive) return;
+      if (!interactive) {
+        return;
+      }
       if (key.escape) {
         appEvents.emit(AppEvent.SetFocusRegion, 'main');
         return;
@@ -62,87 +89,71 @@ export const Sidebar: React.FC<SidebarProps> = ({
         appEvents.emit(AppEvent.ExecuteSlashCommand, action.raw);
         return;
       }
-      if (input.toLowerCase() === 'a')
+      const lowered = input.toLowerCase();
+      if (lowered === 'a') {
         appEvents.emit(AppEvent.ExecuteSlashCommand, '/agent list');
-      if (input.toLowerCase() === 'w')
+      } else if (lowered === 'w') {
         appEvents.emit(AppEvent.ExecuteSlashCommand, '/workflow status');
-      if (input.toLowerCase() === 'm')
+      } else if (lowered === 'm') {
         appEvents.emit(AppEvent.ExecuteSlashCommand, '/mcp list');
-      if (input.toLowerCase() === 't')
+      } else if (lowered === 't') {
         appEvents.emit(AppEvent.ExecuteSlashCommand, '/tools');
-      if (input.toLowerCase() === 's')
+      } else if (lowered === 's') {
         appEvents.emit(AppEvent.ExecuteSlashCommand, '/settings');
+      }
     },
     { isActive: interactive },
   );
 
+  const hintColor = design.colors.text.muted;
+  const selectedColor = design.colors.text.accent;
+
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={Colors.Gray} width="100%">
-      <Box paddingX={1}>
-        <Text color={Colors.Primary} bold>
-          ☰ SIDEBAR
-        </Text>
+    <Surface
+      variant="sunken"
+      borderTone="accent"
+      flexDirection="column"
+      paddingY={design.spacing.sm}
+      paddingX={design.spacing.sm}
+      width="100%"
+    >
+      <SectionHeading icon="☰" text={compact ? 'Navigator' : 'Session Navigator'} />
+      <Box flexDirection="column" marginTop={design.spacing.sm}>
+        <InfoRow label="Provider" value={provider ?? '—'} accent />
+        <InfoRow label="Model" value={model ?? 'Default'} />
+        {branchName ? (
+          <InfoRow
+            label="Branch"
+            value={branchName}
+            accent={false}
+          />
+        ) : null}
       </Box>
-      <Box paddingX={1} marginTop={1}>
-        <Box flexDirection="column">
-          <Text color={Colors.Gray} dimColor>
-            Model:
-          </Text>
-          <Text color={Colors.White} wrap="truncate">
-            {model || 'Default'}
-          </Text>
-        </Box>
+      <Box marginTop={design.spacing.sm}>
+        <Text color={design.colors.text.muted}>Quick actions</Text>
       </Box>
-      {provider && (
-        <Box paddingX={1} marginTop={1}>
-          <Box flexDirection="column">
-            <Text color={Colors.Gray} dimColor>
-              Provider:
-            </Text>
-            <Text color={Colors.Primary}>{provider}</Text>
-          </Box>
-        </Box>
-      )}
-      {branchName && (
-        <Box paddingX={1} marginTop={1}>
-          <Box flexDirection="column">
-            <Text color={Colors.Gray} dimColor>
-              Branch:
-            </Text>
-            <Text color={Colors.Warning} wrap="truncate">
-              {branchName}
-            </Text>
-          </Box>
-        </Box>
-      )}
-      <Box paddingX={1} marginTop={1}>
-        <Text color={Colors.Gray} dimColor>
-          Quick Actions:
-        </Text>
+      <Box flexDirection="column" marginTop={design.spacing.xs}>
+        {actions.map((action, i) => {
+          const isSelected = interactive && i === index;
+          return (
+            <Box key={action.raw}>
+              <Text
+                color={isSelected ? selectedColor : design.colors.text.primary}
+                bold={isSelected}
+                wrap="truncate"
+              >
+                {isSelected ? '▶ ' : '  '}
+                {action.label}
+              </Text>
+            </Box>
+          );
+        })}
       </Box>
-      <Box flexDirection="column" paddingX={1}>
-        {actions.map((action, i) => (
-          <Box key={action.raw} marginTop={i === 0 ? 0 : 0}>
-            <Text
-              color={
-                interactive && i === index ? Colors.Primary : Colors.White
-              }
-              dimColor={!interactive}
-              bold={interactive && i === index}
-            >
-              {interactive && i === index ? '▶ ' : '  '}
-              {action.label}
-            </Text>
-          </Box>
-        ))}
-      </Box>
-      {interactive && (
-        <Box paddingX={1} marginTop={1}>
-          <Text color={Colors.Gray} dimColor>
-            ↑↓ Navigate · ↵ Execute · Esc Back
-          </Text>
+      {interactive ? (
+        <Box marginTop={design.spacing.sm}>
+          <Text color={hintColor}>↑↓ navigate · ↵ run · Esc return</Text>
         </Box>
-      )}
-    </Box>
+      ) : null}
+    </Surface>
   );
 };

@@ -104,14 +104,8 @@ import ansiEscapes from 'ansi-escapes';
 import { OverflowProvider } from './contexts/OverflowContext.js';
 import { ShowMoreLines } from './components/ShowMoreLines.js';
 import { PrivacyNotice } from './privacy/PrivacyNotice.js';
-// TUI components (simplified for now)
-// import { Sidebar } from './components/Sidebar.js';
-// import { ContextPanel } from './components/ContextPanel.js';
-// import { WorkflowProgressProvider } from './contexts/WorkflowProgressContext.js';
-// import {
-//   WorkflowProgressOverlay,
-//   WorkflowProgressMini,
-// } from './components/WorkflowProgressOverlay.js';
+import { Sidebar } from './components/Sidebar.js';
+import { ContextPanel } from './components/ContextPanel.js';
 import { appEvents, AppEvent } from '../utils/events.js';
 import { useSettingsCommand } from './hooks/useSettingsCommand.js';
 import { SettingsDialog } from './components/SettingsDialog.js';
@@ -166,6 +160,11 @@ function formatUserTierLabel(tier: UserTierId | undefined): string {
       return tier;
   }
 }
+
+const formatMetaShortcut = (key: string): string =>
+  process.platform === 'darwin'
+    ? `⌘${key.toUpperCase()}`
+    : `Meta+${key.toUpperCase()}`;
 
 export const AppWrapper = (props: AppProps) => {
   const kittyProtocolStatus = useKittyKeyboardProtocol();
@@ -276,7 +275,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     onWorkspaceMigrationDialogClose,
   } = useWorkspaceMigration(settings);
   
-  // TUI state management (simplified for now)
+  // TUI layout toggles
   const [showSidebar, setShowSidebar] = useState<boolean>(false);
   const [showContextPanel, setShowContextPanel] = useState<boolean>(false);
   // const [showWorkflowProgress, setShowWorkflowProgress] = useState<boolean>(false);
@@ -854,8 +853,18 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const showAutoAcceptIndicator = useAutoAcceptIndicator({ config, addItem });
   const queueLength = messageQueue.length;
   const userTierLabel = useMemo(() => formatUserTierLabel(userTier), [userTier]);
+  const sidebarShortcutLabel = formatMetaShortcut('s');
+  const contextShortcutLabel = formatMetaShortcut('k');
   const commandHints = useMemo<CommandHint[]>(() => {
     const hints: CommandHint[] = [
+      {
+        label: showSidebar ? 'Hide sidebar' : 'Show sidebar',
+        commandText: sidebarShortcutLabel,
+      },
+      {
+        label: showContextPanel ? 'Hide context' : 'Show context',
+        commandText: contextShortcutLabel,
+      },
       { label: 'Theme', commandText: '/theme' },
       { label: 'Auth', commandText: '/auth' },
       { label: 'Settings', commandText: '/settings' },
@@ -872,7 +881,13 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
       hints.push({ label: 'Exit shell', bindings: defaultKeyBindings[Command.EXIT] });
     }
     return hints;
-  }, [shellModeActive]);
+  }, [
+    shellModeActive,
+    showSidebar,
+    showContextPanel,
+    sidebarShortcutLabel,
+    contextShortcutLabel,
+  ]);
 
   const handleExit = useCallback(
     (
@@ -1154,9 +1169,11 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   // Calculate layout dimensions accounting for sidebars
   const sidebarWidth = showSidebar ? 26 : 0;
   const contextPanelWidth = showContextPanel ? 34 : 0;
-  const gutterWidth = (showSidebar ? 2 : 0) + (showContextPanel ? 2 : 0);
+  const gutterWidth = (showSidebar ? 1 : 0) + (showContextPanel ? 1 : 0);
   const totalSideWidth = sidebarWidth + contextPanelWidth + gutterWidth;
-  const mainAreaWidth = Math.max(40, Math.floor(terminalWidth * 0.9) - totalSideWidth);
+  const maxContentWidth = Math.floor(terminalWidth * 0.9);
+  const availableWidth = terminalWidth - totalSideWidth;
+  const mainAreaWidth = Math.max(40, Math.min(maxContentWidth, availableWidth));
   const debugConsoleMaxHeight = Math.floor(Math.max(terminalHeight * 0.2, 5));
   // Arbitrary threshold to ensure that items in the static area are large
   // enough but not too large to make the terminal hard to use.
@@ -1167,8 +1184,20 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
 
   return (
     <StreamingContext.Provider value={streamingState}>
-      <Box flexDirection="column" width="90%">
-        {!agentsClientReady ? (
+      <Box flexDirection="row" width="100%" justifyContent="center">
+        {showSidebar && (
+          <Box width={sidebarWidth} marginRight={showSidebar ? 1 : 0}>
+            <Sidebar
+              model={currentModel}
+              provider={config.getProvider()}
+              branchName={branchName}
+              interactive={isInputActive}
+              compact={isNarrow}
+            />
+          </Box>
+        )}
+        <Box flexDirection="column" width={mainAreaWidth} flexGrow={1}>
+          {!agentsClientReady ? (
           <Box paddingTop={1}>
             <Text color="yellow">Initializing {config.getProvider()} provider...</Text>
           </Box>
@@ -1483,6 +1512,10 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                     <Text color={design.colors.text.muted}>
                       Press Esc again to clear.
                     </Text>
+                  ) : showContextPanel ? (
+                    <Text color={design.colors.text.muted}>
+                      Context panel open — press {contextShortcutLabel} to hide.
+                    </Text>
                   ) : (
                     <ContextSummaryDisplay
                       ideContext={ideContextState}
@@ -1595,6 +1628,20 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
           )}
         </Box>
           </>
+        )}
+        {showContextPanel && (
+          <Box width={contextPanelWidth} marginLeft={showContextPanel ? 1 : 0}>
+            <ContextPanel
+              model={currentModel}
+              provider={config.getProvider()}
+              geminiMdFileCount={geminiMdFileCount}
+              contextFileNames={contextFileNames}
+              approvalMode={showAutoAcceptIndicator}
+              mcpServers={config.getMcpServers()}
+              blockedMcpServers={config.getBlockedMcpServers()}
+              compact={isNarrow}
+            />
+          </Box>
         )}
       </Box>
     </StreamingContext.Provider>
