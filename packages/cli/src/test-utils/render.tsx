@@ -7,12 +7,13 @@
 import { render } from 'ink-testing-library';
 import type React from 'react';
 import { KeypressProvider } from '../ui/contexts/KeypressContext.js';
+import { DesignSystemProvider } from '../ui/design-system/index.js';
 
 export const renderWithProviders = (
   component: React.ReactElement,
 ): ReturnType<typeof render> =>
   render(
     <KeypressProvider kittyProtocolEnabled={true}>
-      {component}
+      <DesignSystemProvider>{component}</DesignSystemProvider>
     </KeypressProvider>,
   );

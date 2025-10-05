@@ -95,6 +95,20 @@ describe('ThemeManager', () => {
     expect(themeManager.getTheme('MyCustomTheme')).toBeDefined();
   });
 
+  it('notifies subscribers when the active theme changes', () => {
+    const listener = vi.fn();
+    const unsubscribe = themeManager.subscribe(listener);
+
+    themeManager.setActiveTheme('Ayu');
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    listener.mockClear();
+    unsubscribe();
+
+    themeManager.setActiveTheme(DEFAULT_THEME.name);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it('should fall back to default theme if active theme is invalid', () => {
     (themeManager as unknown as { activeTheme: unknown }).activeTheme = {
       name: 'NonExistent',

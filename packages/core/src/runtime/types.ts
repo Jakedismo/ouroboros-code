@@ -1,4 +1,9 @@
-import type { AgentInputItem, Model, ModelProvider } from '@openai/agents';
+import type {
+  AgentInputItem,
+  Model,
+  ModelProvider,
+  Tool as AgentsTool,
+} from '@openai/agents';
 
 export type UnifiedAgentRole = 'system' | 'user' | 'assistant' | 'tool';
 
@@ -55,6 +60,8 @@ export interface UnifiedAgentStreamOptions {
   maxOutputTokens?: number;
   toolChoice?: 'auto' | 'none' | { type: 'function'; name: string };
   reasoningEffort?: 'low' | 'medium' | 'high';
+  toolsOverride?: AgentsTool[];
+  toolsAugmentation?: AgentsTool[];
 }
 
 export type { AgentStreamEvent, AgentContentFragment, AgentMessage, AgentToolInvocation, AgentToolResult, AgentFunctionCall, ToolFunctionDeclaration } from './agentsTypes.js';
