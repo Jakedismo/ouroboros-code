@@ -151,24 +151,29 @@ export class UnifiedAgentsClient {
       throw new Error('UnifiedAgentsClient session is missing model context.');
     }
 
-    // Retrieve existing conversation history from session storage
+    // Session-first architecture: Use SessionStorage as primary source of truth
     const sessionStorage = this.sessionStorages.get(session.id);
     let inputItems: AgentInputItem[];
 
     if (sessionStorage) {
-      // Load persisted conversation items
+      // Load existing conversation history from persistent storage
       const persistedItems = await sessionStorage.getItems();
 
-      // Convert new messages to input items
+      // Convert only NEW incoming messages (not already in session)
       const newItems = this.convertMessagesToInput(messages, session.id, session.systemPrompt);
 
-      // Combine persisted + new items
+      // Combine: existing history + new user input for this turn
       inputItems = [...persistedItems, ...newItems];
 
-      this.debugLog('session-load', session.id, `${persistedItems.length} persisted + ${newItems.length} new`);
+      this.debugLog(
+        'session-flow',
+        session.id,
+        `Session: ${persistedItems.length} persisted + ${newItems.length} new = ${inputItems.length} total`,
+      );
     } else {
-      // No session storage - use ephemeral conversion
+      // No session storage - legacy ephemeral mode
       inputItems = this.convertMessagesToInput(messages, session.id, session.systemPrompt);
+      this.debugLog('session-ephemeral', session.id, `Ephemeral mode: ${inputItems.length} items`);
     }
 
     const agent = this.createAgent(session, options);
@@ -214,16 +219,19 @@ export class UnifiedAgentsClient {
     const finalText =
       this.extractFinalOutputText(streamResult) || streamedChunks.filter(Boolean).join('\n');
 
-    // Persist conversation items to session storage after turn completes
+    // Persist conversation state to session storage after turn completes
     if (sessionStorage) {
       try {
-        // Get final result items from the completed run
-        const resultItems = streamResult.items ?? [];
+        // streamResult.items contains the COMPLETE conversation state after this turn
+        // This includes both the input we provided AND the model's response
+        // We need to REPLACE the session contents, not append
+        const completeState = streamResult.items ?? [];
 
-        // Add new conversation items to session storage
-        await sessionStorage.addItems(resultItems);
+        // Clear existing session and store the complete conversation state
+        await sessionStorage.clearSession();
+        await sessionStorage.addItems(completeState);
 
-        this.debugLog('session-persist', session.id, `${resultItems.length} items stored`);
+        this.debugLog('session-persist', session.id, `Session updated: ${completeState.length} total items`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`Failed to persist session ${session.id}:`, message);

@@ -273,5 +273,44 @@ describe('SessionManager', () => {
         text: 'First session message',
       });
     });
+
+    it('should replace session state instead of appending (SDK pattern)', async () => {
+      const sessionId = 'replace-test';
+      const storage = sessionManager.getOrCreateSession(sessionId);
+
+      // Simulate Turn 1: User message + Assistant response
+      const turn1State = [
+        user('Hello'),
+        assistant('Hi there!'),
+      ];
+      await storage.clearSession();
+      await storage.addItems(turn1State);
+
+      let items = await storage.getItems();
+      expect(items).toHaveLength(2);
+
+      // Simulate Turn 2: Complete state after adding new message + response
+      const turn2State = [
+        user('Hello'),
+        assistant('Hi there!'),
+        user('How are you?'),
+        assistant('I am doing well!'),
+      ];
+      await storage.clearSession();
+      await storage.addItems(turn2State);
+
+      items = await storage.getItems();
+      expect(items).toHaveLength(4);
+
+      // Verify no duplication - state was replaced, not appended
+      expect(items[0].content[0]).toMatchObject({
+        type: 'input_text',
+        text: 'Hello',
+      });
+      expect(items[2].content[0]).toMatchObject({
+        type: 'input_text',
+        text: 'How are you?',
+      });
+    });
   });
 });
