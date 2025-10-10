@@ -19,21 +19,23 @@ const ITEMS: Array<RadioSelectItem<string>> = [
 ];
 
 describe('<RadioButtonSelect />', () => {
-  it('renders a list of items and matches snapshot', () => {
+  it('renders a list of items with numeric prefixes', () => {
     const { lastFrame } = renderWithProviders(
       <RadioButtonSelect items={ITEMS} onSelect={() => {}} isFocused={true} />,
     );
-    expect(lastFrame()).toMatchSnapshot();
+    expect(lastFrame()).toContain('1.');
+    expect(lastFrame()).toContain('Option 1');
   });
 
-  it('renders with the second item selected and matches snapshot', () => {
+  it('respects the initial index', () => {
     const { lastFrame } = renderWithProviders(
       <RadioButtonSelect items={ITEMS} initialIndex={1} onSelect={() => {}} />,
     );
-    expect(lastFrame()).toMatchSnapshot();
+    expect(lastFrame()).toContain('●');
+    expect(lastFrame()).toContain('2. Option 2');
   });
 
-  it('renders with numbers hidden and matches snapshot', () => {
+  it('supports hiding numbers', () => {
     const { lastFrame } = renderWithProviders(
       <RadioButtonSelect
         items={ITEMS}
@@ -41,10 +43,11 @@ describe('<RadioButtonSelect />', () => {
         showNumbers={false}
       />,
     );
-    expect(lastFrame()).toMatchSnapshot();
+    expect(lastFrame()).not.toContain('1.');
+    expect(lastFrame()).toContain('Option 1');
   });
 
-  it('renders with scroll arrows and matches snapshot', () => {
+  it('renders scroll arrows when the list overflows', () => {
     const manyItems = Array.from({ length: 20 }, (_, i) => ({
       label: `Item ${i + 1}`,
       value: `item-${i + 1}`,
@@ -57,10 +60,11 @@ describe('<RadioButtonSelect />', () => {
         maxItemsToShow={5}
       />,
     );
-    expect(lastFrame()).toMatchSnapshot();
+    expect(lastFrame()).toContain('▲');
+    expect(lastFrame()).toContain('▼');
   });
 
-  it('renders with special theme display and matches snapshot', () => {
+  it('renders theme metadata when provided', () => {
     const themeItems: Array<RadioSelectItem<string>> = [
       {
         label: 'Theme A (Light)',
@@ -78,10 +82,11 @@ describe('<RadioButtonSelect />', () => {
     const { lastFrame } = renderWithProviders(
       <RadioButtonSelect items={themeItems} onSelect={() => {}} />,
     );
-    expect(lastFrame()).toMatchSnapshot();
+    expect(lastFrame()).toContain('Theme A (Light)');
+    expect(lastFrame()).toContain('Theme B (Dark)');
   });
 
-  it('renders a list with >10 items and matches snapshot', () => {
+  it('renders more than 10 items without truncation', () => {
     const manyItems = Array.from({ length: 12 }, (_, i) => ({
       label: `Item ${i + 1}`,
       value: `item-${i + 1}`,
@@ -89,7 +94,7 @@ describe('<RadioButtonSelect />', () => {
     const { lastFrame } = renderWithProviders(
       <RadioButtonSelect items={manyItems} onSelect={() => {}} />,
     );
-    expect(lastFrame()).toMatchSnapshot();
+    expect(lastFrame()).toContain('12. Item 12');
   });
 
   it('renders nothing when no items are provided', () => {

@@ -7,6 +7,7 @@
 import type React from 'react';
 import { useState } from 'react';
 import { Box, Text } from 'ink';
+import Link from 'ink-link';
 import { Colors } from '../colors.js';
 import { RadioButtonSelect } from './shared/RadioButtonSelect.js';
 import type { LoadedSettings } from '../../config/settings.js';
@@ -163,11 +164,11 @@ export function AuthDialog({
         <Text>Terms of Services and Privacy Notice for Ouroboros Code</Text>
       </Box>
       <Box marginTop={1}>
-        <Text color={Colors.AccentBlue}>
-          {
-            'https://github.com/google-gemini/gemini-cli/blob/main/docs/tos-privacy.md'
-          }
-        </Text>
+        <Link url="https://github.com/google-gemini/gemini-cli/blob/main/docs/tos-privacy.md">
+          <Text color={Colors.AccentBlue}>
+            https://github.com/google-gemini/gemini-cli/blob/main/docs/tos-privacy.md
+          </Text>
+        </Link>
       </Box>
     </Box>
   );
