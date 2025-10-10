@@ -64,6 +64,7 @@ import { WorkspaceContext } from '../utils/workspaceContext.js';
 import { Storage } from './storage.js';
 import { FileExclusions } from '../utils/ignorePatterns.js';
 import type { EventEmitter } from 'node:events';
+import { getCoreSystemPrompt } from '../core/prompts.js';
 
 export enum ApprovalMode {
   DEFAULT = 'default',
@@ -315,6 +316,13 @@ export class Config {
   private readonly autonomousMode: boolean;
   private readonly enableContinuousInput: boolean;
   private initialized: boolean = false;
+  private agentSystemPromptOverride?: string;
+  private baseSystemPromptCache?: {
+    prompt: string;
+    provider: string;
+    model: string;
+    memory: string;
+  };
   readonly storage: Storage;
   private readonly fileExclusions: FileExclusions;
   private readonly eventEmitter?: EventEmitter;
@@ -481,6 +489,7 @@ export class Config {
     // Only assign to instance properties after successful initialization
     this.contentGeneratorConfig = newContentGeneratorConfig;
     this.agentsClient = newAgentsClient;
+    this.invalidateBaseSystemPromptCache();
 
     if (previousSystemInstruction) {
       newAgentsClient.setSystemInstruction(previousSystemInstruction);
@@ -517,6 +526,11 @@ export class Config {
     if (this.contentGeneratorConfig) {
       this.contentGeneratorConfig.model = newModel;
     }
+    this.invalidateBaseSystemPromptCache();
+  }
+
+  private invalidateBaseSystemPromptCache(): void {
+    this.baseSystemPromptCache = undefined;
   }
 
   getProvider(): 'openai' | 'anthropic' | 'gemini' {
@@ -591,7 +605,8 @@ export class Config {
 
     // Update the provider configuration
     (this as any).provider = newProvider;
-    
+    this.invalidateBaseSystemPromptCache();
+
     // Determine appropriate auth type for the new provider
     let authType = this.contentGeneratorConfig?.authType || AuthType.USE_GEMINI;
     
@@ -611,15 +626,40 @@ export class Config {
    * Get the current system prompt
    */
   getSystemPrompt(): string {
-    return (this as any).agentSystemPrompt || '';
+    return this.agentSystemPromptOverride ?? this.getBaseSystemPrompt();
+  }
+
+  getBaseSystemPrompt(): string {
+    const provider = this.getProvider();
+    const model = this.getModel();
+    const memory = this.getUserMemory();
+    const cache = this.baseSystemPromptCache;
+
+    if (
+      cache &&
+      cache.provider === provider &&
+      cache.model === model &&
+      cache.memory === memory
+    ) {
+      return cache.prompt;
+    }
+
+    const prompt = getCoreSystemPrompt(memory, {
+      getProvider: () => provider,
+      getModel: () => model,
+      getSystemPrompt: () => '',
+    });
+
+    this.baseSystemPromptCache = { prompt, provider, model, memory };
+    return prompt;
   }
 
   /**
    * Set a custom system prompt (used by AgentManager)
    */
   async setSystemPrompt(prompt: string): Promise<void> {
-    (this as any).agentSystemPrompt = prompt;
-    
+    this.agentSystemPromptOverride = prompt;
+
     // CRITICAL: DON'T refresh the client - that would lose conversation history!
     // Instead, update the system instruction in the EXISTING chat if one exists
     // This preserves all conversation context for long-running multi-agent tasks
@@ -635,8 +675,8 @@ export class Config {
    * Clear the custom system prompt and restore default
    */
   async clearSystemPrompt(): Promise<void> {
-    (this as any).agentSystemPrompt = undefined;
-    
+    this.agentSystemPromptOverride = undefined;
+
     // CRITICAL: DON'T refresh the client - preserve conversation history
     // When agentSystemPrompt is undefined, the system will use the base prompt
     // The base prompt will be applied on the next message automatically
@@ -825,6 +865,7 @@ export class Config {
 
   setUserMemory(newUserMemory: string): void {
     this.userMemory = newUserMemory;
+    this.invalidateBaseSystemPromptCache();
   }
 
   getGeminiMdFileCount(): number {

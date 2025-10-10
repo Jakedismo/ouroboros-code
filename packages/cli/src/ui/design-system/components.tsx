@@ -6,6 +6,7 @@
 
 import type { PropsWithChildren } from 'react';
 import { Box, type BoxProps, Text } from 'ink';
+import TextInput from 'ink-text-input';
 import { useDesignSystem } from './index.js';
 
 export type SurfaceVariant = 'base' | 'elevated' | 'sunken' | 'transparent';
@@ -156,5 +157,62 @@ export const SectionHeading = ({
       {icon ? `${icon} ` : ''}
       {content}
     </Text>
+  );
+};
+
+export interface TextInputFieldProps {
+  readonly label?: string;
+  readonly value: string;
+  readonly placeholder?: string;
+  readonly focus?: boolean;
+  readonly description?: string;
+  readonly showCursor?: boolean;
+  onChange?: (next: string) => void;
+  onSubmit?: (value: string) => void;
+}
+
+export const TextInputField = ({
+  label,
+  value,
+  placeholder,
+  focus = false,
+  description,
+  showCursor = true,
+  onChange,
+  onSubmit,
+}: TextInputFieldProps) => {
+  const design = useDesignSystem();
+  const borderColor = focus
+    ? design.colors.surface.focus
+    : design.colors.surface.border;
+  const labelMarginTop = label ? design.spacing.xs : design.spacing.none;
+
+  return (
+    <Box flexDirection="column" width="100%">
+      {label ? (
+        <Text color={design.colors.text.muted}>{label}</Text>
+      ) : null}
+      <Box
+        borderStyle="round"
+        borderColor={borderColor}
+        paddingX={1}
+        paddingY={0}
+        marginTop={labelMarginTop}
+      >
+        <TextInput
+          value={value}
+          placeholder={placeholder}
+          focus={focus}
+          showCursor={showCursor}
+          onChange={onChange}
+          onSubmit={onSubmit}
+        />
+      </Box>
+      {description ? (
+        <Box marginTop={design.spacing.xs}>
+          <Text color={design.colors.text.muted}>{description}</Text>
+        </Box>
+      ) : null}
+    </Box>
   );
 };
