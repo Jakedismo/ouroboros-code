@@ -500,7 +500,9 @@ export class MultiAgentExecutor {
   }
 
   private buildSpecialistInstructions(persona: AgentPersona): string {
-    const domainKnowledge = injectToolExamples(persona.systemPrompt, persona.specialties);
+    const domainKnowledge = injectToolExamples(persona.systemPrompt, persona.specialties, {
+      config: this.config,
+    });
 
     return [
       `You are ${persona.name} (${persona.id}) ${persona.emoji}.`,
