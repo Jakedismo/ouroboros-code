@@ -175,6 +175,7 @@ export interface ServerToolCallConfirmationDetails {
 export type ThoughtSummary = {
   subject: string;
   description: string;
+  raw?: Record<string, unknown>;
 };
 
 export type ServerGeminiContentEvent = {

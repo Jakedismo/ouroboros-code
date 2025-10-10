@@ -4,12 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { Agent } from '@openai/agents';
+import { z } from 'zod';
 import type { Config } from '../config/config.js';
 import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
-import type {
-  UnifiedAgentMessage,
-  UnifiedAgentStreamOptions,
-} from '../runtime/types.js';
 import { AgentManager } from './agentManager.js';
 import { AGENT_PERSONAS, getAgentById, type AgentPersona } from './personas.js';
 import {
@@ -17,6 +15,7 @@ import {
   type MultiAgentExecutionResult,
   type MultiAgentExecutionHooks,
 } from './multiAgentExecutor.js';
+import { convertJsonSchemaToZod } from '../runtime/jsonSchemaToZod.js';
 
 /**
  * JSON Schema for OpenAI Structured Outputs - Agent Selection Response
@@ -330,72 +329,98 @@ export class AgentSelectorService {
       throw new Error('Agent selector service is not initialized');
     }
 
-    const selectionPrompt = this.buildSelectionPrompt(userPrompt);
-    const schemaReference = JSON.stringify(
-      AGENT_SELECTION_SCHEMA.schema,
-      null,
-      2,
-    );
     const providerId = this.config.getProvider();
+    const selectionSchemaRaw = convertJsonSchemaToZod(AGENT_SELECTION_SCHEMA.schema);
+    if (!(selectionSchemaRaw instanceof z.ZodObject)) {
+      throw new Error('Agent selection schema must resolve to a Zod object.');
+    }
+    const selectionSchema = selectionSchemaRaw as z.ZodObject<{
+      agentIds: z.ZodArray<z.ZodString, 'many'>;
+      reasoning: z.ZodString;
+      confidence: z.ZodNumber;
+      taskCategory: z.ZodOptional<z.ZodString>;
+    }>;
+    const dispatcherInstructions = [
+      'You are the Ouroboros agent dispatcher. Select the ideal specialists to solve the task.',
+      'Return only the structured object that matches the documented schema—no prose, markdown, or additional keys.',
+      'Choose between three and ten distinct agent IDs and justify the selection succinctly.',
+    ].join('\n\n');
 
-    const session = await this.unifiedClient.createSession({
-      providerId,
-      model,
-      systemPrompt:
-        'You are the Ouroboros agent dispatcher. Select the best specialists and respond with strict JSON that matches the documented schema. Do not include prose.',
-      metadata: {
-        agentId: 'auto-dispatcher',
-        agentName: 'Auto Agent Dispatcher',
+    const userInput = `${this.buildSelectionPrompt(userPrompt)}\n\nUSER PROMPT:
+${userPrompt}`;
+
+    const { runResult } = await this.unifiedClient.runAgentOnce({
+      sessionConfig: {
+        providerId,
+        model,
+        systemPrompt: dispatcherInstructions,
+        metadata: {
+          agentId: 'auto-dispatcher',
+          agentName: 'Auto Agent Dispatcher',
+        },
       },
+      buildAgent: ({ session, modelSettings }) =>
+        new Agent({
+          name: 'auto-dispatcher',
+          instructions: dispatcherInstructions,
+          model: session.modelHandle!,
+          modelSettings,
+          tools: [],
+          outputType: selectionSchema,
+        }),
+      input: userInput,
     });
 
-    const streamOptions: UnifiedAgentStreamOptions = {};
-    if (providerId !== 'openai') {
-      streamOptions.temperature = 0.1;
-      streamOptions.maxOutputTokens = 4096;
-    } else {
-      streamOptions.temperature = 0.1;
+    const finalOutput = runResult.finalOutput;
+    if (!finalOutput || typeof finalOutput !== 'object') {
+      throw new Error('Selection model did not return structured output');
     }
 
-    const messages: UnifiedAgentMessage[] = [
-      {
-        role: 'user',
-        content: `${selectionPrompt}\n\nSchema reference (for validation only):\n${schemaReference}\n\nRespond **only** with JSON matching the fields above.\n\nUSER PROMPT:
-${userPrompt}`,
-      },
-    ];
-
-    let accumulated = '';
-
-    for await (const event of this.unifiedClient.streamResponse(
-      session,
-      messages,
-      streamOptions,
-    )) {
-      if (event.type === 'text-delta' && event.delta) {
-        accumulated += event.delta;
-      }
-      if (event.type === 'final') {
-        accumulated = event.message.content ?? accumulated;
-      }
-    }
-
-    console.log(
-      `[Agent Selector] Raw response for model ${model}:`,
-      accumulated.substring(0, 200),
-    );
-
-    if (!accumulated.trim()) {
-      throw new Error('Empty response from selection model');
-    }
-
-    const parsed = this.parseSelectionResponse(accumulated);
-
-    if (!parsed.agentIds || parsed.agentIds.length === 0) {
+    const parsed = finalOutput as Record<string, unknown>;
+    const rawAgentIds = parsed['agentIds'];
+    if (!Array.isArray(rawAgentIds) || rawAgentIds.length === 0) {
       throw new Error(`Model ${model} returned no agent IDs`);
     }
 
-    return parsed;
+    const uniqueAgentIds = Array.from(
+      new Set(
+        rawAgentIds.filter((value): value is string =>
+          typeof value === 'string' && value.trim().length > 0,
+        ),
+      ),
+    );
+
+    let clampedAgentIds = uniqueAgentIds.slice(0, 10);
+    if (clampedAgentIds.length === 0) {
+      throw new Error(`Model ${model} returned invalid agent IDs`);
+    }
+
+    if (clampedAgentIds.length < 3) {
+      const supplements = this.fallbackAgents.filter((id) =>
+        !clampedAgentIds.includes(id),
+      );
+      const expanded = clampedAgentIds.concat(supplements);
+      clampedAgentIds = Array.from(new Set(expanded)).slice(0, Math.max(3, expanded.length));
+    }
+
+    const reasoning =
+      typeof parsed['reasoning'] === 'string'
+        ? parsed['reasoning']
+        : 'No reasoning provided.';
+    const confidenceValue =
+      typeof parsed['confidence'] === 'number' ? parsed['confidence'] : 0;
+    const confidence = Math.min(1, Math.max(0, confidenceValue));
+    const taskCategory =
+      typeof parsed['taskCategory'] === 'string'
+        ? parsed['taskCategory']
+        : undefined;
+
+    return {
+      agentIds: clampedAgentIds,
+      reasoning,
+      confidence,
+      taskCategory,
+    };
   }
 
   async executeWithSelectedAgents(
@@ -529,114 +554,6 @@ User: "Review this Python code"
 → ["python-specialist", "code-quality-analyst"]
 
 Select the most appropriate agents for this user request:`;
-  }
-
-  /**
-   * Parse the GPT-5-nano response for agent selection
-   */
-  private parseSelectionResponse(response: string): {
-    agentIds: string[];
-    reasoning: string;
-    confidence: number;
-    taskCategory?: string;
-  } {
-    // Clean the response - trim whitespace and remove potential markdown formatting
-    let cleanedResponse = response.trim();
-
-    // Try to extract JSON if wrapped in markdown code blocks
-    const codeBlockMatch = cleanedResponse.match(
-      /```(?:json)?\s*([\s\S]*?)\s*```/,
-    );
-    if (codeBlockMatch) {
-      cleanedResponse = codeBlockMatch[1];
-    }
-
-    // Try to find JSON object in the response
-    const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      cleanedResponse = jsonMatch[0];
-    }
-
-    try {
-      // Try to parse JSON response
-      const parsed = JSON.parse(cleanedResponse);
-
-      // Validate and extract fields with defaults
-      const agentIds = Array.isArray(parsed.agentIds)
-        ? parsed.agentIds.filter((id: any) => typeof id === 'string')
-        : [];
-
-      if (agentIds.length === 0) {
-        throw new Error('No valid agent IDs found in JSON response');
-      }
-
-      return {
-        agentIds: agentIds,
-        reasoning: parsed.reasoning || 'Agent selection completed',
-        confidence:
-          typeof parsed.confidence === 'number'
-            ? Math.min(1, Math.max(0, parsed.confidence))
-            : 0.75,
-        taskCategory: parsed.taskCategory,
-      };
-    } catch (error) {
-      // Enhanced fallback parsing for non-JSON responses
-      console.warn(
-        'Failed to parse JSON response, attempting enhanced text parsing',
-      );
-      console.debug('Parse error:', error);
-      console.debug(
-        'Raw response (first 300 chars):',
-        response.substring(0, 300),
-      );
-
-      // Look for agent IDs mentioned in the text
-      const agentIds: string[] = [];
-      const responseLower = response.toLowerCase();
-
-      // First, try to find exact agent IDs
-      for (const agent of AGENT_PERSONAS) {
-        // Check for exact ID match or agent name mention
-        if (
-          responseLower.includes(agent.id.toLowerCase()) ||
-          responseLower.includes(
-            agent.name
-              .toLowerCase()
-              .replace(' specialist', '')
-              .replace(' engineer', ''),
-          )
-        ) {
-          agentIds.push(agent.id);
-        }
-      }
-
-      // If still no agents, look for specialty keywords
-      if (agentIds.length === 0) {
-        const words = responseLower.split(/\s+/);
-        for (const agent of AGENT_PERSONAS) {
-          const specialtyKeywords = agent.specialties
-            .join(' ')
-            .toLowerCase()
-            .split(/\s+/);
-          if (
-            words.some(
-              (word) => specialtyKeywords.includes(word) && word.length > 4,
-            )
-          ) {
-            agentIds.push(agent.id);
-            if (agentIds.length >= 2) break;
-          }
-        }
-      }
-
-      return {
-        agentIds:
-          agentIds.length > 0 ? agentIds.slice(0, 3) : ['systems-architect'], // Default to systems-architect if nothing found
-        reasoning: 'Parsed from text response due to JSON formatting issue',
-        confidence: 0.3,
-        taskCategory: undefined,
-      };
-    }
   }
 
   /**

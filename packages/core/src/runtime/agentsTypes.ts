@@ -237,6 +237,7 @@ export interface GenerateContentConfig {
   mediaResolution?: MediaResolution;
   speechConfig?: SpeechConfigUnion;
   audioTimestamp?: boolean;
+  parallelToolCalls?: boolean;
 }
 
 export interface GenerateContentParameters {

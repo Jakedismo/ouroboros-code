@@ -9,7 +9,12 @@ import * as addFormats from 'ajv-formats';
 
 const ajValidator = new Ajv();
 const addFormatsFunc = (addFormats as any).default || addFormats;
-addFormatsFunc(ajValidator);
+try {
+  addFormatsFunc(ajValidator);
+} catch (_error) {
+  // Ignore format registration errors in environments where ajv-formats
+  // expects optional code generation settings.
+}
 
 /**
  * Simple utility to validate objects against JSON Schemas

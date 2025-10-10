@@ -124,7 +124,7 @@ function extractFromParts(parts: Part[] | undefined): [string, Record<string, un
     }
 
     if (typeof part === 'string') {
-      const normalized = part.trim();
+      const normalized = (part as string).trim();
       if (normalized.length > 0) {
         textSegments.push(normalized);
       }
@@ -135,7 +135,7 @@ function extractFromParts(parts: Part[] | undefined): [string, Record<string, un
 
     const text = record['text'];
     if (typeof text === 'string' && text.trim().length > 0) {
-      textSegments.push(text.trim());
+      textSegments.push((text as string).trim());
       continue;
     }
 

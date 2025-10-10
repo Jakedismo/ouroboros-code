@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef, Fragment } from 'react';
 import {
   Box,
   type DOMElement,
@@ -194,7 +194,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const [updateInfo, setUpdateInfo] = useState<UpdateObject | null>(null);
   const { stdout } = useStdout();
   const nightly = version.includes('nightly');
-  const { history, addItem, clearItems, loadHistory } = useHistory();
+  const { history, addItem, updateItem, clearItems, loadHistory } = useHistory();
 
   const [idePromptAnswered, setIdePromptAnswered] = useState(false);
   const currentIDE = config.getIdeClient().getCurrentIde();
@@ -730,6 +730,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     agentsClient,
     history,
     addItem,
+    updateItem,
     config,
     settings,
     setDebugMessage,
@@ -1178,6 +1179,16 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   // Arbitrary threshold to ensure that items in the static area are large
   // enough but not too large to make the terminal hard to use.
   const staticAreaMaxItemHeight = Math.max(terminalHeight * 4, 100);
+  const blockedMcpServerMap: Record<string, unknown> = Object.fromEntries(
+    (config.getBlockedMcpServers?.() ?? []).map((server, index) => {
+      const record = server as Record<string, unknown>;
+      const key =
+        typeof record['name'] === 'string'
+          ? (record['name'] as string)
+          : `${record['extensionName'] ?? 'extension'}-${index}`;
+      return [key, record];
+    }),
+  );
   const placeholder = vimModeEnabled
     ? "  Press 'i' for INSERT mode and 'Esc' for NORMAL mode."
     : '  Type your message or @path/to/file';
@@ -1198,11 +1209,13 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
         )}
         <Box flexDirection="column" width={mainAreaWidth} flexGrow={1}>
           {!agentsClientReady ? (
-          <Box paddingTop={1}>
-            <Text color="yellow">Initializing {config.getProvider()} provider...</Text>
-          </Box>
-        ) : (
-          <>
+            <Box paddingTop={1}>
+              <Text color="yellow">
+                Initializing {config.getProvider()} provider...
+              </Text>
+            </Box>
+          ) : (
+            <Fragment>
             {/*
          * The Static component is an Ink intrinsic in which there can only be 1 per application.
          * Because of this restriction we're hacking it slightly by having a 'header' item here to
@@ -1271,7 +1284,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
             activeToolNames={toolRunState.activeToolNames}
             totalHistoryItems={history.length}
             model={currentModel}
-            isTrustedWorkspace={isTrustedFolderState}
+            isTrustedWorkspace={Boolean(isTrustedFolderState)}
             userTierLabel={userTierLabel}
             shellModeActive={shellModeActive}
             isCompact={isNarrow}
@@ -1389,7 +1402,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
               />
             </Box>
           ) : isAuthenticating ? (
-            <>
+            <Fragment>
               <AuthInProgress
                 onTimeout={() => {
                   setAuthError('Authentication timed out. Please try again.');
@@ -1411,7 +1424,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                   </Box>
                 </OverflowProvider>
               )}
-            </>
+            </Fragment>
           ) : isAuthDialogOpen ? (
             <Box flexDirection="column">
               <AuthDialog
@@ -1439,7 +1452,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
               config={config}
             />
           ) : (
-            <>
+            <Fragment>
               <LoadingIndicator
                 thought={
                   streamingState === StreamingState.WaitingForConfirmation ||
@@ -1554,7 +1567,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
               )}
 
               {isInputActive && (
-                <>
+                <Fragment>
                   <CommandHintBar hints={commandHints} isCompact={isNarrow} />
                   <InputPrompt
                     buffer={buffer}
@@ -1573,9 +1586,9 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                     vimHandleInput={vimHandleInput}
                     placeholder={placeholder}
                   />
-                </>
+                </Fragment>
               )}
-            </>
+            </Fragment>
           )}
 
           {initError && streamingState !== StreamingState.Responding && (
@@ -1593,7 +1606,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                   }
                 </Text>
               ) : (
-                <>
+                <Fragment>
                   <Text color={design.colors.status.error}>
                     Initialization Error: {initError}
                   </Text>
@@ -1601,7 +1614,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                     {' '}
                     Please check API key and configuration.
                   </Text>
-                </>
+                </Fragment>
               )}
             </Surface>
           )}
@@ -1627,8 +1640,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
             />
           )}
         </Box>
-          </>
-        )}
+            </Fragment>
+          )}
         {showContextPanel && (
           <Box width={contextPanelWidth} marginLeft={showContextPanel ? 1 : 0}>
             <ContextPanel
@@ -1637,12 +1650,13 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
               geminiMdFileCount={geminiMdFileCount}
               contextFileNames={contextFileNames}
               approvalMode={showAutoAcceptIndicator}
-              mcpServers={config.getMcpServers()}
-              blockedMcpServers={config.getBlockedMcpServers()}
+              mcpServers={(config.getMcpServers?.() ?? {}) as Record<string, unknown>}
+              blockedMcpServers={blockedMcpServerMap}
               compact={isNarrow}
             />
           </Box>
         )}
+      </Box>
       </Box>
     </StreamingContext.Provider>
   );

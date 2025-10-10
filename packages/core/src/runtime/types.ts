@@ -4,6 +4,7 @@ import type {
   ModelProvider,
   Tool as AgentsTool,
 } from '@openai/agents';
+import type { ZodTypeAny } from 'zod';
 
 export type UnifiedAgentRole = 'system' | 'user' | 'assistant' | 'tool';
 
@@ -31,6 +32,7 @@ export type UnifiedAgentsStreamEvent =
   | { type: 'text-delta'; delta: string }
   | { type: 'tool-call'; toolCall: UnifiedAgentToolCall }
   | { type: 'tool-approval'; approval: UnifiedAgentToolApproval }
+  | { type: 'reasoning'; reasoning: Array<{ text: string; raw?: Record<string, unknown> }> }
   | { type: 'final'; message: UnifiedAgentMessage }
   | { type: 'error'; error: Error }
   | { type: 'usage'; usage: Record<string, unknown> };
@@ -55,6 +57,12 @@ export interface UnifiedAgentSessionConfig {
   metadata?: Record<string, unknown>;
 }
 
+export interface StructuredOutputOptions {
+  schema: ZodTypeAny;
+  schemaSignature: string;
+  mimeType?: string;
+}
+
 export interface UnifiedAgentStreamOptions {
   temperature?: number;
   maxOutputTokens?: number;
@@ -62,6 +70,8 @@ export interface UnifiedAgentStreamOptions {
   reasoningEffort?: 'low' | 'medium' | 'high';
   toolsOverride?: AgentsTool[];
   toolsAugmentation?: AgentsTool[];
+  structuredOutput?: StructuredOutputOptions;
+  parallelToolCalls?: boolean;
 }
 
 export type { AgentStreamEvent, AgentContentFragment, AgentMessage, AgentToolInvocation, AgentToolResult, AgentFunctionCall, ToolFunctionDeclaration } from './agentsTypes.js';

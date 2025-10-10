@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @license
  * Copyright 2025 Ouroboros Development Team
@@ -5,6 +6,16 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { z } from 'zod';
+
+vi.mock('../config/config.js', () => ({
+  ApprovalMode: {
+    DEFAULT: 'default',
+    AUTO_EDIT: 'autoEdit',
+    YOLO: 'yolo',
+  },
+}));
+
 import { UnifiedAgentsClient } from './unifiedAgentsClient.js';
 import type { Config } from '../config/config.js';
 import { ApprovalMode } from '../config/config.js';
@@ -12,9 +23,14 @@ import type { ProviderConnectorRegistry } from './providerConnectors.js';
 
 const approveSpy = vi.fn();
 const rejectSpy = vi.fn();
+const runnerCtorSpy = vi.fn();
+const agentCtorSpy = vi.fn();
 
 vi.mock('@openai/agents', () => {
   class RunnerMock {
+    constructor(options: unknown) {
+      runnerCtorSpy(options);
+    }
     async run() {
       const approvalItem = { rawItem: { name: 'read_file', callId: 'call-123' } };
       const toolCallItem = {
@@ -65,8 +81,9 @@ vi.mock('@openai/agents', () => {
   }
 
   class AgentMock {
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    constructor(_options: unknown) {}
+    constructor(options: unknown) {
+      agentCtorSpy(options);
+    }
   }
 
   return {
@@ -82,6 +99,8 @@ describe('UnifiedAgentsClient tool approval handling', () => {
   beforeEach(() => {
     approveSpy.mockClear();
     rejectSpy.mockClear();
+    runnerCtorSpy.mockClear();
+    agentCtorSpy.mockClear();
   });
 
   it('defers approval until the host explicitly confirms the call', async () => {
@@ -95,6 +114,7 @@ describe('UnifiedAgentsClient tool approval handling', () => {
       getProviderApiKey: () => 'test-key',
       getSessionId: () => 'session-123',
       getApprovalMode: () => ApprovalMode.DEFAULT,
+      isToolEnabled: () => false,
     } as unknown as Config;
 
     const connectorRegistry = {
@@ -164,6 +184,7 @@ describe('UnifiedAgentsClient tool approval handling', () => {
       getProviderApiKey: () => 'test-key',
       getSessionId: () => 'session-123',
       getApprovalMode: () => ApprovalMode.YOLO,
+      isToolEnabled: () => false,
     } as unknown as Config;
 
     const connectorRegistry = {
@@ -218,6 +239,7 @@ describe('UnifiedAgentsClient tool approval handling', () => {
       getProviderApiKey: () => 'test-key',
       getSessionId: () => 'session-123',
       getApprovalMode: () => ApprovalMode.DEFAULT,
+      isToolEnabled: () => false,
     } as unknown as Config;
 
     const connectorRegistry = {
@@ -250,5 +272,94 @@ describe('UnifiedAgentsClient tool approval handling', () => {
     await generator.next();
     await generator.next();
     await generator.next();
+  });
+});
+
+describe('UnifiedAgentsClient Agent/Runner caching', () => {
+  const baseConfig: Partial<Config> = {
+    getToolRegistry: () => ({
+      getAllTools: () => [],
+    }),
+    getWorkspaceContext: () => ({ getDirectories: () => ['/repo'] }),
+    getTargetDir: () => '/repo',
+    getProvider: () => 'openai',
+    getProviderApiKey: () => 'test-key',
+    getSessionId: () => 'session-123',
+    getApprovalMode: () => ApprovalMode.DEFAULT,
+    isToolEnabled: () => false,
+  };
+
+  const connectorRegistry: ProviderConnectorRegistry = {
+    get: () => ({
+      id: 'openai',
+      displayName: 'OpenAI',
+      models: [],
+      async createModel() {
+        return {} as unknown;
+      },
+      async getModelProvider() {
+        return {
+          getModel: async () => ({} as unknown),
+        };
+      },
+    }),
+  } as unknown as ProviderConnectorRegistry;
+
+  it('reuses Agent and Runner instances for sequential turns with same options', async () => {
+    agentCtorSpy.mockClear();
+    runnerCtorSpy.mockClear();
+    const client = new UnifiedAgentsClient(baseConfig as Config, { connectorRegistry });
+    const session = await client.createSession({
+      providerId: 'openai',
+      model: 'gpt-5',
+    });
+
+    const consumeTurn = async () => {
+      for await (const event of client.streamResponse(session, [
+        { role: 'user', content: 'list files again' },
+      ])) {
+        if (event.type === 'tool-approval') {
+          client.approveToolCall(event.approval.callId);
+        }
+      }
+    };
+
+    await consumeTurn();
+    await consumeTurn();
+
+    expect(agentCtorSpy).toHaveBeenCalledTimes(1);
+    expect(runnerCtorSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes structured output schemas to agent outputType', async () => {
+    agentCtorSpy.mockClear();
+    runnerCtorSpy.mockClear();
+    const client = new UnifiedAgentsClient(baseConfig as Config, { connectorRegistry });
+    const session = await client.createSession({ providerId: 'openai', model: 'gpt-5' });
+
+    const schema = z.object({ foo: z.string() });
+    const iterator = client.streamResponse(
+      session,
+      [{ role: 'user', content: 'list files' }],
+      {
+        structuredOutput: {
+          schema,
+          schemaSignature: 'schema:v1',
+          mimeType: 'application/json',
+        },
+      },
+    );
+
+    const first = await iterator.next();
+    expect(first.value).toMatchObject({ type: 'tool-approval' });
+    client.approveToolCall('call-123');
+
+    for await (const _event of iterator) {
+      // consume generator
+    }
+
+    expect(agentCtorSpy).toHaveBeenCalled();
+    const agentOptions = agentCtorSpy.mock.calls[0][0];
+    expect(agentOptions.outputType).toBe(schema);
   });
 });

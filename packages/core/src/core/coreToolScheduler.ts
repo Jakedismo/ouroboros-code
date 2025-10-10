@@ -290,6 +290,54 @@ interface CoreToolSchedulerOptions {
   onEditorClose: () => void;
 }
 
+function stableSerialize(value: unknown): string {
+  if (value === undefined) {
+    return 'undefined';
+  }
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableSerialize(entry)).join(',')}]`;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  const entries = keys.map(
+    (key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`,
+  );
+  return `{${entries.join(',')}}`;
+}
+
+function normalizeArgsForFingerprint(args: unknown): unknown {
+  if (typeof args === 'string') {
+    try {
+      return normalizeArgsForFingerprint(JSON.parse(args));
+    } catch (_error) {
+      return args;
+    }
+  }
+  if (Array.isArray(args)) {
+    return args.map((entry) => normalizeArgsForFingerprint(entry));
+  }
+  if (args && typeof args === 'object') {
+    const record = args as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(record)) {
+      result[key] = normalizeArgsForFingerprint(record[key]);
+    }
+    return result;
+  }
+  return args;
+}
+
+function computeToolCallFingerprint(request: ToolCallRequestInfo): string {
+  const normalizedArgs = normalizeArgsForFingerprint(request.args);
+  return `${request.name}::${stableSerialize(normalizedArgs)}`;
+}
+
 export class CoreToolScheduler {
   private toolRegistry: ToolRegistry;
   private toolCalls: ToolCall[] = [];
@@ -301,6 +349,9 @@ export class CoreToolScheduler {
   private onEditorClose: () => void;
   private isFinalizingToolCalls = false;
   private isScheduling = false;
+  private readonly seenCallIds = new Set<string>();
+  private readonly callFingerprintById = new Map<string, string>();
+  private readonly activeFingerprints = new Set<string>();
   private requestQueue: Array<{
     request: ToolCallRequestInfo | ToolCallRequestInfo[];
     signal: AbortSignal;
@@ -369,6 +420,7 @@ export class CoreToolScheduler {
           const durationMs = existingStartTime
             ? Date.now() - existingStartTime
             : undefined;
+          this.releaseFingerprint(targetCallId);
           return {
             request: currentCall.request,
             tool: toolInstance,
@@ -383,6 +435,7 @@ export class CoreToolScheduler {
           const durationMs = existingStartTime
             ? Date.now() - existingStartTime
             : undefined;
+          this.releaseFingerprint(targetCallId);
           return {
             request: currentCall.request,
             status: 'error',
@@ -415,6 +468,7 @@ export class CoreToolScheduler {
           const durationMs = existingStartTime
             ? Date.now() - existingStartTime
             : undefined;
+          this.releaseFingerprint(targetCallId);
 
           // Preserve diff for cancelled edit operations
           let resultDisplay: ToolResultDisplay | undefined = undefined;
@@ -624,7 +678,35 @@ export class CoreToolScheduler {
           'Cannot schedule new tool calls while other tool calls are actively running (executing or awaiting approval).',
         );
       }
-      const requestsToProcess = Array.isArray(request) ? request : [request];
+      const rawRequests = Array.isArray(request) ? request : [request];
+      const existingCallIds = new Set(
+        this.toolCalls.map((call) => call.request.callId),
+      );
+      const batchFingerprints = new Set<string>();
+      const fingerprintByCallId = new Map<string, string>();
+      const requestsToProcess = rawRequests.filter((reqInfo) => {
+        if (!reqInfo?.callId) {
+          return true;
+        }
+        if (existingCallIds.has(reqInfo.callId) || this.seenCallIds.has(reqInfo.callId)) {
+          return false;
+        }
+
+        const fingerprint = computeToolCallFingerprint(reqInfo);
+        if (this.activeFingerprints.has(fingerprint) || batchFingerprints.has(fingerprint)) {
+          return false;
+        }
+
+        existingCallIds.add(reqInfo.callId);
+        this.seenCallIds.add(reqInfo.callId);
+        batchFingerprints.add(fingerprint);
+        fingerprintByCallId.set(reqInfo.callId, fingerprint);
+        return true;
+      });
+
+      if (requestsToProcess.length === 0) {
+        return;
+      }
 
       const newToolCalls: ToolCall[] = requestsToProcess.map(
         (reqInfo): ToolCall => {
@@ -662,13 +744,19 @@ export class CoreToolScheduler {
             };
           }
 
-          return {
+          const toolCall: ToolCall = {
             status: 'validating',
             request: reqInfo,
             tool: toolInstance,
             invocation: invocationOrError,
             startTime: Date.now(),
           };
+          const fingerprint = fingerprintByCallId.get(reqInfo.callId);
+          if (fingerprint) {
+            this.callFingerprintById.set(reqInfo.callId, fingerprint);
+            this.activeFingerprints.add(fingerprint);
+          }
+          return toolCall;
         },
       );
 
@@ -1075,5 +1163,14 @@ export class CoreToolScheduler {
         );
       }
     }
+  }
+
+  private releaseFingerprint(callId: string): void {
+    const fingerprint = this.callFingerprintById.get(callId);
+    if (!fingerprint) {
+      return;
+    }
+    this.callFingerprintById.delete(callId);
+    this.activeFingerprints.delete(fingerprint);
   }
 }

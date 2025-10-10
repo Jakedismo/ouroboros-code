@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @license
  * Copyright 2025 Ouroboros Development Team

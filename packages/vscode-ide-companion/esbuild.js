@@ -5,6 +5,11 @@
  */
 
 import esbuild from 'esbuild';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -31,6 +36,15 @@ const esbuildProblemMatcherPlugin = {
   },
 };
 
+const fdirAliasPlugin = {
+  name: 'fdir-alias',
+  setup(build) {
+    build.onResolve({ filter: /^fdir$/ }, () => ({
+      path: path.resolve(__dirname, '../core/node_modules/fdir/dist/index.js'),
+    }));
+  },
+};
+
 async function main() {
   const ctx = await esbuild.context({
     entryPoints: ['src/extension.ts'],
@@ -50,8 +64,8 @@ async function main() {
       'import.meta.url': 'import_meta.url',
     },
     plugins: [
-      /* add to the end of plugins array */
       esbuildProblemMatcherPlugin,
+      fdirAliasPlugin,
     ],
     loader: { '.node': 'file' },
   });

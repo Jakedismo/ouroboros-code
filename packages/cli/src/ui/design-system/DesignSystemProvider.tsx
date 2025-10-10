@@ -28,13 +28,28 @@ interface ThemeSnapshot {
 
 const DesignSystemContext = createContext<DesignTokens | null>(null);
 
+let cachedSnapshot: ThemeSnapshot | null = null;
+
 const getSnapshot = (): ThemeSnapshot => {
   const activeTheme = themeManager.getActiveTheme();
-  return {
+  const semantics = themeManager.getSemanticColors();
+
+  if (
+    cachedSnapshot &&
+    cachedSnapshot.name === activeTheme.name &&
+    cachedSnapshot.type === activeTheme.type &&
+    cachedSnapshot.semantics === semantics
+  ) {
+    return cachedSnapshot;
+  }
+
+  cachedSnapshot = {
     name: activeTheme.name,
     type: activeTheme.type,
-    semantics: themeManager.getSemanticColors(),
+    semantics,
   };
+
+  return cachedSnapshot;
 };
 
 const subscribe = (listener: () => void) => themeManager.subscribe(listener);

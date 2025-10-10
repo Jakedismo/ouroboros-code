@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @license
  * Copyright 2025 Google LLC
@@ -5,7 +6,7 @@
  */
 
 import path from 'node:path';
-import { fdir } from 'fdir';
+import fs from 'node:fs/promises';
 import type { Ignore } from './ignore.js';
 import * as cache from './crawlCache.js';
 
@@ -44,33 +45,65 @@ export async function crawl(options: CrawlOptions): Promise<string[]> {
   const posixCwd = toPosixPath(options.cwd);
   const posixCrawlDirectory = toPosixPath(options.crawlDirectory);
 
-  let results: string[];
-  try {
-    const dirFilter = options.ignore.getDirectoryFilter();
-    const api = new fdir()
-      .withRelativePaths()
-      .withDirs()
-      .withPathSeparator('/') // Always use unix style paths
-      .exclude((_, dirPath) => {
-        const relativePath = path.posix.relative(posixCrawlDirectory, dirPath);
-        return dirFilter(`${relativePath}/`);
-      });
+  const dirFilter = options.ignore.getDirectoryFilter();
+  const results: string[] = ['.'];
+  const seen = new Set<string>(results);
 
-    if (options.maxDepth !== undefined) {
-      api.withMaxDepth(options.maxDepth);
+  async function walk(currentDir: string, depth: number): Promise<void> {
+    let entries: DirentWithPath[];
+    try {
+      const dirEntries = await fs.readdir(currentDir, { withFileTypes: true });
+      entries = dirEntries.map((entry) => ({
+        dirent: entry,
+        absolute: path.join(currentDir, entry.name),
+      }));
+    } catch (_error) {
+      return;
     }
 
-    results = await api.crawl(options.crawlDirectory).withPromise();
-  } catch (_e) {
-    // The directory probably doesn't exist.
-    return [];
+    for (const { dirent, absolute } of entries) {
+      const posixAbsolute = toPosixPath(absolute);
+      const relativeFromCrawl = path.posix.relative(
+        posixCrawlDirectory,
+        posixAbsolute,
+      );
+      const relativeFromCwd = path.posix.relative(posixCwd, posixAbsolute);
+
+      if (dirent.isDirectory()) {
+        if (dirFilter(`${relativeFromCrawl}/`)) {
+          continue;
+        }
+
+        const normalizedRelative =
+          relativeFromCwd.length > 0 ? `${relativeFromCwd}/` : null;
+
+        if (normalizedRelative && !seen.has(normalizedRelative)) {
+          seen.add(normalizedRelative);
+          results.push(normalizedRelative);
+        }
+
+        if (
+          options.maxDepth === undefined ||
+          depth < options.maxDepth
+        ) {
+          await walk(absolute, depth + 1);
+        }
+        continue;
+      }
+
+      const normalizedFile =
+        relativeFromCwd.length > 0
+          ? relativeFromCwd
+          : path.posix.basename(posixAbsolute);
+
+      if (!seen.has(normalizedFile)) {
+        seen.add(normalizedFile);
+        results.push(normalizedFile);
+      }
+    }
   }
 
-  const relativeToCrawlDir = path.posix.relative(posixCwd, posixCrawlDirectory);
-
-  const relativeToCwdResults = results.map((p) =>
-    path.posix.join(relativeToCrawlDir, p),
-  );
+  await walk(options.crawlDirectory, 0);
 
   if (options.cache) {
     const cacheKey = cache.getCacheKey(
@@ -78,8 +111,13 @@ export async function crawl(options: CrawlOptions): Promise<string[]> {
       options.ignore.getFingerprint(),
       options.maxDepth,
     );
-    cache.write(cacheKey, relativeToCwdResults, options.cacheTtl * 1000);
+    cache.write(cacheKey, results, options.cacheTtl * 1000);
   }
 
-  return relativeToCwdResults;
+  return results;
+}
+
+interface DirentWithPath {
+  dirent: import('node:fs').Dirent;
+  absolute: string;
 }

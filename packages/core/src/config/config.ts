@@ -745,12 +745,70 @@ export class Config {
     return this.excludeTools;
   }
 
+  isToolEnabled(
+    toolIdentifiers: string[],
+    legacyClassName?: string,
+  ): boolean {
+    const candidates = new Set<string>(toolIdentifiers.filter(Boolean));
+    if (legacyClassName) {
+      candidates.add(legacyClassName);
+    }
+
+    if (candidates.size === 0) {
+      return false;
+    }
+
+    const excludeTools = this.getExcludeTools() ?? [];
+    for (const specifier of excludeTools) {
+      if (this.matchesExactToolSpecifier(specifier, candidates)) {
+        return false;
+      }
+    }
+
+    const coreTools = this.getCoreTools();
+    if (!coreTools || coreTools.length === 0) {
+      return true;
+    }
+
+    for (const specifier of coreTools) {
+      if (this.matchesCoreToolSpecifier(specifier, candidates)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   getToolDiscoveryCommand(): string | undefined {
     return this.toolDiscoveryCommand;
   }
 
   getToolCallCommand(): string | undefined {
     return this.toolCallCommand;
+  }
+
+  private matchesExactToolSpecifier(
+    specifier: string,
+    candidates: Set<string>,
+  ): boolean {
+    for (const name of candidates) {
+      if (specifier === name) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private matchesCoreToolSpecifier(
+    specifier: string,
+    candidates: Set<string>,
+  ): boolean {
+    for (const name of candidates) {
+      if (specifier === name || specifier.startsWith(`${name}(`)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   getMcpServerCommand(): string | undefined {
@@ -1040,6 +1098,7 @@ export class Config {
 
   async createToolRegistry(): Promise<ToolRegistry> {
     const registry = new ToolRegistry(this, this.eventEmitter);
+    const provider = this.getProvider();
 
     // helper to create & register core tools that are enabled
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1091,7 +1150,9 @@ export class Config {
     registerCoreTool(LocalShellTool, this);
     registerCoreTool(MemoryTool);
     registerCoreTool(UpdatePlanTool, this);
-    registerCoreTool(WebSearchTool, this);
+    if (provider !== 'openai') {
+      registerCoreTool(WebSearchTool, this);
+    }
     registerCoreTool(ImageGenerationTool, this);
 
     await registry.discoverAllTools();

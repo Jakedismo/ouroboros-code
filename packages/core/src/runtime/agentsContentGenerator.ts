@@ -15,7 +15,12 @@ import type {
 } from './genaiCompat.js';
 import type { Config } from '../config/config.js';
 import type { ContentGenerator } from '../core/contentGenerator.js';
-import type { UnifiedAgentMessage, UnifiedAgentStreamOptions, UnifiedAgentToolCall } from './types.js';
+import type {
+  StructuredOutputOptions,
+  UnifiedAgentMessage,
+  UnifiedAgentStreamOptions,
+  UnifiedAgentToolCall,
+} from './types.js';
 import type { AnyDeclarativeTool } from '../tools/tools.js';
 import { UnifiedAgentsClient } from './unifiedAgentsClient.js';
 import {
@@ -24,6 +29,8 @@ import {
 } from './historyConversion.js';
 import { SessionManager } from './sessionManager.js';
 import { Storage } from '../config/storage.js';
+import { z } from 'zod';
+import { convertJsonSchemaToZod, type JsonSchema } from './jsonSchemaToZod.js';
 
 interface AgentsContentGeneratorOptions {
   defaultModel?: string;
@@ -102,12 +109,14 @@ export class AgentsContentGenerator implements ContentGenerator {
   }> {
     const providerId = this.config.getProvider();
     const model = request.model || this.getDefaultModel();
-    const systemPrompt = this.buildSystemPrompt(request);
-    const messages = this.applySchemaInstruction(
-      this.convertContentsToMessages(request.contents),
-      request,
-    );
+    const responseStrategy = this.resolveResponseStrategy(request);
+    const systemPrompt = this.buildSystemPrompt(request, responseStrategy.schemaInstruction);
+    let messages = this.convertContentsToMessages(request.contents);
+    messages = this.applySchemaInstruction(messages, responseStrategy.schemaInstruction);
     const streamOptions = this.buildStreamOptions(request);
+    if (responseStrategy.structuredOutput) {
+      streamOptions.structuredOutput = responseStrategy.structuredOutput;
+    }
 
     // Pass session ID through metadata for persistence
     const sessionId = this.config.getSessionId();
@@ -124,6 +133,7 @@ export class AgentsContentGenerator implements ContentGenerator {
       let finalText = '';
       const functionCalls: FunctionCall[] = [];
       let usage: GenerateContentResponseUsageMetadata | undefined;
+      const reasoningSegments: Array<{ text: string; raw?: Record<string, unknown> }> = [];
 
       for await (const event of this.client.streamResponse(
         session,
@@ -145,6 +155,11 @@ export class AgentsContentGenerator implements ContentGenerator {
           continue;
         }
 
+        if (event.type === 'reasoning') {
+          reasoningSegments.push(...event.reasoning);
+          continue;
+        }
+
         if (event.type === 'error') {
           throw event.error;
         }
@@ -154,6 +169,13 @@ export class AgentsContentGenerator implements ContentGenerator {
           if (typeof content === 'string' && content.length > 0) {
             finalText = content;
           }
+        }
+      }
+
+      if (reasoningSegments.length > 0) {
+        const reasoningText = reasoningSegments.map((segment) => segment.text).filter(Boolean).join('\n');
+        if (reasoningText) {
+          finalText = [finalText, reasoningText].filter(Boolean).join('\n\n');
         }
       }
 
@@ -198,6 +220,20 @@ export class AgentsContentGenerator implements ContentGenerator {
           continue;
         }
 
+        if (event.type === 'reasoning') {
+          for (const segment of event.reasoning) {
+            if (!segment.text) {
+              continue;
+            }
+            yield self.buildResponseChunk({
+              thoughts: [segment],
+              usage: pendingUsage,
+            });
+            pendingUsage = undefined;
+          }
+          continue;
+        }
+
         if (event.type === 'error') {
           throw event.error;
         }
@@ -230,8 +266,10 @@ export class AgentsContentGenerator implements ContentGenerator {
   private buildStreamOptions(request: GenerateContentParameters): UnifiedAgentStreamOptions {
     const config = request.config ?? {};
     const streamOptions: UnifiedAgentStreamOptions = {};
+    const provider = this.config.getProvider();
+    const model = request.model || this.getDefaultModel();
 
-    if (this.config.getProvider() !== 'openai') {
+    if (provider !== 'openai') {
       if (typeof config.maxOutputTokens === 'number') {
         streamOptions.maxOutputTokens = config.maxOutputTokens;
       }
@@ -240,12 +278,65 @@ export class AgentsContentGenerator implements ContentGenerator {
       }
     }
 
+    const parallelOverride = config.parallelToolCalls;
+    if (typeof parallelOverride === 'boolean') {
+      streamOptions.parallelToolCalls = parallelOverride;
+    } else {
+      streamOptions.parallelToolCalls = this.shouldEnableParallelToolCalls(model, provider);
+    }
+
     return streamOptions;
   }
 
-  private buildSystemPrompt(request: GenerateContentParameters): string | undefined {
+  private resolveResponseStrategy(
+    request: GenerateContentParameters,
+  ): {
+    schemaInstruction?: string;
+    structuredOutput?: StructuredOutputOptions;
+  } {
+    const config = request.config ?? {};
+    const schema = config.responseJsonSchema;
+    const mimeType = typeof config.responseMimeType === 'string' ? config.responseMimeType : undefined;
+    const provider = this.config.getProvider();
+
+    if (provider === 'openai' && (schema || mimeType === 'application/json')) {
+      if (schema && typeof schema === 'object') {
+        try {
+          const zodSchema = convertJsonSchemaToZod(schema as JsonSchema);
+          const signature = JSON.stringify(schema);
+          return {
+            structuredOutput: {
+              schema: zodSchema,
+              schemaSignature: signature,
+              mimeType: mimeType ?? 'application/json',
+            },
+          };
+        } catch (error) {
+          console.warn(
+            'Failed to convert response schema to structured output. Falling back to prompt instructions.',
+            error,
+          );
+        }
+      } else {
+        return {
+          structuredOutput: {
+            schema: z.unknown(),
+            schemaSignature: `mime:${mimeType ?? 'application/json'}`,
+            mimeType: mimeType ?? 'application/json',
+          },
+        };
+      }
+    }
+
+    const schemaInstruction = this.describeExpectedResponse(schema, mimeType);
+    return { schemaInstruction };
+  }
+
+  private buildSystemPrompt(
+    request: GenerateContentParameters,
+    schemaInstruction?: string,
+  ): string | undefined {
     const basePrompt = this.extractSystemPrompt(request.config?.systemInstruction);
-    const schemaInstruction = this.describeExpectedResponse(request);
     const runtimePrimer = this.getRuntimePrimer();
 
     const segments = [basePrompt, runtimePrimer, schemaInstruction].filter(
@@ -261,9 +352,8 @@ export class AgentsContentGenerator implements ContentGenerator {
 
   private applySchemaInstruction(
     messages: UnifiedAgentMessage[],
-    request: GenerateContentParameters,
+    schemaInstruction?: string,
   ): UnifiedAgentMessage[] {
-    const schemaInstruction = this.describeExpectedResponse(request);
     if (!schemaInstruction) {
       return messages;
     }
@@ -282,11 +372,10 @@ export class AgentsContentGenerator implements ContentGenerator {
     return messages;
   }
 
-  private describeExpectedResponse(request: GenerateContentParameters): string | undefined {
-    const config = request.config ?? {};
-    const schema = config.responseJsonSchema;
-    const mimeType = typeof config.responseMimeType === 'string' ? config.responseMimeType : undefined;
-
+  private describeExpectedResponse(
+    schema: unknown,
+    mimeType?: string,
+  ): string | undefined {
     if (!schema && !mimeType) {
       return undefined;
     }
@@ -356,13 +445,58 @@ export class AgentsContentGenerator implements ContentGenerator {
     return (content as string[]).join('\n');
   }
 
+  private serializeParts(parts: Part[]): string {
+    return parts
+      .map((part) => {
+        if (!part) {
+          return '';
+        }
+        if (typeof part === 'string') {
+          return part;
+        }
+        if ('text' in part && typeof part.text === 'string') {
+          return part.text;
+        }
+        if ('functionCall' in part) {
+          try {
+            return JSON.stringify(part.functionCall);
+          } catch (_error) {
+            return '[function_call]';
+          }
+        }
+        if ('inlineData' in part) {
+          return '[binary-data]';
+        }
+        return '';
+      })
+      .filter((segment) => segment.length > 0)
+      .join('\n');
+  }
+
   private buildResponseChunk(options: {
     textParts?: string[];
     functionCalls?: FunctionCall[];
     finishReason?: FinishReason;
     usage?: GenerateContentResponseUsageMetadata;
+    thoughts?: Array<{ text: string; raw?: Record<string, unknown> }>;
   }): GenerateContentResponse {
     const parts: Part[] = [];
+
+    for (const thought of options.thoughts ?? []) {
+      if (!thought.text) {
+        continue;
+      }
+      const part: Part = {
+        thought: thought.text,
+      };
+      if (thought.raw) {
+        part.metadata = {
+          ...(part.metadata ?? {}),
+          reasoningRaw: thought.raw,
+        };
+      }
+      parts.push(part);
+    }
 
     for (const text of options.textParts ?? []) {
       if (typeof text === 'string' && text.length > 0) {
@@ -459,6 +593,16 @@ export class AgentsContentGenerator implements ContentGenerator {
 
   private getDefaultModel(): string {
     return this.options.defaultModel || this.config.getModel();
+  }
+
+  private shouldEnableParallelToolCalls(model: string | undefined, provider: string): boolean {
+    if (!model) {
+      return false;
+    }
+    if (provider !== 'openai') {
+      return false;
+    }
+    return /^gpt-5/i.test(model);
   }
 
   private extractSystemPrompt(value: unknown): string | undefined {

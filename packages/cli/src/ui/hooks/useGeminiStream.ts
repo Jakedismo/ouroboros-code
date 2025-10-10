@@ -118,6 +118,7 @@ export const useGeminiStream = (
   agentsClient: AgentsClient,
   history: HistoryItem[],
   addItem: UseHistoryManagerReturn['addItem'],
+  updateItem: UseHistoryManagerReturn['updateItem'],
   config: Config,
   settings: LoadedSettings,
   onDebugMessage: (message: string) => void,
@@ -141,6 +142,8 @@ export const useGeminiStream = (
   const [pendingHistoryItemRef, setPendingHistoryItem] =
     useStateAndRef<HistoryItemWithoutId | null>(null);
   const processedMemoryToolsRef = useRef<Set<string>>(new Set());
+  const toolHistoryEntryRef = useRef(new Map<string, number>());
+  const reasoningItemsRef = useRef<Array<{ text: string; raw?: Record<string, unknown> }>>([]);
   const { startNewPrompt, getPromptCount } = useSessionStats();
   const storage = config.storage;
   const logger = useLogger(storage);
@@ -154,17 +157,7 @@ export const useGeminiStream = (
   const [toolCalls, scheduleToolCalls, markToolsAsSubmitted] =
     useReactToolScheduler(
       async (completedToolCallsFromScheduler) => {
-        // This onComplete is called when ALL scheduled tools for a given batch are done.
         if (completedToolCallsFromScheduler.length > 0) {
-          // Add the final state of these tools to the history for display.
-          addItem(
-            mapTrackedToolCallsToDisplay(
-              completedToolCallsFromScheduler as TrackedToolCall[],
-            ),
-            Date.now(),
-          );
-
-          // Handle tool response submission immediately when tools complete
           await handleCompletedTools(
             completedToolCallsFromScheduler as TrackedToolCall[],
           );
@@ -212,6 +205,7 @@ export const useGeminiStream = (
       }
     >(),
   );
+  const processedCompletionCallIdsRef = useRef(new Set<string>());
 
   const pendingToolApprovalsRef = useRef(new Map<string, ToolCallConfirmationDetails>());
   const [pendingApprovalIds, setPendingApprovalIds] = useState<string[]>([]);
@@ -1063,6 +1057,15 @@ export const useGeminiStream = (
         switch (event.type) {
           case ServerGeminiEventType.Thought:
             setThought(event.value);
+            if (event.value && typeof event.value === 'object') {
+              const description = event.value.description ?? '';
+              if (typeof description === 'string' && description.trim().length > 0) {
+                reasoningItemsRef.current.push({
+                  text: description.trim(),
+                  raw: event.value.raw,
+                });
+              }
+            }
             break;
           case ServerGeminiEventType.Content:
             geminiMessageBuffer = handleContentEvent(
@@ -1154,10 +1157,16 @@ export const useGeminiStream = (
 
       const userMessageTimestamp = Date.now();
 
+      if (!options?.isContinuation) {
+        processedCompletionCallIdsRef.current.clear();
+      }
+
       // Reset quota error flag when starting a new query (not a continuation)
       if (!options?.isContinuation) {
         setModelSwitchedFromQuotaError(false);
         config.setQuotaErrorOccurred(false);
+        reasoningItemsRef.current = [];
+        toolHistoryEntryRef.current.clear();
       }
 
       abortControllerRef.current = new AbortController();
@@ -1445,7 +1454,39 @@ export const useGeminiStream = (
 
   const handleCompletedTools = useCallback(
     async (completedToolCallsFromScheduler: TrackedToolCall[]) => {
-      for (const completed of completedToolCallsFromScheduler) {
+      const dedupedCompletions = completedToolCallsFromScheduler.filter((call) => {
+        if (processedCompletionCallIdsRef.current.has(call.request.callId)) {
+          return false;
+        }
+        processedCompletionCallIdsRef.current.add(call.request.callId);
+        return true;
+      });
+
+      if (dedupedCompletions.length === 0) {
+        return;
+      }
+
+      const displayGroup = mapTrackedToolCallsToDisplay(
+        dedupedCompletions as TrackedToolCall[],
+      ) as HistoryItemToolGroup;
+      const callKey = displayGroup.tools
+        .map((tool) => tool.callId)
+        .sort()
+        .join('|');
+      const timestamp = Date.now();
+
+      if (toolHistoryEntryRef.current.has(callKey)) {
+        const existingId = toolHistoryEntryRef.current.get(callKey)!;
+        updateItem(existingId, (prev) => ({
+          ...(prev as HistoryItemToolGroup),
+          tools: displayGroup.tools,
+        }));
+      } else {
+        const newId = addItem(displayGroup, timestamp);
+        toolHistoryEntryRef.current.set(callKey, newId);
+      }
+
+      for (const completed of dedupedCompletions) {
         if ('response' in completed) {
           const resolver = toolExecutionResolversRef.current.get(
             completed.request.callId,
@@ -1457,8 +1498,7 @@ export const useGeminiStream = (
         }
       }
 
-      const completedAndReadyToSubmitTools =
-        completedToolCallsFromScheduler.filter(
+      const completedAndReadyToSubmitTools = dedupedCompletions.filter(
           (
             tc: TrackedToolCall,
           ): tc is TrackedCompletedToolCall | TrackedCancelledToolCall => {
@@ -1542,12 +1582,32 @@ export const useGeminiStream = (
           (toolCall) => toolCall.request.callId,
         );
         markToolsAsSubmitted(callIdsToMarkAsSubmitted);
+        reasoningItemsRef.current = [];
         return;
       }
 
-      const responsesToSend: GeminiPart[] = geminiTools.flatMap(
-        (toolCall) => toolCall.response.responseParts,
-      );
+      const reasoningParts: GeminiPart[] = reasoningItemsRef.current
+        .filter((item) => typeof item.text === 'string' && item.text.trim().length > 0)
+        .map((item) => {
+          const part: GeminiPart = { thought: item.text.trim() } as GeminiPart;
+          if (item.raw) {
+            const currentMetadata = (part as Record<string, unknown>)['metadata'];
+            const normalizedMetadata =
+              currentMetadata && typeof currentMetadata === 'object'
+                ? (currentMetadata as Record<string, unknown>)
+                : {};
+            (part as Record<string, unknown>)['metadata'] = {
+              ...normalizedMetadata,
+              reasoningRaw: item.raw,
+            };
+          }
+          return part;
+        });
+
+      const responsesToSend: GeminiPart[] = [
+        ...reasoningParts,
+        ...geminiTools.flatMap((toolCall) => toolCall.response.responseParts),
+      ];
       const callIdsToMarkAsSubmitted = geminiTools.map(
         (toolCall) => toolCall.request.callId,
       );
@@ -1560,6 +1620,7 @@ export const useGeminiStream = (
 
       // Don't continue if model was switched due to quota error
       if (modelSwitchedFromQuotaError) {
+        reasoningItemsRef.current = [];
         return;
       }
 
@@ -1590,6 +1651,7 @@ export const useGeminiStream = (
           prompt_ids[0],
         );
         console.log('[DEBUG] Tool continuation submitted successfully');
+        reasoningItemsRef.current = [];
       } catch (error) {
         console.error('[DEBUG] Failed to submit tool continuation:', error);
         // If continuation fails, ensure we reset the responding state

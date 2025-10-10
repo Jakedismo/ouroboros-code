@@ -4,19 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { tool as createAgentsTool, type Tool as AgentsTool } from '@openai/agents';
+import { Agent, type ModelSettings, type Tool as AgentsTool } from '@openai/agents';
 import { z } from 'zod';
 import type { Config } from '../config/config.js';
 import { UnifiedAgentsClient } from '../runtime/unifiedAgentsClient.js';
-import type {
-  UnifiedAgentMessage,
-  UnifiedAgentStreamOptions,
-} from '../runtime/types.js';
+import type { UnifiedAgentSession } from '../runtime/types.js';
+import { adaptToolsToAgents } from '../runtime/toolAdapter.js';
+import type { ToolCallRequestInfo, ToolCallResponseInfo } from '../core/turn.js';
 import type { AgentPersona } from './personas.js';
-import { getAgentById } from './personas.js';
 import { injectToolExamples } from './toolInjector.js';
 import type { ToolResultDisplay, ToolErrorType } from '../tools/tools.js';
 import { toolResponsePartsToString } from '../utils/toolResponseStringifier.js';
+import { createHostedWebSearchTool, HOSTED_WEB_SEARCH_NAME } from '../tools/web-search-sdk.js';
 
 interface MultiAgentExecutorOptions {
   defaultModel?: string;
@@ -83,10 +82,45 @@ export interface MultiAgentExecutionResult {
   durationMs: number;
 }
 
-const MAX_EXECUTION_PASSES = 6;
-const MAX_AGENTS_PER_RUN = 6;
+const ORCHESTRATOR_AGENT_NAME = 'ouroboros-orchestrator';
+const MIN_SPECIALISTS = 3;
+const MAX_SPECIALISTS = 10;
 
-const DEFAULT_MODEL_FALLBACK = 'gpt-5-codex';
+const SPECIALIST_OUTPUT_SCHEMA = z.object({
+  analysis: z.string().min(1, 'analysis is required'),
+  solution: z.string().default(''),
+  confidence: z.number().min(0).max(1).default(0.5),
+  handoff: z.array(z.string()).max(MAX_SPECIALISTS).default([]),
+});
+
+type SpecialistSchema = typeof SPECIALIST_OUTPUT_SCHEMA;
+
+const ORCHESTRATOR_OUTPUT_SCHEMA = z.object({
+  finalResponse: z.string().min(1, 'finalResponse is required'),
+  reasoning: z.string().min(1, 'reasoning is required'),
+});
+
+type OrchestratorSchema = typeof ORCHESTRATOR_OUTPUT_SCHEMA;
+
+type SpecialistStructuredOutput = z.infer<SpecialistSchema>;
+type OrchestratorStructuredOutput = z.infer<OrchestratorSchema>;
+
+type SpecialistMemoryEntry = {
+  lastOutput?: SpecialistStructuredOutput;
+  history: SpecialistStructuredOutput[];
+};
+
+interface OrchestrationRunContext {
+  userPrompt: string;
+  memory: Record<string, SpecialistMemoryEntry>;
+}
+
+interface BuildAgentToolsOptions {
+  session: UnifiedAgentSession;
+  persona?: AgentPersona;
+  toolEventLog?: Map<string, AgentToolEvent[]>;
+  hooks?: MultiAgentExecutionHooks;
+}
 
 export class MultiAgentExecutor {
   private readonly defaultModel: string;
@@ -97,7 +131,7 @@ export class MultiAgentExecutor {
     private readonly config: Config,
     options: MultiAgentExecutorOptions = {},
   ) {
-    this.defaultModel = options.defaultModel ?? DEFAULT_MODEL_FALLBACK;
+    this.defaultModel = options.defaultModel ?? 'gpt-5-codex';
     this.providedClient = options.client;
     this.disableDelegation = options.disableDelegation ?? false;
   }
@@ -107,578 +141,403 @@ export class MultiAgentExecutor {
     seedAgents: AgentPersona[],
     hooks?: MultiAgentExecutionHooks,
   ): Promise<MultiAgentExecutionResult> {
-    if (!this.disableDelegation) {
-      const toolEventLog = new Map<string, AgentToolEvent[]>();
-      const unifiedClient = this.createUnifiedClient(toolEventLog, hooks);
-
-      try {
-        return await this.executeWithDelegation(
-          userPrompt,
-          seedAgents,
-          unifiedClient,
-          toolEventLog,
-          hooks,
-        );
-      } catch (error) {
-        console.warn(
-          'Delegated multi-agent execution failed, falling back to sequential mode.',
-          error,
-        );
-      }
+    if (seedAgents.length === 0) {
+      throw new Error('Delegated execution requires at least one specialist agent.');
     }
 
-    const fallbackToolEventLog = new Map<string, AgentToolEvent[]>();
-    const fallbackClient = this.createUnifiedClient(
-      fallbackToolEventLog,
-      hooks,
-    );
-
-    return this.executeSequential(
-      userPrompt,
-      seedAgents,
-      fallbackClient,
-      fallbackToolEventLog,
-      hooks,
-    );
-  }
-
-  private createUnifiedClient(
-    toolEventLog: Map<string, AgentToolEvent[]>,
-    hooks?: MultiAgentExecutionHooks,
-  ): UnifiedAgentsClient {
-    if (this.providedClient) {
-      return this.providedClient;
+    if (this.disableDelegation) {
+      console.warn('[MultiAgentExecutor] disableDelegation is deprecated; running orchestrated flow regardless.');
     }
 
-    return new UnifiedAgentsClient(this.config, {
-      onToolExecuted: ({ session, request, response }) => {
-        const meta = session.metadata;
-        const agentId =
-          meta && typeof meta['agentId'] === 'string'
-            ? (meta['agentId'] as string)
-            : undefined;
-        if (!agentId) return;
-        const list = toolEventLog.get(agentId) ?? [];
-        const event: AgentToolEvent = {
-          callId: request.callId,
-          toolName: request.name,
-          arguments: request.args,
-          outputText: toolResponsePartsToString(response.responseParts),
-          resultDisplay: response.resultDisplay,
-          errorMessage: response.error?.message,
-          errorType: response.errorType,
-          timestamp: Date.now(),
-        };
-        list.push(event);
-        toolEventLog.set(agentId, list);
-
-        if (hooks?.onToolEvent) {
-          const persona = getAgentById(agentId);
-          if (persona) {
-            void hooks.onToolEvent({ agent: persona, event });
-          }
-        }
-      },
-    });
+    const client = this.providedClient ?? new UnifiedAgentsClient(this.config);
+    return this.executeWithDelegation(userPrompt, seedAgents, client, hooks);
   }
 
   private async executeWithDelegation(
     userPrompt: string,
     seedAgents: AgentPersona[],
     unifiedClient: UnifiedAgentsClient,
-    toolEventLog: Map<string, AgentToolEvent[]>,
     hooks?: MultiAgentExecutionHooks,
   ): Promise<MultiAgentExecutionResult> {
-    if (seedAgents.length === 0) {
-      throw new Error('Delegated execution requires at least one specialist agent.');
-    }
-
     const startedAt = Date.now();
-    const executed = new Map<string, AgentRunResult>();
+
+    const toolEventLog = new Map<string, AgentToolEvent[]>();
+    const personaByAgentName = new Map<string, AgentPersona>();
+    const agentResultsById = new Map<string, AgentRunResult>();
     const timeline: Array<{ wave: number; agents: AgentPersona[] }> = [];
-    const availableAgents = new Map<string, AgentPersona>();
-
-    for (const agent of seedAgents) {
-      availableAgents.set(agent.id, agent);
-    }
-
-    const delegationTool = this.createDelegationTool({
+    const waveByAgentId = new Map<string, number>();
+    const runContext: OrchestrationRunContext = {
       userPrompt,
-      unifiedClient,
-      toolEventLog,
-      executed,
-      timeline,
-      hooks,
-      availableAgents,
-    });
-
-    const session = await unifiedClient.createSession({
-      providerId: this.config.getProvider(),
-      model: this.defaultModel,
-      systemPrompt: this.buildOrchestratorSystemPrompt(seedAgents),
-      metadata: {
-        agentId: 'orchestrator',
-        agentName: 'Master Orchestrator',
-      },
-    });
-
-    const streamOptions: UnifiedAgentStreamOptions = {
-      temperature: 0.4,
-      toolsAugmentation: [delegationTool],
+      memory: {},
     };
 
-    if (this.config.getProvider() !== 'openai') {
-      streamOptions.maxOutputTokens = 4096;
-    }
+    let currentWave = 0;
 
-    const messages: UnifiedAgentMessage[] = [
-      {
-        role: 'user',
-        content: this.buildOrchestratorUserPrompt(userPrompt, seedAgents),
-      },
-    ];
-
-    let accumulated = '';
-
-    for await (const event of unifiedClient.streamResponse(
-      session,
-      messages,
-      streamOptions,
-    )) {
-      if (event.type === 'text-delta' && event.delta) {
-        accumulated += event.delta;
-      }
-      if (event.type === 'final') {
-        accumulated = event.message.content ?? accumulated;
-      }
-    }
-
-    const agentResults = Array.from(executed.values());
-
-    if (agentResults.length === 0) {
-      throw new Error('Orchestrator session finished without consulting any specialists.');
-    }
-
-    const [finalResponse, aggregateReasoning] = this.splitFinalResponse(
-      accumulated.trim(),
-    );
-
-    return {
-      agentResults,
-      finalResponse,
-      aggregateReasoning,
-      timeline,
-      totalAgents: agentResults.length,
-      durationMs: Date.now() - startedAt,
-    };
-  }
-
-  private async executeSequential(
-    userPrompt: string,
-    seedAgents: AgentPersona[],
-    unifiedClient: UnifiedAgentsClient,
-    toolEventLog: Map<string, AgentToolEvent[]>,
-    hooks?: MultiAgentExecutionHooks,
-  ): Promise<MultiAgentExecutionResult> {
-    const executed = new Map<string, AgentRunResult>();
-    const queue: AgentPersona[] = [...seedAgents];
-    const timeline: Array<{ wave: number; agents: AgentPersona[] }> = [];
-    const startedAt = Date.now();
-    let passes = 0;
-
-    while (
-      queue.length > 0 &&
-      passes < MAX_EXECUTION_PASSES &&
-      executed.size < MAX_AGENTS_PER_RUN
-    ) {
-      const agent = queue.shift();
-      if (!agent) break;
-
-      passes += 1;
-      timeline.push({ wave: passes, agents: [agent] });
-
-      if (hooks?.onAgentStart) {
-        await hooks.onAgentStart({
-          agent,
-          wave: passes,
-          pendingAgents: [...queue],
-          previousResults: Array.from(executed.values()),
-        });
-      }
-
-      const result = await this.runSingleAgent(
-        agent,
-        userPrompt,
-        unifiedClient,
-        toolEventLog,
-        Array.from(executed.values()),
-        passes,
-        hooks,
-      );
-
-      if (!result) {
-        continue;
-      }
-
-      executed.set(result.agent.id, result);
-
-      if (hooks?.onAgentComplete) {
-        await hooks.onAgentComplete({
-          agent,
-          wave: passes,
-          result,
-          completedAgents: executed.size,
-          remainingAgents: queue.length,
-        });
-      }
-
-      for (const handoffId of result.handoffAgentIds) {
-        if (executed.has(handoffId)) continue;
-        if (queue.some((queuedAgent) => queuedAgent.id === handoffId)) continue;
-        const persona = getAgentById(handoffId);
+    const onAgentEvent = (
+      event:
+        | { type: 'agent_start'; agent: Agent }
+        | { type: 'agent_end'; agent: Agent; output: string }
+        | { type: 'agent_handoff'; from: Agent; to: Agent },
+    ) => {
+      if (event.type === 'agent_handoff') {
+        const persona = personaByAgentName.get(event.to.name);
         if (persona) {
-          queue.push(persona);
+          currentWave += 1;
+          waveByAgentId.set(persona.id, currentWave);
+          timeline.push({ wave: currentWave, agents: [persona] });
         }
+        return;
       }
-    }
 
-    const agentResults = Array.from(executed.values());
-    const { finalResponse, aggregateReasoning } = await this.synthesize(
-      userPrompt,
-      agentResults,
-      unifiedClient,
-    );
+      if (event.type === 'agent_start') {
+        const persona = personaByAgentName.get(event.agent.name);
+        if (!persona) return;
 
-    return {
-      agentResults,
-      finalResponse,
-      aggregateReasoning,
-      timeline,
-      totalAgents: agentResults.length,
-      durationMs: Date.now() - startedAt,
-    };
-  }
+        const wave = waveByAgentId.get(persona.id) ?? (() => {
+          currentWave += 1;
+          waveByAgentId.set(persona.id, currentWave);
+          timeline.push({ wave: currentWave, agents: [persona] });
+          return currentWave;
+        })();
 
-  private async runSingleAgent(
-    agent: AgentPersona,
-    userPrompt: string,
-    unifiedClient: UnifiedAgentsClient,
-    toolEventLog: Map<string, AgentToolEvent[]>,
-    previousResults: AgentRunResult[],
-    wave: number,
-    hooks?: MultiAgentExecutionHooks,
-    directive?: string,
-  ): Promise<AgentRunResult | null> {
-    try {
-      const { rawText, parsed } = await this.executeAgentSession(
-        agent,
-        userPrompt,
-        unifiedClient,
-        previousResults,
-        wave,
-        hooks,
-        directive,
-      );
-      const agentToolEvents = toolEventLog.get(agent.id) ?? [];
-
-      return {
-        agent,
-        analysis: parsed.analysis ?? rawText,
-        solution: parsed.solution ?? '',
-        confidence: this.clampConfidence(parsed.confidence),
-        handoffAgentIds: Array.isArray(parsed.handoff)
-          ? parsed.handoff.filter(
-              (id: unknown): id is string => typeof id === 'string',
-            )
-          : [],
-        rawText,
-        toolEvents: agentToolEvents,
-      };
-    } catch (error) {
-      const fallbackText =
-        error instanceof Error ? error.message : 'Agent execution failed';
-      const agentToolEvents = toolEventLog.get(agent.id) ?? [];
-      return {
-        agent,
-        analysis: fallbackText,
-        solution: '',
-        confidence: 0,
-        handoffAgentIds: [],
-        rawText: fallbackText,
-        toolEvents: agentToolEvents,
-      };
-    }
-  }
-
-  private async executeAgentSession(
-    agent: AgentPersona,
-    userPrompt: string,
-    unifiedClient: UnifiedAgentsClient,
-    previousResults: AgentRunResult[],
-    wave: number,
-    hooks?: MultiAgentExecutionHooks,
-    directive?: string,
-  ): Promise<{ rawText: string; parsed: any }> {
-    const session = await unifiedClient.createSession({
-      providerId: this.config.getProvider(),
-      model: this.defaultModel,
-      systemPrompt: this.buildAgentSystemPrompt(agent),
-      metadata: {
-        agentId: agent.id,
-        agentName: agent.name,
-        agentEmoji: agent.emoji,
-      },
-    });
-
-    const streamOptions: UnifiedAgentStreamOptions = {};
-
-    if (this.config.getProvider() !== 'openai') {
-      streamOptions.maxOutputTokens = 4096;
-      if (typeof agent.temperature === 'number') {
-        streamOptions.temperature = agent.temperature;
-      }
-    }
-
-    const userContent = this.buildAgentUserPrompt(
-      agent,
-      userPrompt,
-      previousResults,
-      directive,
-    );
-
-    let accumulated = '';
-    let emittedFinalThinking = false;
-
-    for await (const event of unifiedClient.streamResponse(
-      session,
-      userContent,
-      streamOptions,
-    )) {
-      if (event.type === 'text-delta' && event.delta) {
-        accumulated += event.delta;
-        emittedFinalThinking = false;
-        if (hooks?.onAgentThinking) {
-          await hooks.onAgentThinking({
-            agent,
-            wave,
-            delta: event.delta,
-            accumulated,
-          });
-        }
-      }
-      if (event.type === 'final') {
-        accumulated = event.message.content ?? accumulated;
-        emittedFinalThinking = true;
-        if (hooks?.onAgentThinking) {
-          await hooks.onAgentThinking({
-            agent,
-            wave,
-            delta: '',
-            accumulated,
-          });
-        }
-      }
-    }
-
-    if (!emittedFinalThinking && hooks?.onAgentThinking) {
-      await hooks.onAgentThinking({
-        agent,
-        wave,
-        delta: '',
-        accumulated,
-      });
-    }
-
-    const parsed = this.safeParse(accumulated);
-    return { rawText: accumulated, parsed };
-  }
-
-  private buildAgentSystemPrompt(agent: AgentPersona): string {
-    const domainKnowledge = injectToolExamples(
-      agent.systemPrompt,
-      agent.specialties,
-    );
-
-    return [
-      `You are ${agent.name} (${agent.id}), a specialist in ${agent.specialties.join(', ')}.`,
-      agent.description,
-      domainKnowledge,
-      'Use available tools when they help you produce a thorough solution. Narrate your reasoning before finalizing your answer.',
-      'When you have reached a conclusion, produce a final JSON object with the fields {"analysis","solution","confidence","handoff"}.',
-    ].join('\n\n');
-  }
-
-  private buildAgentUserPrompt(
-    agent: AgentPersona,
-    userPrompt: string,
-    previousResults: AgentRunResult[],
-    directive?: string,
-  ): UnifiedAgentMessage[] {
-    const priorInsights = this.formatPriorInsights(previousResults, agent.id);
-    const directiveBlock = directive && directive.trim().length > 0
-      ? `\nSPECIALIST DIRECTIVE:\n${directive.trim()}`
-      : '';
-    const instructions = `USER TASK:\n${userPrompt}\n\n${priorInsights}${directiveBlock}\nFINAL RESPONSE FORMAT:\nReturn a JSON object like:\n{\n  "analysis": "key findings...",\n  "solution": "proposed implementation or answer",\n  "confidence": 0.0-1.0,\n  "handoff": ["optional-agent-id", ...]\n}\nIf no handoff is needed, respond with an empty array.`;
-    return [{ role: 'user', content: instructions }];
-  }
-
-  private createDelegationTool(context: {
-    userPrompt: string;
-    unifiedClient: UnifiedAgentsClient;
-    toolEventLog: Map<string, AgentToolEvent[]>;
-    executed: Map<string, AgentRunResult>;
-    timeline: Array<{ wave: number; agents: AgentPersona[] }>;
-    hooks?: MultiAgentExecutionHooks;
-    availableAgents: Map<string, AgentPersona>;
-  }): AgentsTool {
-    const executor = this;
-    const schema = z
-      .object({
-        agent_id: z
-          .string()
-          .min(1)
-          .describe('ID of the specialist to consult (e.g., systems-architect).'),
-        instructions: z
-          .string()
-          .trim()
-          .max(4000)
-          .optional()
-          .describe('Optional directive for the specialist run.'),
-      })
-      .strict();
-
-    let waveCounter = 0;
-
-    return createAgentsTool({
-      name: 'delegate_to_specialist',
-      description:
-        'Execute a specialist agent by ID. Returns JSON describing their analysis, solution, confidence, and handoff suggestions.',
-      parameters: schema,
-      strict: true,
-      async execute(input: unknown): Promise<string> {
-        const parsed = schema.safeParse(input);
-        if (!parsed.success) {
-          return JSON.stringify({
-            status: 'error',
-            message: 'Invalid parameters for delegate_to_specialist.',
-            issues: parsed.error.issues.map((issue) => issue.message),
-          });
-        }
-
-        if (waveCounter >= MAX_AGENTS_PER_RUN) {
-          return JSON.stringify({
-            status: 'error',
-            message: `Maximum of ${MAX_AGENTS_PER_RUN} specialist runs reached.`,
-          });
-        }
-
-        const agentId = parsed.data.agent_id;
-        const directive = parsed.data.instructions;
-        const persona =
-          context.availableAgents.get(agentId) ?? getAgentById(agentId);
-
-        if (!persona) {
-          return JSON.stringify({
-            status: 'error',
-            message: `Unknown specialist agent: ${agentId}`,
-          });
-        }
-
-        context.availableAgents.set(persona.id, persona);
-
-        waveCounter += 1;
-        const wave = waveCounter;
-        context.timeline.push({ wave, agents: [persona] });
-
-        const previousResults = Array.from(context.executed.values());
-
-        if (context.hooks?.onAgentStart) {
-          const pendingAgents = Array.from(context.availableAgents.values()).filter(
-            (candidate) => candidate.id !== persona.id && !context.executed.has(candidate.id),
-          );
-          await context.hooks.onAgentStart({
+        if (hooks?.onAgentStart) {
+          void hooks.onAgentStart({
             agent: persona,
             wave,
-            pendingAgents,
-            previousResults,
+            pendingAgents: this.computePendingAgents(seedAgents, agentResultsById, persona.id),
+            previousResults: Array.from(agentResultsById.values()),
           });
         }
+        return;
+      }
 
-        const result = await executor.runSingleAgent(
-          persona,
-          context.userPrompt,
-          context.unifiedClient,
-          context.toolEventLog,
-          previousResults,
-          wave,
-          context.hooks,
-          directive,
-        );
+      if (event.type === 'agent_end') {
+        const persona = personaByAgentName.get(event.agent.name);
+        if (!persona) return;
 
-        if (!result) {
-          return JSON.stringify({
-            status: 'error',
-            message: `Failed to run specialist ${persona.id}.`,
-          });
-        }
+        const wave = waveByAgentId.get(persona.id) ?? (() => {
+          currentWave += 1;
+          waveByAgentId.set(persona.id, currentWave);
+          timeline.push({ wave: currentWave, agents: [persona] });
+          return currentWave;
+        })();
 
-        context.executed.set(result.agent.id, result);
+        const { rawText, parsed } = this.parseSpecialistOutput(event.output);
+        const toolEvents = toolEventLog.get(persona.id) ?? [];
+        const result = this.buildAgentRunResult({ persona, parsed, rawText, toolEvents });
+        agentResultsById.set(persona.id, result);
 
-        if (context.hooks?.onAgentComplete) {
-          const remainingAgents = Array.from(context.availableAgents.values()).filter(
-            (candidate) => !context.executed.has(candidate.id),
-          ).length;
-          await context.hooks.onAgentComplete({
+        this.updateMemoryEntry(runContext, persona.id, parsed ?? this.convertAgentResultToStructured(result));
+
+        if (hooks?.onAgentComplete) {
+          void hooks.onAgentComplete({
             agent: persona,
             wave,
             result,
-            completedAgents: context.executed.size,
-            remainingAgents,
+            completedAgents: agentResultsById.size,
+            remainingAgents: this.computeRemainingAgents(seedAgents, agentResultsById),
           });
         }
+      }
+    };
 
-        for (const handoffId of result.handoffAgentIds) {
-          const recommended = getAgentById(handoffId);
-          if (recommended) {
-            context.availableAgents.set(recommended.id, recommended);
-          }
-        }
-
-        return JSON.stringify({
-          status: 'completed',
-          agent_id: result.agent.id,
-          name: result.agent.name,
-          analysis: result.analysis,
-          solution: result.solution,
-          confidence: result.confidence,
-          handoff: result.handoffAgentIds,
-          raw_text: result.rawText,
-        });
+    const { runResult } = await unifiedClient.runAgentOnce({
+      sessionConfig: {
+        providerId: this.config.getProvider(),
+        model: this.defaultModel,
+        systemPrompt: undefined,
+        metadata: {
+          agentId: ORCHESTRATOR_AGENT_NAME,
+          agentName: 'Multi-Agent Orchestrator',
+        },
       },
+      buildAgent: ({ session, modelSettings }) => {
+        const { orchestrator } = this.buildOrchestrationGraph({
+          session,
+          modelSettings,
+          userPrompt,
+          seedAgents,
+          toolEventLog,
+          hooks,
+          personaByAgentName,
+        });
+        return orchestrator;
+      },
+      input: this.buildOrchestratorUserInput(userPrompt, seedAgents),
+      context: runContext,
+      onAgentEvent,
+    });
+
+    if (agentResultsById.size === 0) {
+      throw new Error('Orchestrator session finished without consulting any specialists.');
+    }
+
+    const orchestratorOutput = this.parseOrchestratorOutput(runResult.finalOutput);
+    if (!orchestratorOutput) {
+      throw new Error('Orchestrator did not return structured output.');
+    }
+
+    const agentResults = Array.from(agentResultsById.values());
+
+    // Ensure timeline is sorted and consolidated by wave
+    const orderedTimeline = timeline
+      .reduce<Array<{ wave: number; agents: AgentPersona[] }>>((acc, entry) => {
+        const existing = acc.find((item) => item.wave === entry.wave);
+        if (existing) {
+          for (const agent of entry.agents) {
+            if (!existing.agents.some((candidate) => candidate.id === agent.id)) {
+              existing.agents.push(agent);
+            }
+          }
+        } else {
+          acc.push({ wave: entry.wave, agents: [...entry.agents] });
+        }
+        return acc;
+      }, [])
+      .sort((a, b) => a.wave - b.wave);
+
+    return {
+      agentResults,
+      finalResponse: orchestratorOutput.finalResponse,
+      aggregateReasoning: orchestratorOutput.reasoning,
+      timeline: orderedTimeline,
+      totalAgents: agentResults.length,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  private buildOrchestrationGraph(args: {
+    session: UnifiedAgentSession;
+    modelSettings: Partial<ModelSettings>;
+    userPrompt: string;
+    seedAgents: AgentPersona[];
+    toolEventLog: Map<string, AgentToolEvent[]>;
+    hooks?: MultiAgentExecutionHooks;
+    personaByAgentName: Map<string, AgentPersona>;
+  }): { orchestrator: Agent<OrchestrationRunContext, OrchestratorSchema>; specialists: Agent<OrchestrationRunContext, SpecialistSchema>[] } {
+    const { session, modelSettings, seedAgents, toolEventLog, hooks, personaByAgentName } = args;
+
+    const specialists = seedAgents.slice(0, MAX_SPECIALISTS).map((persona) => {
+      const agent = this.buildSpecialistAgent({
+        session,
+        modelSettings,
+        persona,
+        toolEventLog,
+        hooks,
+      });
+      personaByAgentName.set(agent.name, persona);
+      return agent;
+    });
+
+    const orchestrator = this.buildOrchestratorAgent({
+      session,
+      modelSettings,
+      specialists,
+      seedAgents,
+    });
+
+    return { orchestrator, specialists };
+  }
+
+  private buildSpecialistAgent(args: {
+    session: UnifiedAgentSession;
+    modelSettings: Partial<ModelSettings>;
+    persona: AgentPersona;
+    toolEventLog: Map<string, AgentToolEvent[]>;
+    hooks?: MultiAgentExecutionHooks;
+  }): Agent<OrchestrationRunContext, SpecialistSchema> {
+    const { session, modelSettings, persona, toolEventLog, hooks } = args;
+    const instructions = this.buildSpecialistInstructions(persona);
+
+    const personaModelSettings: Partial<ModelSettings> = {
+      ...modelSettings,
+    };
+    if (typeof persona.temperature === 'number') {
+      personaModelSettings.temperature = persona.temperature;
+    }
+
+    const tools = this.buildAgentTools({
+      session,
+      persona,
+      toolEventLog,
+      hooks,
+    });
+
+    return new Agent<OrchestrationRunContext, SpecialistSchema>({
+      name: persona.id,
+      instructions,
+      handoffDescription: `${persona.emoji} ${persona.name} — ${persona.description}`,
+      handoffs: [],
+      model: session.modelHandle!,
+      modelSettings: personaModelSettings,
+      tools,
+      outputType: SPECIALIST_OUTPUT_SCHEMA,
     });
   }
 
-  private buildOrchestratorSystemPrompt(selectedAgents: AgentPersona[]): string {
-    const roster = this.formatAgentRoster(selectedAgents);
+  private buildOrchestratorAgent(args: {
+    session: UnifiedAgentSession;
+    modelSettings: Partial<ModelSettings>;
+    specialists: Agent<OrchestrationRunContext, SpecialistSchema>[];
+    seedAgents: AgentPersona[];
+  }): Agent<OrchestrationRunContext, OrchestratorSchema> {
+    const { session, modelSettings, specialists, seedAgents } = args;
+    const instructions = this.buildOrchestratorInstructions(seedAgents);
+    const tools = this.buildAgentTools({ session });
+
+    const orchestratorSettings: Partial<ModelSettings> = {
+      ...modelSettings,
+    };
+
+    return new Agent<OrchestrationRunContext, OrchestratorSchema>({
+      name: ORCHESTRATOR_AGENT_NAME,
+      instructions,
+      handoffDescription: 'Primary Ouroboros orchestrator coordinating specialist handoffs.',
+      handoffs: specialists,
+      model: session.modelHandle!,
+      modelSettings: orchestratorSettings,
+      tools,
+      outputType: ORCHESTRATOR_OUTPUT_SCHEMA,
+    });
+  }
+
+  private buildAgentTools(options: BuildAgentToolsOptions): AgentsTool[] {
+    const { session, persona, toolEventLog, hooks } = options;
+    const registry = this.config.getToolRegistry();
+
+    const adaptedTools = adaptToolsToAgents({
+      registry,
+      config: this.config,
+      getPromptId: () => session.id,
+      agentId: persona?.id ?? ORCHESTRATOR_AGENT_NAME,
+      agentName: persona?.name ?? 'Multi-Agent Orchestrator',
+      agentEmoji: persona?.emoji,
+      onToolExecuted:
+        persona && toolEventLog
+          ? ({ request, response }) =>
+              this.recordToolEvent({
+                persona,
+                toolEventLog,
+                hooks,
+                request,
+                response,
+              })
+          : undefined,
+    });
+
+    const hostedTools = this.createHostedToolsForSession(session, registry);
+    const mergedTools = this.mergeTools(adaptedTools, hostedTools);
+
+    if (persona?.suggestedTools?.length) {
+      const allowed = new Set(persona.suggestedTools.map((name) => name.toLowerCase()));
+      const filtered = mergedTools.filter((tool) => {
+        const toolName = tool.name?.toLowerCase();
+        return !toolName || allowed.has(toolName);
+      });
+      if (filtered.length > 0) {
+        return filtered;
+      }
+    }
+
+    return mergedTools;
+  }
+
+  private createHostedToolsForSession(
+    session: UnifiedAgentSession,
+    registry: ReturnType<Config['getToolRegistry']>,
+  ): AgentsTool[] {
+    if (
+      session.providerId !== 'openai' ||
+      !this.config.isToolEnabled([HOSTED_WEB_SEARCH_NAME, 'web_search'], 'WebSearchTool') ||
+      registry.getTool(HOSTED_WEB_SEARCH_NAME)
+    ) {
+      return [];
+    }
+
+    return [createHostedWebSearchTool(this.config)];
+  }
+
+  private mergeTools(primary: AgentsTool[], secondary: AgentsTool[]): AgentsTool[] {
+    if (secondary.length === 0) {
+      return primary;
+    }
+    const seen = new Set<string>();
+    const merged: AgentsTool[] = [];
+    for (const tool of [...primary, ...secondary]) {
+      const key = tool.name ?? `anonymous-${merged.length}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(tool);
+    }
+    return merged;
+  }
+
+  private recordToolEvent(args: {
+    persona: AgentPersona;
+    toolEventLog: Map<string, AgentToolEvent[]>;
+    hooks?: MultiAgentExecutionHooks;
+    request: ToolCallRequestInfo;
+    response: ToolCallResponseInfo;
+  }): void {
+    const { persona, toolEventLog, hooks, request, response } = args;
+    const events = toolEventLog.get(persona.id) ?? [];
+    const event: AgentToolEvent = {
+      callId: request.callId,
+      toolName: request.name,
+      arguments: request.args,
+      outputText: toolResponsePartsToString(response.responseParts),
+      resultDisplay: response.resultDisplay,
+      errorMessage: response.error?.message,
+      errorType: response.errorType,
+      timestamp: Date.now(),
+    };
+    events.push(event);
+    toolEventLog.set(persona.id, events);
+
+    if (hooks?.onToolEvent) {
+      void hooks.onToolEvent({ agent: persona, event });
+    }
+  }
+
+  private buildSpecialistInstructions(persona: AgentPersona): string {
+    const domainKnowledge = injectToolExamples(persona.systemPrompt, persona.specialties);
+
     return [
-      'You are the Ouroboros master orchestrator responsible for coordinating specialist agents to solve the task.',
-      'Use the `delegate_to_specialist` tool to run specialists in the order you deem most effective. The tool returns their JSON analysis, solution, confidence, and handoff suggestions.',
-      `Run at most ${MAX_AGENTS_PER_RUN} specialists during a single orchestration pass.`,
-      roster,
-      'After collecting the required expertise, synthesize a single actionable response. Close with a reasoning summary separated by "\n\n---\n\nReasoning:".',
+      `You are ${persona.name} (${persona.id}) ${persona.emoji}.`,
+      persona.description,
+      domainKnowledge,
+      'Leverage tools when they strengthen your analysis. Reference prior outputs available via context.memory to avoid duplication.',
+      `Provide your final response using the structured schema provided by the SDK (analysis, solution, confidence, handoff). Do not wrap JSON in Markdown fences.`,
+      `If you recommend additional specialists, list their agent IDs in the handoff array. Confidence must be between 0 and 1.`,
     ].join('\n\n');
   }
 
-  private buildOrchestratorUserPrompt(
+  private buildOrchestratorInstructions(seedAgents: AgentPersona[]): string {
+    const roster = this.formatAgentRoster(seedAgents);
+    return [
+      'You are the Ouroboros multi-agent orchestrator responsible for coordinating specialist agents inside a single shared session.',
+      roster,
+      'Process: (1) understand the user task, (2) plan an approach, (3) delegate to 3-10 specialists using handoffs, possibly in parallel waves, (4) merge their findings into a final solution.',
+      'For every handoff, provide the specialist with a concise directive that references the user prompt and any relevant prior outputs stored in context.memory. Update context.memory[agentId] with each specialist’s structured output before delegating to the next specialist.',
+      'Before every handoff or tool invocation, emit a short reasoning line prefixed with "HANDOFF_PLAN:" describing why that action is necessary and which TODO item it tackles.',
+      'Maintain a rolling TODO ledger in context.memory["orchestrator_todo"]. Add entries before delegating, mark them as [DONE] when resolved, and echo the final ledger at the end of the reasoning field you return.',
+      'Ensure every consulted specialist completes their run and returns structured output conforming to the SDK schema.',
+      'When all required work is complete, produce a final structured object with fields { finalResponse, reasoning }. finalResponse may include Markdown, but do not emit code fences or extra wrapper text.',
+      'Respect token efficiency: reuse knowledge from earlier specialists and avoid redundant tool calls unless necessary.',
+      'If the seed roster lacks required expertise, you may still produce handoff recommendations in the final reasoning, but you must only run specialists provided as handoffs in this graph.',
+    ].join('\n\n');
+  }
+
+  private buildOrchestratorUserInput(
     userPrompt: string,
     selectedAgents: AgentPersona[],
   ): string {
     const roster = this.formatAgentRoster(selectedAgents);
     return [
-      `USER PROMPT:\n${userPrompt}`,
       roster,
-      'Plan the sequence of specialists, call `delegate_to_specialist` for each, and optionally consult additional agents recommended through handoff suggestions. Provide clear directives when delegating.',
-      'Once all necessary specialists have been consulted, deliver the final response with Markdown formatting followed by the reasoning marker.',
+      'USER REQUEST:',
+      userPrompt,
+      'Deliver the best possible solution by delegating to the most relevant specialists and composing their insights.',
     ].join('\n\n');
   }
 
@@ -686,211 +545,150 @@ export class MultiAgentExecutor {
     if (agents.length === 0) {
       return 'Available specialists: none provided.';
     }
-
     const lines = agents.map((agent, index) => {
       const specialties = agent.specialties.slice(0, 3).join(', ');
       return `${index + 1}. ${agent.id} — ${agent.name} (${specialties})`;
     });
-
-    return `Available specialists:\n${lines.join('\n')}`;
+    const minSelectable = Math.min(MIN_SPECIALISTS, agents.length);
+    const maxSelectable = Math.min(MAX_SPECIALISTS, agents.length);
+    return `Available specialists (select at least ${minSelectable} and at most ${maxSelectable} per run):\n${lines.join('\n')}`;
   }
 
-  private formatPriorInsights(
-    previousResults: AgentRunResult[],
-    currentAgentId: string,
-  ): string {
-    if (previousResults.length === 0) {
-      return 'PREVIOUS SPECIALISTS: none yet. You are the first responder.';
+  private parseSpecialistOutput(raw: unknown): { rawText: string; parsed: SpecialistStructuredOutput | null } {
+    if (raw === null || raw === undefined) {
+      return { rawText: '', parsed: null };
     }
 
-    const summaries = previousResults
-      .filter((result) => result.agent.id !== currentAgentId)
-      .map((result, index) => {
-        const analysis = this.truncateForContext(result.analysis);
-        const solution = this.truncateForContext(result.solution);
-        const raw = this.formatRawForContext(result.rawText);
-        const lines = [
-          `${index + 1}. ${result.agent.name} (${result.agent.id})`,
-          `   • Analysis: ${analysis || 'n/a'}`,
-          `   • Solution: ${solution || 'n/a'}`,
-          `   • Confidence: ${Math.round(result.confidence * 100)}%`,
-        ];
-        if (raw) {
-          lines.push('   • Full JSON output:', `     ${raw}`);
-        }
-        return lines.join('\n');
-      })
-      .join('\n');
-
-    if (!summaries) {
-      return 'PREVIOUS SPECIALISTS: none yet. You are the first responder.';
+    if (typeof raw === 'object') {
+      const parsed = SPECIALIST_OUTPUT_SCHEMA.safeParse(raw);
+      if (parsed.success) {
+        return { rawText: JSON.stringify(parsed.data), parsed: parsed.data };
+      }
+      return { rawText: JSON.stringify(raw), parsed: null };
     }
 
-    return `PREVIOUS SPECIALISTS (use to avoid duplication and build upon their output):\n${summaries}`;
-  }
-
-  private truncateForContext(text: string): string {
-    if (!text) return '';
-    const normalized = text.replace(/\s+/g, ' ').trim();
-    if (normalized.length <= 280) {
-      return normalized;
+    if (typeof raw !== 'string') {
+      const text = String(raw);
+      return { rawText: text, parsed: null };
     }
-    return `${normalized.slice(0, 277)}...`;
-  }
 
-  private formatRawForContext(raw: string): string {
-    if (!raw) return '';
     const trimmed = raw.trim();
-    if (!trimmed) return '';
-    let pretty = trimmed;
+    const candidate = this.stripCodeFences(trimmed);
     try {
-      const parsed = JSON.parse(trimmed);
-      pretty = JSON.stringify(parsed, null, 2);
-    } catch (_error) {
-      const codeBlock = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-      if (codeBlock) {
-        const candidate = codeBlock[1].trim();
-        try {
-          pretty = JSON.stringify(JSON.parse(candidate), null, 2);
-        } catch (_inner) {
-          pretty = candidate;
-        }
+      const parsedJson = JSON.parse(candidate);
+      const parsed = SPECIALIST_OUTPUT_SCHEMA.safeParse(parsedJson);
+      if (parsed.success) {
+        return { rawText: candidate, parsed: parsed.data };
       }
+      return { rawText: candidate, parsed: null };
+    } catch (_error) {
+      return { rawText: candidate, parsed: null };
     }
-
-    return this.limitForContext(pretty, 1200)
-      .split('\n')
-      .map((line) => (line.length > 0 ? line : ' '))
-      .join('\n     ');
   }
 
-  private limitForContext(text: string, maxLength: number): string {
-    if (text.length <= maxLength) {
-      return text;
+  private parseOrchestratorOutput(output: unknown): OrchestratorStructuredOutput | null {
+    if (!output) return null;
+    if (typeof output === 'object') {
+      const parsed = ORCHESTRATOR_OUTPUT_SCHEMA.safeParse(output);
+      if (parsed.success) {
+        return parsed.data;
+      }
     }
-    return `${text.slice(0, maxLength - 3)}...`;
+    if (typeof output === 'string') {
+      const candidate = this.stripCodeFences(output.trim());
+      try {
+        const parsedJson = JSON.parse(candidate);
+        const parsed = ORCHESTRATOR_OUTPUT_SCHEMA.safeParse(parsedJson);
+        if (parsed.success) {
+          return parsed.data;
+        }
+      } catch (_error) {
+        return null;
+      }
+    }
+    return null;
   }
 
-  private safeParse(raw: string): any {
-    try {
-      return JSON.parse(raw);
-    } catch (_error) {
-      const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
-      if (codeBlock) {
-        try {
-          return JSON.parse(codeBlock[1]);
-        } catch (_inner) {
-          // fall through
-        }
-      }
-
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          return JSON.parse(jsonMatch[0]);
-        } catch (_inner) {
-          // ignore
-        }
-      }
-
-      return {};
+  private stripCodeFences(text: string): string {
+    const fenceMatch = text.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
+    if (fenceMatch) {
+      return fenceMatch[1].trim();
     }
+    return text;
+  }
+
+  private buildAgentRunResult(args: {
+    persona: AgentPersona;
+    parsed: SpecialistStructuredOutput | null;
+    rawText: string;
+    toolEvents: AgentToolEvent[];
+  }): AgentRunResult {
+    const { persona, parsed, rawText, toolEvents } = args;
+    const base: SpecialistStructuredOutput = parsed ?? {
+      analysis: rawText || 'No structured analysis provided.',
+      solution: '',
+      confidence: 0,
+      handoff: [],
+    };
+
+    return {
+      agent: persona,
+      analysis: base.analysis,
+      solution: base.solution ?? '',
+      confidence: this.clampConfidence(base.confidence),
+      handoffAgentIds: Array.isArray(base.handoff)
+        ? base.handoff.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+        : [],
+      rawText: rawText || JSON.stringify(base),
+      toolEvents,
+    };
+  }
+
+  private convertAgentResultToStructured(result: AgentRunResult): SpecialistStructuredOutput {
+    return {
+      analysis: result.analysis,
+      solution: result.solution,
+      confidence: this.clampConfidence(result.confidence),
+      handoff: [...result.handoffAgentIds],
+    };
+  }
+
+  private updateMemoryEntry(
+    runContext: OrchestrationRunContext,
+    agentId: string,
+    output: SpecialistStructuredOutput,
+  ): void {
+    const existing = runContext.memory[agentId];
+    if (!existing) {
+      runContext.memory[agentId] = {
+        lastOutput: output,
+        history: [output],
+      };
+      return;
+    }
+    existing.lastOutput = output;
+    existing.history.push(output);
+  }
+
+  private computePendingAgents(
+    seedAgents: AgentPersona[],
+    agentResultsById: Map<string, AgentRunResult>,
+    currentAgentId: string,
+  ): AgentPersona[] {
+    return seedAgents.filter(
+      (agent) => agent.id !== currentAgentId && !agentResultsById.has(agent.id),
+    );
+  }
+
+  private computeRemainingAgents(
+    seedAgents: AgentPersona[],
+    agentResultsById: Map<string, AgentRunResult>,
+  ): number {
+    return seedAgents.filter((agent) => !agentResultsById.has(agent.id)).length;
   }
 
   private clampConfidence(value: unknown): number {
     if (typeof value !== 'number' || Number.isNaN(value)) return 0.0;
     return Math.min(1, Math.max(0, value));
   }
-
-  private async synthesize(
-    userPrompt: string,
-    agentResults: AgentRunResult[],
-    unifiedClient: UnifiedAgentsClient,
-  ): Promise<{ finalResponse: string; aggregateReasoning: string }> {
-    if (agentResults.length === 0) {
-      return {
-        finalResponse:
-          'No specialised agents were able to contribute to this task.',
-        aggregateReasoning: 'No agent responses available.',
-      };
-    }
-
-    const summaryPayload = agentResults.map((result) => ({
-      agentId: result.agent.id,
-      name: result.agent.name,
-      expertise: result.agent.description,
-      analysis: result.analysis,
-      solution: result.solution,
-      confidence: result.confidence,
-    }));
-
-    const synthesisPrompt =
-      `You are the Ouroboros master orchestrator. Multiple specialists responded to the user's request.\n\n` +
-      `USER PROMPT:\n${userPrompt}\n\n` +
-      `SPECIALIST RESPONSES (JSON):\n${JSON.stringify(summaryPayload, null, 2)}\n\n` +
-      `TASK: Combine the specialists' insights into a single, coherent answer.\n` +
-      `- Reference the most relevant specialist reasoning\n` +
-      `- Resolve contradictions if they exist\n` +
-      `- Provide clear, actionable guidance\n` +
-      `- Use Markdown where appropriate\n` +
-      `- Close with a short reasoning summary on its own line in the format "---\n\nReasoning: ..."`;
-
-    const session = await unifiedClient.createSession({
-      providerId: this.config.getProvider(),
-      model: this.defaultModel,
-      systemPrompt:
-        'You are the Ouroboros master orchestrator. Combine specialist insights into a single, coherent response.',
-      metadata: {
-        agentId: 'orchestrator',
-        agentName: 'Master Orchestrator',
-      },
-    });
-
-    const streamOptions: UnifiedAgentStreamOptions = {
-      temperature: 0.4,
-    };
-
-    if (this.config.getProvider() !== 'openai') {
-      streamOptions.maxOutputTokens = 4096;
-    }
-
-    const messages: UnifiedAgentMessage[] = [
-      {
-        role: 'user',
-        content: synthesisPrompt,
-      },
-    ];
-
-    let accumulated = '';
-
-    for await (const event of unifiedClient.streamResponse(
-      session,
-      messages,
-      streamOptions,
-    )) {
-      if (event.type === 'text-delta' && event.delta) {
-        accumulated += event.delta;
-      }
-      if (event.type === 'final') {
-        accumulated = event.message.content ?? accumulated;
-      }
-    }
-
-    const [finalResponse, aggregateReasoning] = this.splitFinalResponse(
-      accumulated.trim(),
-    );
-
-    return { finalResponse, aggregateReasoning };
-  }
-
-  private splitFinalResponse(text: string): [string, string] {
-    if (!text) return ['', ''];
-    const marker = '\n\n---\n\nReasoning:';
-    if (!text.includes(marker)) {
-      return [text.trim(), ''];
-    }
-    const [answer, reasoning] = text.split(marker);
-    return [answer.trim(), reasoning.trim()];
-  }
-
 }

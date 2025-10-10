@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentPersona, Config } from '@ouroboros/ouroboros-code-core';
 import type {
   AgentPersonaSummary,
@@ -237,9 +237,14 @@ export const useAutomaticAgentSelection = (
 ) => {
   const [orchestrator, setOrchestrator] = useState<any>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const seenToolCallIdsRef = useRef(new Set<string>());
 
   const emitToolEventMessage = useCallback(
     (payload: StreamToolEvent) => {
+      if (seenToolCallIdsRef.current.has(payload.event.callId)) {
+        return;
+      }
+      seenToolCallIdsRef.current.add(payload.event.callId);
       const historyItem = buildToolGroupDisplay(payload.agent, payload.event);
       addItem(historyItem, Date.now());
     },
@@ -313,6 +318,7 @@ export const useAutomaticAgentSelection = (
       }
 
       try {
+        seenToolCallIdsRef.current.clear();
         const selectionStream =
           orchestrator.processPromptWithAutoSelectionStream(userPrompt);
 
@@ -412,6 +418,7 @@ export const useAutomaticAgentSelection = (
       }
 
       try {
+        seenToolCallIdsRef.current.clear();
         const result = await orchestrator.processPromptWithAutoSelection(
           userPrompt,
           [],
