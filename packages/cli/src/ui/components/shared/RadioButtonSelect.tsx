@@ -280,6 +280,7 @@ export function RadioButtonSelect<T>({
     showScrollArrows && hasOverflow && highlightedIndex < items.length - 1;
 
   const selectProps: SelectInputProps<SelectValue<T>> = {
+    key: selectKey,
     items: selectItems,
     initialIndex: forcedIndex ?? highlightedIndex,
     isFocused,
@@ -297,7 +298,7 @@ export function RadioButtonSelect<T>({
           ▲
         </Text>
       )}
-      <SelectInput key={selectKey} {...selectProps} />
+      <SelectInput {...selectProps} />
       {showDownArrow && (
         <Text color={Colors.Gray} aria-hidden>
           ▼
