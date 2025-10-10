@@ -1,0 +1,41 @@
+# CLI TUI Enhancement Research
+
+## Summary
+- The current Ink application stitches together many bespoke hooks and contexts to coordinate session state, command routing, and layout toggles. Centralizing interaction patterns with richer Ink primitives would reduce boilerplate and improve legibility.
+- Several UX gaps stem from manual rendering of history, prompts, and status panes. Leveraging focused community plugins (select inputs, markdown rendering, tables, and progress indicators) can simplify components and expand affordances without heavy custom work.
+- Incremental adoption of Ink plugins is viable by wrapping them inside the existing design system, preserving theming while enabling future virtualization, accessibility, and cross-session parity upgrades.
+
+## Current Implementation Highlights
+- `App.tsx` composes the overall surface area: it wires Ink primitives, the session/history providers, dialog toggles, and numerous component imports that render the sidebar, context panel, and command hints in response to application events.【F:packages/cli/src/ui/App.tsx†L7-L198】【F:packages/cli/src/ui/App.tsx†L271-L335】
+- The header and footer already lean on `ink-gradient` for a branded look, demonstrating that plugin-driven visuals integrate cleanly with the in-house design system.【F:packages/cli/src/ui/components/Header.tsx†L7-L76】【F:packages/cli/src/ui/components/Footer.tsx†L1-L200】
+- Console and prompt experiences are bespoke: `DetailedMessagesDisplay` builds a boxed log viewer, while `InputPrompt` implements history navigation, completions, and clipboard flows from scratch to satisfy power-user requirements.【F:packages/cli/src/ui/components/DetailedMessagesDisplay.tsx†L7-L82】【F:packages/cli/src/ui/components/InputPrompt.tsx†L7-L200】
+- The CLI package ships only a small subset of the Ink ecosystem today—besides `ink` itself it depends on `ink-gradient` and `ink-spinner`—leaving room for more purpose-built primitives before introducing heavier bespoke components.【F:packages/cli/package.json†L1-L78】
+
+## Identified UX and Maintainability Gaps
+1. **Complex layout wiring:** App-level toggles manage sidebar/context panel visibility via event handlers and local state, but the rendering pipeline lacks reusable layout containers (tabs, accordions) to scale new panes without duplicating toggle logic.【F:packages/cli/src/ui/App.tsx†L278-L335】
+2. **Manual history rendering:** Tool timelines, console logs, and context summaries use low-level `Box`/`Text` primitives; pagination, filtering, or sorting requires custom code rather than declarative list/table helpers.【F:packages/cli/src/ui/components/DetailedMessagesDisplay.tsx†L28-L80】
+3. **Input ergonomics:** `InputPrompt` recreates behaviors like reverse search, completions, and shell history; future experiences (multi-line prompts, inline forms) will need additional scaffolding beyond the current bespoke implementation.【F:packages/cli/src/ui/components/InputPrompt.tsx†L69-L200】
+4. **Progress feedback:** Long-running tool workflows surface limited feedback beyond status text and spinners, making it difficult to track multi-step or parallel jobs without scanning large text blocks.【F:packages/cli/src/ui/App.tsx†L137-L145】
+
+## Recommended Ink Ecosystem Enhancements
+| Plugin | Opportunity | Integration Notes | Effort | Risks |
+| --- | --- | --- | --- | --- |
+| [`ink-select-input`](https://github.com/vadimdemedes/ink-select-input) | Provides accessible arrow-key navigation for option lists, ideal for theme selection, auth providers, or workspace prompts currently handled by bespoke dialogs. | Wrap inside `RadioButtonSelect`/dialog components to reuse design tokens and centralize focus management. | Low | Must reconcile with existing Vim mode navigation hooks.
+| [`ink-multi-select`](https://github.com/vadimdemedes/ink-multi-select) | Enables checkbox-style multi-selection, useful for context panel filters or bulk workspace migration choices currently toggled manually. | Expose via the design system to keep consistent padding/colors, and bridge selection events into existing hook state. | Medium | Needs harmonization with keyboard shortcuts and screen reader prompts.
+| [`ink-text-input`](https://github.com/vadimdemedes/ink-text-input) | Supplies a lightweight single-line input that can replace ad-hoc fields (e.g., auth tokens, quick command palette) so `InputPrompt` stays focused on the main chat buffer. | Compose within dialog components and forward `useKeypress` handlers when advanced keybindings are required. | Low | Core chat prompt remains custom, but shared dialogs must coordinate focus shifts.
+| [`ink-markdown`](https://github.com/maticzav/ink-markdown) | Renders formatted agent/tool output (lists, code blocks) without manually handling ANSI styles, simplifying `HistoryItemDisplay` and console detail panes. | Introduce as a renderer under the design system to apply theme colors and highlight.js integration. | Medium | Ensure performance on large transcripts and sanitize user-provided markdown.
+| [`ink-table`](https://github.com/maticzav/ink-table) | Offers sortable tabular layouts for session stats, tool execution logs, or quota usage overlays instead of custom flex grids. | Back session stats/HistoryActivityRail with table views and integrate with overflow handling logic. | Medium | Large datasets may need virtualization; evaluate before replacing history lists wholesale.
+| [`ink-progress-bar`](https://github.com/vadimdemedes/ink-progress-bar) | Adds intuitive progress meters for multi-stage tool runs, file uploads, or workspace migrations beyond simple spinner feedback. | Mount inside `HistoryActivityRail` entries or the status bar, binding to scheduler updates already available in `useGeminiStream`. | Low | Requires plumbing progress events through history updates to avoid stale rendering.
+| [`ink-link`](https://github.com/sindresorhus/ink-link) | Allows clickable URLs for docs, update notifications, and privacy notices, aligning with the design goal of quick task completion. | Embed in `Footer`, `PrivacyNotice`, and `UpdateNotification` to encourage adoption flows. | Low | Screen-reader compatibility must be verified with current text narration.
+| [`ink-box`](https://github.com/sindresorhus/ink-box) | Simplifies consistent panel chrome with padding/borders for sidebar/context panes now managed manually. | Replace ad-hoc `Box` wrappers in `Sidebar`/`ContextPanel` with themed `InkBox` variants to standardize spacing. | Low | Double-boxing with existing custom borders should be avoided.
+
+## Suggested Implementation Phases
+1. **Design System Wrappers:** Prototype wrappers around `ink-select-input`, `ink-text-input`, and `ink-link` to confirm theming hooks (colors, focus outlines) align with `DesignSystemProvider`. Focus on dialogs already using simple input lists to minimize regression risk.【F:packages/cli/src/ui/App.tsx†L169-L198】
+2. **Rich Content Rendering:** Pilot `ink-markdown` and `ink-table` inside non-critical panes (e.g., console log viewer) to validate performance and virtualization assumptions before expanding to history transcripts.【F:packages/cli/src/ui/components/DetailedMessagesDisplay.tsx†L28-L80】
+3. **Progress Feedback Upgrade:** Feed scheduler state into `ink-progress-bar` within `HistoryActivityRail` entries to provide stepwise tool visualization without reworking the entire history renderer.【F:packages/cli/src/ui/App.tsx†L137-L145】
+4. **Advanced Navigation Patterns:** After wrappers prove stable, migrate sidebar/context toggles to plugin-powered interactions (multi-select, tabs) and document focus management patterns alongside Vim mode integration.【F:packages/cli/src/ui/App.tsx†L278-L335】
+
+## Follow-up Considerations
+- Incorporate regression coverage in `App.test.tsx` capturing new plugin-driven frames to ensure deduplication fixes remain intact while verifying improved layout snapshots.
+- Update the CLI style guide to document plugin wrappers, color tokens, and accessibility behaviors so downstream extensions (e.g., `vision-quest`) can adopt the same primitives without duplicating logic.
+- Profile render cost after introducing plugins; ensure virtualization or memoization is introduced where plugin abstractions wrap large transcript lists.
