@@ -6,6 +6,8 @@
 
 import type React from 'react';
 import { Box, Text } from 'ink';
+import Markdown from 'ink-markdown';
+import chalk from 'chalk';
 import { Colors } from '../colors.js';
 import type { ConsoleMessageItem } from '../types.js';
 import { MaxSizedBox } from './shared/MaxSizedBox.js';
@@ -55,24 +57,43 @@ export const DetailedMessagesDisplay: React.FC<
               icon = '\u2716'; // Heavy multiplication x (✖)
               break;
             case 'debug':
-              textColor = Colors.Gray; // Or Colors.Gray
+              textColor = Colors.Gray;
               icon = '\u{1F50D}'; // Left-pointing magnifying glass (🔍)
               break;
             case 'log':
             default:
-              // Default textColor and icon are already set
               break;
           }
 
+          const shouldRenderAsMarkdown = /[`*_#\[-]/.test(msg.content);
+          const markdownTheme = {
+            text: (value: string) => chalk.hex(textColor)(value),
+            strong: chalk.hex(textColor).bold,
+            em: chalk.hex(textColor).italic,
+            codespan: chalk.hex(Colors.AccentCyan),
+            link: chalk.hex(Colors.AccentBlue),
+            href: chalk.hex(Colors.AccentBlue).underline,
+            listitem: (value: string) => chalk.hex(textColor)(value),
+            heading: chalk.hex(textColor).bold,
+            firstHeading: chalk.hex(textColor).bold,
+            blockquote: chalk.hex(Colors.Gray).italic,
+          } as const;
+
           return (
-            <Box key={index} flexDirection="row">
+            <Box key={index} flexDirection="row" marginBottom={0}>
               <Text color={textColor}>{icon} </Text>
-              <Text color={textColor} wrap="wrap">
-                {msg.content}
+              <Box flexDirection="column" flexGrow={1}>
+                {shouldRenderAsMarkdown ? (
+                  <Markdown {...markdownTheme}>{msg.content}</Markdown>
+                ) : (
+                  <Text color={textColor} wrap="wrap">
+                    {msg.content}
+                  </Text>
+                )}
                 {msg.count && msg.count > 1 && (
                   <Text color={Colors.Gray}> (x{msg.count})</Text>
                 )}
-              </Text>
+              </Box>
             </Box>
           );
         })}

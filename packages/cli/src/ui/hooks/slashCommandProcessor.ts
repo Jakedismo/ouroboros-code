@@ -239,7 +239,29 @@ export const useSlashCommandProcessor = (
         loaders,
         controller.signal,
       );
-      setCommands(commandService.getCommands());
+      const loadedCommands = commandService.getCommands();
+      setCommands(loadedCommands);
+
+      if (config) {
+        try {
+          const { AgentManager } = await import(
+            '@ouroboros/ouroboros-code-core'
+          );
+          const agentManager = AgentManager.getInstance();
+          const summaries = loadedCommands.map((command) => ({
+            name: `/${command.name}`,
+            description:
+              command.description?.trim().length > 0
+                ? command.description
+                : 'Core CLI command.',
+          }));
+          agentManager.setSlashCommandSummaries(summaries);
+        } catch (error) {
+          if (config.getDebugMode()) {
+            console.warn('Failed to update agent slash command summaries:', error);
+          }
+        }
+      }
     };
 
     load();

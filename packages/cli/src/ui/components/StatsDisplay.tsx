@@ -7,6 +7,8 @@
 import type React from 'react';
 import { Box, Text } from 'ink';
 import Gradient from 'ink-gradient';
+import Table from 'ink-table';
+import chalk from 'chalk';
 import { theme } from '../semantic-colors.js';
 import { formatDuration } from '../utils/formatters.js';
 import type { ModelMetrics } from '../contexts/SessionContext.js';
@@ -19,6 +21,7 @@ import {
   USER_AGREEMENT_RATE_MEDIUM,
 } from '../utils/displayUtils.js';
 import { computeSessionStats } from '../utils/computeStats.js';
+import { SectionHeading } from '../design-system/index.js';
 
 // A more flexible and powerful StatRow component
 interface StatRowProps {
@@ -67,74 +70,73 @@ const Section: React.FC<SectionProps> = ({ title, children }) => (
   </Box>
 );
 
+const formatCacheRate = (tokens: ModelMetrics['tokens']) => {
+  if (!tokens.prompt) {
+    return '—';
+  }
+  const rate = (tokens.cached / tokens.prompt) * 100;
+  return `${rate.toFixed(1)}%`;
+};
+
+const highlightWithColor = (value: string, color: string): string => {
+  if (/^#[0-9a-f]{6}$/i.test(color) || /^#[0-9a-f]{3}$/i.test(color)) {
+    return chalk.hex(color)(value);
+  }
+  return value;
+};
+
 const ModelUsageTable: React.FC<{
   models: Record<string, ModelMetrics>;
   totalCachedTokens: number;
   cacheEfficiency: number;
 }> = ({ models, totalCachedTokens, cacheEfficiency }) => {
-  const nameWidth = 25;
-  const requestsWidth = 8;
-  const inputTokensWidth = 15;
-  const outputTokensWidth = 15;
+  const modelEntries = Object.entries(models);
+  if (!modelEntries.length) {
+    return null;
+  }
+
+  const tableData = modelEntries.map(([name, metrics]) => ({
+    model: name.replace('-001', ''),
+    requests: metrics.api.totalRequests.toString(),
+    inputTokens: highlightWithColor(
+      metrics.tokens.prompt.toLocaleString(),
+      theme.status.warning,
+    ),
+    outputTokens: highlightWithColor(
+      metrics.tokens.candidates.toLocaleString(),
+      theme.status.warning,
+    ),
+    cacheHitRate: highlightWithColor(
+      formatCacheRate(metrics.tokens),
+      theme.status.success,
+    ),
+  }));
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      {/* Header */}
-      <Box>
-        <Box width={nameWidth}>
-          <Text bold>Model Usage</Text>
-        </Box>
-        <Box width={requestsWidth} justifyContent="flex-end">
-          <Text bold>Reqs</Text>
-        </Box>
-        <Box width={inputTokensWidth} justifyContent="flex-end">
-          <Text bold>Input Tokens</Text>
-        </Box>
-        <Box width={outputTokensWidth} justifyContent="flex-end">
-          <Text bold>Output Tokens</Text>
-        </Box>
+      <SectionHeading icon="📈" text="Model Usage" tone="muted" />
+      <Box marginTop={1}>
+        <Table
+          data={tableData}
+          columns={[
+            { key: 'model', label: 'Model' },
+            { key: 'requests', label: 'Reqs' },
+            { key: 'inputTokens', label: 'Input Tokens' },
+            { key: 'outputTokens', label: 'Output Tokens' },
+            { key: 'cacheHitRate', label: 'Cache Hit %' },
+          ]}
+        />
       </Box>
-      {/* Divider */}
-      <Box
-        borderStyle="round"
-        borderBottom={true}
-        borderTop={false}
-        borderLeft={false}
-        borderRight={false}
-        width={nameWidth + requestsWidth + inputTokensWidth + outputTokensWidth}
-      ></Box>
-
-      {/* Rows */}
-      {Object.entries(models).map(([name, modelMetrics]) => (
-        <Box key={name}>
-          <Box width={nameWidth}>
-            <Text>{name.replace('-001', '')}</Text>
-          </Box>
-          <Box width={requestsWidth} justifyContent="flex-end">
-            <Text>{modelMetrics.api.totalRequests}</Text>
-          </Box>
-          <Box width={inputTokensWidth} justifyContent="flex-end">
-            <Text color={theme.status.warning}>
-              {modelMetrics.tokens.prompt.toLocaleString()}
-            </Text>
-          </Box>
-          <Box width={outputTokensWidth} justifyContent="flex-end">
-            <Text color={theme.status.warning}>
-              {modelMetrics.tokens.candidates.toLocaleString()}
-            </Text>
-          </Box>
-        </Box>
-      ))}
       {cacheEfficiency > 0 && (
         <Box flexDirection="column" marginTop={1}>
           <Text>
             <Text color={theme.status.success}>Savings Highlight:</Text>{' '}
-            {totalCachedTokens.toLocaleString()} ({cacheEfficiency.toFixed(1)}
-            %) of input tokens were served from the cache, reducing costs.
+            {totalCachedTokens.toLocaleString()} ({cacheEfficiency.toFixed(1)}%){' '}
+            of input tokens were served from cache, reducing costs.
           </Text>
           <Box height={1} />
           <Text color={theme.text.secondary}>
-            » Tip: For a full token breakdown, run `/stats model`.
+            » Tip: For deeper per-model trends, run `/stats model`.
           </Text>
         </Box>
       )}

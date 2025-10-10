@@ -6,7 +6,8 @@
 
 import type React from 'react';
 import { useMemo } from 'react';
-import { Box } from 'ink';
+import { Box, Text } from 'ink';
+import ProgressBar from 'ink-progress-bar';
 import type { IndividualToolCallDisplay } from '../../types.js';
 import { ToolCallStatus } from '../../types.js';
 import { ToolMessage } from './ToolMessage.js';
@@ -23,6 +24,24 @@ interface ToolGroupMessageProps {
   config: Config;
   isFocused?: boolean;
 }
+
+const isTerminalStatus = (status: ToolCallStatus): boolean =>
+  status === ToolCallStatus.Success ||
+  status === ToolCallStatus.Error ||
+  status === ToolCallStatus.Canceled;
+
+const countCompletedTools = (
+  toolCalls: readonly IndividualToolCallDisplay[],
+): number => toolCalls.filter((tool) => isTerminalStatus(tool.status)).length;
+
+const calculateProgress = (
+  toolCalls: readonly IndividualToolCallDisplay[],
+): number => {
+  if (toolCalls.length === 0) {
+    return 0;
+  }
+  return countCompletedTools(toolCalls) / toolCalls.length;
+};
 
 // Main component renders the border and maps the tools using ToolMessage
 export const ToolGroupMessage: React.FC<ToolGroupMessageProps> = ({
@@ -84,6 +103,18 @@ export const ToolGroupMessage: React.FC<ToolGroupMessageProps> = ({
       borderColor={borderColor}
       gap={1}
     >
+      {toolCalls.length > 1 && (
+        <Box flexDirection="column" paddingX={1} paddingTop={1} gap={1}>
+          <Text color={Colors.Gray}>
+            {`${countCompletedTools(toolCalls)}/${toolCalls.length} tools finished`}
+          </Text>
+          <ProgressBar
+            percent={calculateProgress(toolCalls)}
+            barColor={hasPending ? Colors.AccentYellow : Colors.AccentGreen}
+            backgroundColor={Colors.Gray}
+          />
+        </Box>
+      )}
       {toolCalls.map((tool) => {
         const isConfirming = toolAwaitingApproval?.callId === tool.callId;
         return (

@@ -6,6 +6,7 @@
 
 import type React from 'react';
 import { Box, Text } from 'ink';
+import Link from 'ink-link';
 import { theme } from '../semantic-colors.js';
 import { shortenPath, tildeifyPath } from '@ouroboros/ouroboros-code-core';
 import { ConsoleSummaryDisplay } from './ConsoleSummaryDisplay.js';
@@ -116,9 +117,12 @@ export const Footer: React.FC<FooterProps> = ({
             </Text>
           </Text>
         ) : (
-          <Text color={theme.status.error}>
-            no sandbox <Text color={theme.text.secondary}>(see /docs)</Text>
-          </Text>
+          <Box flexDirection="row" alignItems="center">
+            <Text color={theme.status.error}>no sandbox </Text>
+            <Link url="https://github.com/google-gemini/gemini-cli/blob/main/docs/sandbox.md">
+              <Text color={theme.text.link}>(view guidance)</Text>
+            </Link>
+          </Box>
         )}
       </Box>
 
