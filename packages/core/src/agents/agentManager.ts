@@ -6,7 +6,11 @@
 
 import { getAgentById, type AgentPersona } from './personas.js';
 import type { Config } from '../config/config.js';
-import { injectToolExamples } from './toolInjector.js';
+import {
+  injectToolExamples,
+  buildSharedToolingAppendix,
+  type SlashCommandSummary,
+} from './toolInjector.js';
 
 /**
  * Manages active agents and their integration with the system prompt
@@ -15,7 +19,7 @@ export class AgentManager {
   private static instance: AgentManager | null = null;
   private activeAgents = new Set<string>();
   private config: Config | null = null;
-  private baseSystemPrompt = '';
+  private slashCommandSummaries: SlashCommandSummary[] | null = null;
 
   private constructor() {}
 
@@ -31,19 +35,7 @@ export class AgentManager {
    */
   initialize(config: Config): void {
     this.config = config;
-    // Store the original system prompt so we can restore it
-    this.baseSystemPrompt = this.getCurrentSystemPrompt();
-  }
-
-  /**
-   * Get the current system prompt from config
-   */
-  private getCurrentSystemPrompt(): string {
-    if (!this.config) return '';
-    
-    // Try to get current system prompt from config
-    // This might need to be adapted based on how Config stores system prompts
-    return this.config.getSystemPrompt?.() || '';
+    this.slashCommandSummaries = null;
   }
 
   /**
@@ -128,6 +120,13 @@ export class AgentManager {
       .filter(Boolean) as AgentPersona[];
   }
 
+  setSlashCommandSummaries(summaries: SlashCommandSummary[]): void {
+    this.slashCommandSummaries = [...summaries];
+    if (this.config && this.activeAgents.size > 0) {
+      void this.updateSystemPrompt();
+    }
+  }
+
   /**
    * Check if an agent is active
    */
@@ -147,40 +146,57 @@ export class AgentManager {
    * Update the system prompt by combining base prompt with active agent prompts
    */
   private async updateSystemPrompt(): Promise<void> {
-    if (!this.config) return;
-
-    let combinedPrompt = this.baseSystemPrompt;
-    const activeAgentsList = this.getActiveAgents();
-
-    if (activeAgentsList.length > 0) {
-      // Add agent coordination section
-      combinedPrompt += `\n\n# ACTIVE SPECIALIST AGENTS
-
-You now have access to the expertise of ${activeAgentsList.length} specialist agent(s). Each agent brings deep domain knowledge that you should leverage when relevant to the user's request.
-
-## Active Specialists:
-${activeAgentsList.map(agent => `• ${agent.emoji} **${agent.name}** - ${agent.description}`).join('\n')}
-
-## Agent Integration Guidelines:
-1. **Identify Relevant Expertise**: When the user's request relates to an active agent's specialty, integrate that agent's knowledge
-2. **Multi-Agent Collaboration**: For complex tasks, combine insights from multiple relevant agents
-3. **Maintain Agent Personas**: When acting on behalf of an agent, reflect their specific expertise and approach
-4. **Agent Communication**: You can reference agents explicitly (e.g., "As the Systems Architect would recommend...")
-
----
-
-# SPECIALIST AGENT KNOWLEDGE BASE
-
-${activeAgentsList.map(agent => this.formatAgentPrompt(agent)).join('\n\n---\n\n')}
-
----
-
-# END AGENT KNOWLEDGE BASE
-
-Remember: You now have access to the combined expertise above. Use it appropriately based on the user's needs.`;
+    if (!this.config) {
+      return;
     }
 
-    // Update the system prompt in the config
+    const activeAgentsList = this.getActiveAgents();
+
+    if (activeAgentsList.length === 0) {
+      await this.config.clearSystemPrompt();
+      return;
+    }
+
+    const basePrompt = this.config.getBaseSystemPrompt().trim();
+    const rosterLines = activeAgentsList
+      .map(
+        (agent) =>
+          `• ${agent.emoji} **${agent.name}** (${agent.id}) — ${agent.description}`,
+      )
+      .join('\n');
+
+    const personaSections = activeAgentsList
+      .map((agent) => this.formatAgentPrompt(agent))
+      .join('\n\n---\n\n');
+
+    const sharedAppendix = buildSharedToolingAppendix(this.config, {
+      slashCommandSummaries: this.slashCommandSummaries ?? undefined,
+    });
+
+    const combinedPrompt = [
+      basePrompt,
+      '---',
+      '# ACTIVE SPECIALIST AGENTS',
+      `You now have access to the expertise of ${activeAgentsList.length} specialist agent(s). Leverage their strengths when relevant to the user\'s request and coordinate tightly so plans stay cohesive.`,
+      '## Active Specialists:',
+      rosterLines,
+      '## Collaboration Protocol:',
+      '1. **Targeted Delegation** — Route sub-tasks to the specialist whose skills best match the need. Avoid redundant parallel work.',
+      '2. **Evidence First** — Cite the repository evidence (tool outputs, file paths, logs) each specialist uses so the orchestrator can audit reasoning.',
+      '3. **Tight Feedback Loop** — Summaries must be concise, highlight blockers, and propose next steps or handoffs explicitly.',
+      '---',
+      '# SPECIALIST AGENT DOSSIER',
+      personaSections,
+      '---',
+      '# SHARED TOOLING APPENDIX',
+      sharedAppendix,
+      '---',
+      '# END AGENT KNOWLEDGE BASE',
+      'Remember: invoke specialists deliberately, respect their guardrails, and fall back to the base prompt when no specialist insight is needed.',
+    ]
+      .filter((section) => section && section.length > 0)
+      .join('\n\n');
+
     await this.setSystemPrompt(combinedPrompt);
   }
 
@@ -188,18 +204,32 @@ Remember: You now have access to the combined expertise above. Use it appropriat
    * Format an agent's system prompt for integration
    */
   private formatAgentPrompt(agent: AgentPersona): string {
-    // Inject tool usage examples into the agent's system prompt
-    const enhancedPrompt = injectToolExamples(agent.systemPrompt, agent.specialties);
-    
-    return `## ${agent.emoji} ${agent.name} (${agent.id})
+    const specialties = agent.specialties
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    const primarySpecialties = specialties.slice(0, 5);
+    const engagementHints =
+      primarySpecialties.length > 0
+        ? primarySpecialties.map((entry) => `- ${entry}`).join('\n')
+        : '- Apply judgement for ambiguous domain questions.';
 
-**Category**: ${agent.category}
-**Specialties**: ${agent.specialties.join(', ')}
+    const personaPrimer = injectToolExamples(agent.systemPrompt, specialties, {
+      includeSharedAppendix: false,
+    });
 
-**Expert Knowledge & Approach**:
-${enhancedPrompt}
-
-**When to engage this specialist**: When users ask about ${agent.specialties.slice(0, 3).join(', ')}, or related topics in ${agent.category}.`;
+    return [
+      `## ${agent.emoji} ${agent.name} (${agent.id})`,
+      `**Category**: ${agent.category}`,
+      `**Mission Statement**: ${agent.description}`,
+      '### When to Pull This Specialist In',
+      engagementHints,
+      '### Working Agreements',
+      '- Respond with short, evidence-backed updates tailored to the orchestrator. Highlight blockers immediately.',
+      '- Escalate when requirements are ambiguous or conflicting. Recommend which agent should assist next.',
+      '- Keep deliverables reproducible: reference exact files, commands, and verification steps.',
+      '### Specialist Playbook',
+      personaPrimer,
+    ].join('\n\n');
   }
 
   /**

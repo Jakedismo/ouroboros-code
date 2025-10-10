@@ -17,4 +17,6 @@ export {
   SectionHeading,
   type SectionHeadingProps,
   type SectionHeadingTone,
+  TextInputField,
+  type TextInputFieldProps,
 } from './components.js';

@@ -5,6 +5,7 @@
  */
 
 import { Box, Newline, Text } from 'ink';
+import Link from 'ink-link';
 import { RadioButtonSelect } from '../components/shared/RadioButtonSelect.js';
 import { usePrivacySettings } from '../hooks/usePrivacySettings.js';
 import { CloudPaidPrivacyNotice } from './CloudPaidPrivacyNotice.js';
@@ -106,10 +107,13 @@ export const CloudFreePrivacyNotice = ({
         />
       </Box>
       <Newline />
-      <Text>
-        <Text color={Colors.AccentBlue}>[1]</Text>{' '}
-        https://policies.google.com/privacy
-      </Text>
+      <Box flexDirection="row">
+        <Text color={Colors.AccentBlue}>[1]</Text>
+        <Text> </Text>
+        <Link url="https://policies.google.com/privacy">
+          <Text color={Colors.AccentBlue}>https://policies.google.com/privacy</Text>
+        </Link>
+      </Box>
       <Newline />
       <Text color={Colors.Gray}>Press Enter to choose an option and exit.</Text>
     </Box>

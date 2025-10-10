@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import React from 'react';
 import type { Mock } from 'vitest';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { waitFor } from '@testing-library/react';
@@ -28,7 +29,11 @@ import process from 'node:process';
 import { useGeminiStream } from './hooks/useGeminiStream.js';
 import { useConsoleMessages } from './hooks/useConsoleMessages.js';
 import type { ConsoleMessageItem } from './types.js';
-import { StreamingState } from './types.js';
+import {
+  StreamingState,
+  ToolCallStatus,
+  type HistoryItemWithoutId,
+} from './types.js';
 import { Tips } from './components/Tips.js';
 import type { UpdateObject } from './utils/updateCheck.js';
 import { checkForUpdates } from './utils/updateCheck.js';
@@ -36,6 +41,21 @@ import { EventEmitter } from 'node:events';
 import { updateEventEmitter } from '../utils/updateEventEmitter.js';
 import * as auth from '../config/auth.js';
 import * as useTerminalSize from './hooks/useTerminalSize.js';
+
+const createDefaultGeminiStreamState = () => ({
+  streamingState: StreamingState.Idle,
+  submitQuery: vi.fn(),
+  initError: null,
+  pendingHistoryItems: [],
+  thought: null,
+  cancelOngoingRequest: vi.fn(),
+});
+
+const resetUseGeminiStreamMock = () => {
+  vi.mocked(useGeminiStream).mockImplementation(() =>
+    createDefaultGeminiStreamState(),
+  );
+};
 
 // Define a more complete mock server config based on actual Config
 interface MockServerConfig {
@@ -199,13 +219,7 @@ vi.mock('@ouroboros/ouroboros-code-core', async (importOriginal) => {
 
 // Mock heavy dependencies or those with side effects
 vi.mock('./hooks/useGeminiStream', () => ({
-  useGeminiStream: vi.fn(() => ({
-    streamingState: 'Idle',
-    submitQuery: vi.fn(),
-    initError: null,
-    pendingHistoryItems: [],
-    thought: null,
-  })),
+  useGeminiStream: vi.fn(() => createDefaultGeminiStreamState()),
 }));
 
 vi.mock('./hooks/useAuthCommand', () => ({
@@ -320,6 +334,7 @@ describe('App UI', () => {
   };
 
   beforeEach(() => {
+    resetUseGeminiStreamMock();
     vi.spyOn(useTerminalSize, 'useTerminalSize').mockReturnValue({
       columns: 120,
       rows: 24,
@@ -1594,6 +1609,206 @@ describe('App UI', () => {
       expect(
         mockSettings.merged.advanced?.debugKeystrokeLogging,
       ).toBeUndefined();
+    });
+  });
+
+  describe('tool execution timeline logging', () => {
+    it('renders each tool call once while capturing a frame log of the session', async () => {
+      vi.useFakeTimers();
+
+      const toolName = 'write_file';
+      const userPrompt = 'Add integration tests for the CLI';
+      const toolResult = 'Wrote App.renderSequence.test.tsx';
+      const assistantReply = 'All tests updated.';
+
+      vi.mocked(useGeminiStream).mockImplementation(
+        (
+          _client,
+          history,
+          addItem,
+          _updateItem,
+          _config,
+          _settings,
+          _onDebugMessage,
+          _handleSlashCommand,
+          _shellModeActive,
+          _getPreferredEditor,
+          _onAuthError,
+          _performMemoryRefresh,
+          _modelSwitchedFromQuotaError,
+          _setModelSwitchedFromQuotaError,
+          _onEditorClose,
+          _onCancelSubmit,
+        ) => {
+          const [pendingHistoryItems, setPendingHistoryItems] =
+            React.useState<HistoryItemWithoutId[]>(() => [
+              {
+                type: 'tool_group',
+                tools: [
+                  {
+                    callId: 'tool-1',
+                    name: toolName,
+                    description: 'Prepare test coverage',
+                    status: ToolCallStatus.Pending,
+                    resultDisplay: undefined,
+                    confirmationDetails: undefined,
+                    renderOutputAsMarkdown: false,
+                  },
+                ],
+              },
+            ]);
+          const [streamingState, setStreamingState] = React.useState(
+            StreamingState.Responding,
+          );
+
+          React.useEffect(() => {
+            if (!history.some((item) => item.type === 'user')) {
+              addItem({ type: 'user', text: userPrompt }, 1000);
+            }
+          }, [history, addItem]);
+
+          React.useEffect(() => {
+            const toExecuting = setTimeout(() => {
+              setPendingHistoryItems((prev) =>
+                prev.map((item) =>
+                  item.type === 'tool_group'
+                    ? {
+                        ...item,
+                        tools: item.tools.map((tool) =>
+                          tool.callId === 'tool-1'
+                            ? {
+                                ...tool,
+                                status: ToolCallStatus.Executing,
+                                resultDisplay: 'Applying patch...',
+                              }
+                            : tool,
+                        ),
+                      }
+                    : item,
+                ),
+              );
+            }, 200);
+
+            const toComplete = setTimeout(() => {
+              setPendingHistoryItems([]);
+              setStreamingState(StreamingState.Idle);
+              addItem(
+                {
+                  type: 'tool_group',
+                  tools: [
+                    {
+                      callId: 'tool-1',
+                      name: toolName,
+                      description: 'Prepare test coverage',
+                      status: ToolCallStatus.Success,
+                      resultDisplay: toolResult,
+                      confirmationDetails: undefined,
+                      renderOutputAsMarkdown: false,
+                    },
+                  ],
+                },
+                2000,
+              );
+              addItem({ type: 'gemini', text: assistantReply }, 3000);
+            }, 1000);
+
+            return () => {
+              clearTimeout(toExecuting);
+              clearTimeout(toComplete);
+            };
+          }, [addItem]);
+
+          return {
+            streamingState,
+            submitQuery: vi.fn(),
+            initError: null,
+            pendingHistoryItems,
+            thought: null,
+            cancelOngoingRequest: vi.fn(),
+          };
+        },
+      );
+
+      const { lastFrame, unmount } = renderWithProviders(
+        <App
+          config={mockConfig as unknown as ServerConfig}
+          settings={mockSettings}
+          version={mockVersion}
+        />,
+      );
+      currentUnmount = unmount;
+
+      const sanitizeFrame = (frame: string | undefined) =>
+        (frame ?? '').replace(/\u001B\[[0-9;]*m/g, '');
+
+      try {
+        await waitFor(() => {
+          expect(sanitizeFrame(lastFrame())).toContain(userPrompt);
+        });
+
+        const pendingFrame = sanitizeFrame(lastFrame());
+        expect((pendingFrame.match(new RegExp(toolName, 'g')) ?? []).length).toBe(
+          1,
+        );
+
+        await vi.advanceTimersByTimeAsync(200);
+
+        await waitFor(() => {
+          expect(sanitizeFrame(lastFrame())).toContain('Applying patch...');
+        });
+
+        const executingFrame = sanitizeFrame(lastFrame());
+        expect(
+          (executingFrame.match(new RegExp(toolName, 'g')) ?? []).length,
+        ).toBe(1);
+
+        await vi.advanceTimersByTimeAsync(800);
+
+        await waitFor(() => {
+          const completed = sanitizeFrame(lastFrame());
+          expect(completed).toContain(toolResult);
+          expect(completed).toContain(assistantReply);
+        });
+
+        const completedFrame = sanitizeFrame(lastFrame());
+        expect(
+          (completedFrame.match(new RegExp(toolName, 'g')) ?? []).length,
+        ).toBe(1);
+
+        const summarize = (frame: string) =>
+          frame
+            .split('\n')
+            .filter((line) =>
+              [
+                userPrompt,
+                toolName,
+                'Applying patch...',
+                toolResult,
+                assistantReply,
+              ].some((token) => line.includes(token)),
+            )
+            .map((line) => line.trim())
+            .join('\n');
+
+        const timelineLog = [
+          summarize(pendingFrame),
+          summarize(executingFrame),
+          summarize(completedFrame),
+        ];
+
+        expect(timelineLog).toHaveLength(3);
+        expect(timelineLog[0]).toContain(userPrompt);
+        expect(timelineLog[0]).toContain(toolName);
+        expect(timelineLog[1]).toContain('Applying patch...');
+        expect(timelineLog[1]).toContain(toolName);
+        expect(timelineLog[1]).not.toContain(toolResult);
+        expect(timelineLog[2]).toContain(toolResult);
+        expect(timelineLog[2]).toContain(assistantReply);
+        expect(timelineLog[2]).toContain(toolName);
+      } finally {
+        vi.useRealTimers();
+        resetUseGeminiStreamMock();
+      }
     });
   });
 

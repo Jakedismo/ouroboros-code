@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import stripAnsi from 'strip-ansi';
 import { Sidebar } from './Sidebar.js';
 import { renderWithProviders } from '../../test-utils/render.js';
+import { appEvents, AppEvent } from '../../utils/events.js';
+import { setTimeout as delay } from 'node:timers/promises';
 
 describe('<Sidebar />', () => {
   it('shows session metadata and quick actions', () => {
@@ -29,5 +31,47 @@ describe('<Sidebar />', () => {
 
     const frame = stripAnsi(lastFrame() ?? '');
     expect(frame).toContain('Navigator');
+  });
+
+  it('supports slash search to filter and launch quick actions', async () => {
+    const emitSpy = vi.spyOn(appEvents, 'emit');
+    try {
+      const { lastFrame, stdin } = renderWithProviders(
+        <Sidebar interactive model="gemini" provider="google" />,
+      );
+
+      stdin.write('/');
+      await delay(0);
+      stdin.write('tools');
+      await delay(0);
+
+      const frame = stripAnsi(lastFrame() ?? '');
+      expect(frame).toContain('Search actions');
+      expect(frame).toContain('/tools');
+
+      stdin.write('\r');
+      await delay(0);
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        AppEvent.ExecuteSlashCommand,
+        '/tools',
+      );
+    } finally {
+      emitSpy.mockRestore();
+    }
+  });
+
+  it('explains when no quick actions match the search query', async () => {
+    const { lastFrame, stdin } = renderWithProviders(
+      <Sidebar interactive model="gemini" provider="google" />,
+    );
+
+    stdin.write('/');
+    await delay(0);
+    stdin.write('zzz');
+    await delay(0);
+
+    const frame = stripAnsi(lastFrame() ?? '');
+    expect(frame).toContain('No quick actions match');
   });
 });

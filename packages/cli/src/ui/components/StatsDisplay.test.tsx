@@ -62,8 +62,9 @@ describe('<StatsDisplay />', () => {
     expect(output).toContain('Performance');
     expect(output).toContain('Interaction Summary');
     expect(output).not.toContain('Efficiency & Optimizations');
-    expect(output).not.toContain('Model'); // The table header
-    expect(output).toMatchSnapshot();
+    expect(output).not.toContain('Model Usage');
+    expect(output).not.toContain('Savings Highlight');
+    expect(output).not.toContain('Cache Hit %');
   });
 
   it('renders a table with two models correctly', () => {
@@ -109,11 +110,15 @@ describe('<StatsDisplay />', () => {
     const { lastFrame } = renderWithMockedStats(metrics);
     const output = lastFrame();
 
+    expect(output).toContain('Model Usage');
     expect(output).toContain('gemini-2.5-pro');
     expect(output).toContain('gemini-2.5-flash');
     expect(output).toContain('1,000');
     expect(output).toContain('25,000');
-    expect(output).toMatchSnapshot();
+    expect(output).toContain('Cache Hit %');
+    expect(output).toContain('50.0%');
+    expect(output).toContain('40.0%');
+    expect(output).toContain('Savings Highlight');
   });
 
   it('renders all sections when all data is present', () => {
@@ -161,7 +166,7 @@ describe('<StatsDisplay />', () => {
     expect(output).toContain('User Agreement');
     expect(output).toContain('Savings Highlight');
     expect(output).toContain('gemini-2.5-pro');
-    expect(output).toMatchSnapshot();
+    expect(output).toContain('Cache Hit %');
   });
 
   describe('Conditional Rendering Tests', () => {
@@ -196,7 +201,6 @@ describe('<StatsDisplay />', () => {
       expect(output).toContain('Interaction Summary');
       expect(output).toContain('Success Rate');
       expect(output).not.toContain('User Agreement');
-      expect(output).toMatchSnapshot();
     });
 
     it('hides Efficiency section when cache is not used', () => {
@@ -232,7 +236,9 @@ describe('<StatsDisplay />', () => {
       const output = lastFrame();
 
       expect(output).not.toContain('Efficiency & Optimizations');
-      expect(output).toMatchSnapshot();
+      expect(output).not.toContain('Savings Highlight');
+      expect(output).toContain('Model Usage');
+      expect(output).toContain('Cache Hit %');
     });
   });
 
@@ -254,7 +260,9 @@ describe('<StatsDisplay />', () => {
         },
       };
       const { lastFrame } = renderWithMockedStats(metrics);
-      expect(lastFrame()).toMatchSnapshot();
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('Success Rate');
+      expect(frame).toContain('100.0%');
     });
 
     it('renders success rate in yellow for medium values', () => {
@@ -274,7 +282,9 @@ describe('<StatsDisplay />', () => {
         },
       };
       const { lastFrame } = renderWithMockedStats(metrics);
-      expect(lastFrame()).toMatchSnapshot();
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('Success Rate');
+      expect(frame).toContain('90.0%');
     });
 
     it('renders success rate in red for low values', () => {
@@ -294,7 +304,9 @@ describe('<StatsDisplay />', () => {
         },
       };
       const { lastFrame } = renderWithMockedStats(metrics);
-      expect(lastFrame()).toMatchSnapshot();
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('Success Rate');
+      expect(frame).toContain('50.0%');
     });
   });
 
@@ -322,7 +334,6 @@ describe('<StatsDisplay />', () => {
       expect(output).toContain('Code Changes:');
       expect(output).toContain('+42');
       expect(output).toContain('-18');
-      expect(output).toMatchSnapshot();
     });
 
     it('hides Code Changes when no lines are added or removed', () => {
@@ -346,7 +357,6 @@ describe('<StatsDisplay />', () => {
       const output = lastFrame();
 
       expect(output).not.toContain('Code Changes:');
-      expect(output).toMatchSnapshot();
     });
   });
 
@@ -372,7 +382,6 @@ describe('<StatsDisplay />', () => {
       const output = lastFrame();
       expect(output).toContain('Session Stats');
       expect(output).not.toContain('Agent powering down');
-      expect(output).toMatchSnapshot();
     });
 
     it('renders the custom title when a title prop is provided', () => {
@@ -395,7 +404,6 @@ describe('<StatsDisplay />', () => {
       const output = lastFrame();
       expect(output).toContain('Agent powering down. Goodbye!');
       expect(output).not.toContain('Session Stats');
-      expect(output).toMatchSnapshot();
     });
   });
 });

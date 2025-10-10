@@ -5,8 +5,15 @@
  */
 
 import type React from 'react';
-import { useEffect, useState, useRef } from 'react';
-import { Text, Box } from 'ink';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Text } from 'ink';
+import SelectInput from 'ink-select-input';
+import type {
+  Item as SelectInputItem,
+  Props as SelectInputProps,
+} from 'ink-select-input/build/SelectInput.js';
+import type { Props as IndicatorProps } from 'ink-select-input/build/Indicator.js';
+import type { Props as ItemProps } from 'ink-select-input/build/Item.js';
 import { Colors } from '../../colors.js';
 import { useKeypress } from '../../hooks/useKeypress.js';
 
@@ -45,12 +52,24 @@ export interface RadioButtonSelectProps<T> {
   showNumbers?: boolean;
 }
 
-/**
- * A custom component that displays a list of items with radio buttons,
- * supporting scrolling and keyboard navigation.
- *
- * @template T The type of the value associated with each radio item.
- */
+type SelectValue<T> = {
+  readonly index: number;
+  readonly option: RadioSelectItem<T>;
+};
+
+const clampIndex = (index: number, length: number): number => {
+  if (length === 0) {
+    return 0;
+  }
+  if (index < 0) {
+    return 0;
+  }
+  if (index >= length) {
+    return length - 1;
+  }
+  return index;
+};
+
 export function RadioButtonSelect<T>({
   items,
   initialIndex = 0,
@@ -60,179 +79,232 @@ export function RadioButtonSelect<T>({
   showScrollArrows = false,
   maxItemsToShow = 10,
   showNumbers = true,
-}: RadioButtonSelectProps<T>): React.JSX.Element {
-  const [activeIndex, setActiveIndex] = useState(initialIndex);
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const [numberInput, setNumberInput] = useState('');
-  const numberInputTimer = useRef<NodeJS.Timeout | null>(null);
+}: RadioButtonSelectProps<T>): React.JSX.Element | null {
+  const normalizedInitialIndex = clampIndex(initialIndex, items.length);
+  const [highlightedIndex, setHighlightedIndex] = useState(normalizedInitialIndex);
+  const [selectKey, setSelectKey] = useState(0);
+  const [forcedIndex, setForcedIndex] = useState<number | null>(null);
+  const numberBufferRef = useRef('');
+  const numberTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSelectionRef = useRef<RadioSelectItem<T> | null>(null);
+
   useEffect(() => {
-    const newScrollOffset = Math.max(
-      0,
-      Math.min(activeIndex - maxItemsToShow + 1, items.length - maxItemsToShow),
-    );
-    if (activeIndex < scrollOffset) {
-      setScrollOffset(activeIndex);
-    } else if (activeIndex >= scrollOffset + maxItemsToShow) {
-      setScrollOffset(newScrollOffset);
+    const nextIndex = clampIndex(initialIndex, items.length);
+    setHighlightedIndex(nextIndex);
+    setForcedIndex(nextIndex);
+    setSelectKey((key) => key + 1);
+  }, [initialIndex, items.length]);
+
+  useEffect(() => {
+    if (forcedIndex === null) {
+      return;
     }
-  }, [activeIndex, items.length, scrollOffset, maxItemsToShow]);
+    const clearForcedIndex = setTimeout(() => setForcedIndex(null), 0);
+    return () => clearTimeout(clearForcedIndex);
+  }, [forcedIndex]);
 
   useEffect(
     () => () => {
-      if (numberInputTimer.current) {
-        clearTimeout(numberInputTimer.current);
+      if (numberTimerRef.current) {
+        clearTimeout(numberTimerRef.current);
       }
     },
     [],
   );
 
-  useKeypress(
-    (key) => {
-      const { sequence, name } = key;
-      const isNumeric = showNumbers && /^[0-9]$/.test(sequence);
-
-      // Any key press that is not a digit should clear the number input buffer.
-      if (!isNumeric && numberInputTimer.current) {
-        clearTimeout(numberInputTimer.current);
-        setNumberInput('');
-      }
-
-      if (name === 'k' || name === 'up') {
-        const newIndex = activeIndex > 0 ? activeIndex - 1 : items.length - 1;
-        setActiveIndex(newIndex);
-        onHighlight?.(items[newIndex]!.value);
-        return;
-      }
-
-      if (name === 'j' || name === 'down') {
-        const newIndex = activeIndex < items.length - 1 ? activeIndex + 1 : 0;
-        setActiveIndex(newIndex);
-        onHighlight?.(items[newIndex]!.value);
-        return;
-      }
-
-      if (name === 'return') {
-        onSelect(items[activeIndex]!.value);
-        return;
-      }
-
-      // Handle numeric input for selection.
-      if (isNumeric) {
-        if (numberInputTimer.current) {
-          clearTimeout(numberInputTimer.current);
-        }
-
-        const newNumberInput = numberInput + sequence;
-        setNumberInput(newNumberInput);
-
-        const targetIndex = Number.parseInt(newNumberInput, 10) - 1;
-
-        // A single '0' is not a valid selection since items are 1-indexed.
-        if (newNumberInput === '0') {
-          numberInputTimer.current = setTimeout(() => setNumberInput(''), 350);
-          return;
-        }
-
-        if (targetIndex >= 0 && targetIndex < items.length) {
-          const targetItem = items[targetIndex]!;
-          setActiveIndex(targetIndex);
-          onHighlight?.(targetItem.value);
-
-          // If the typed number can't be a prefix for another valid number,
-          // select it immediately. Otherwise, wait for more input.
-          const potentialNextNumber = Number.parseInt(newNumberInput + '0', 10);
-          if (potentialNextNumber > items.length) {
-            onSelect(targetItem.value);
-            setNumberInput('');
-          } else {
-            numberInputTimer.current = setTimeout(() => {
-              onSelect(targetItem.value);
-              setNumberInput('');
-            }, 350); // Debounce time for multi-digit input.
-          }
-        } else {
-          // The typed number is out of bounds, clear the buffer
-          setNumberInput('');
-        }
-      }
-    },
-    { isActive: !!(isFocused && items.length > 0) },
+  const selectItems: Array<SelectInputItem<SelectValue<T>>> = useMemo(
+    () =>
+      items.map((option, index) => ({
+        key: `${index}-${option.label}`,
+        label: option.label,
+        value: { index, option },
+      })),
+    [items],
   );
 
-  const visibleItems = items.slice(scrollOffset, scrollOffset + maxItemsToShow);
+  const totalDigits = useMemo(() => String(items.length).length, [items.length]);
+
+  const commitSelection = (option: RadioSelectItem<T>) => {
+    if (option.disabled) {
+      return;
+    }
+    onSelect(option.value);
+  };
+
+  const handleHighlight = (item: SelectInputItem<SelectValue<T>>) => {
+    const { index, option } = item.value;
+    setHighlightedIndex(index);
+    if (!option.disabled) {
+      onHighlight?.(option.value);
+    }
+  };
+
+  const handleSelect = (item: SelectInputItem<SelectValue<T>>) => {
+    if (numberBufferRef.current !== '') {
+      pendingSelectionRef.current = item.value.option;
+      return;
+    }
+    commitSelection(item.value.option);
+  };
+
+  const scheduleBufferReset = () => {
+    if (numberTimerRef.current) {
+      clearTimeout(numberTimerRef.current);
+    }
+    numberTimerRef.current = setTimeout(() => {
+      numberBufferRef.current = '';
+      pendingSelectionRef.current = null;
+    }, 350);
+  };
+
+  useKeypress(
+    (key) => {
+      if (!isFocused || !showNumbers || items.length === 0) {
+        return;
+      }
+
+      const { sequence } = key;
+      if (!sequence || !/^[0-9]$/.test(sequence)) {
+        if (numberBufferRef.current && sequence) {
+          numberBufferRef.current = '';
+          pendingSelectionRef.current = null;
+          if (numberTimerRef.current) {
+            clearTimeout(numberTimerRef.current);
+            numberTimerRef.current = null;
+          }
+        }
+        return;
+      }
+
+      if (numberTimerRef.current) {
+        clearTimeout(numberTimerRef.current);
+        numberTimerRef.current = null;
+      }
+
+      const nextBuffer = numberBufferRef.current + sequence;
+      numberBufferRef.current = nextBuffer;
+
+      if (nextBuffer === '0') {
+        scheduleBufferReset();
+        return;
+      }
+
+      const targetIndex = Number.parseInt(nextBuffer, 10) - 1;
+      if (targetIndex >= 0 && targetIndex < items.length) {
+        const targetOption = items[targetIndex]!;
+        pendingSelectionRef.current = targetOption;
+        setHighlightedIndex(targetIndex);
+        setForcedIndex(targetIndex);
+        setSelectKey((key) => key + 1);
+        if (!targetOption.disabled) {
+          onHighlight?.(targetOption.value);
+        }
+
+        const potentialNext = Number.parseInt(`${nextBuffer}0`, 10);
+        if (potentialNext > items.length) {
+          commitSelection(targetOption);
+          numberBufferRef.current = '';
+          pendingSelectionRef.current = null;
+        } else {
+          numberTimerRef.current = setTimeout(() => {
+            if (pendingSelectionRef.current) {
+              commitSelection(pendingSelectionRef.current);
+            }
+            numberBufferRef.current = '';
+            pendingSelectionRef.current = null;
+          }, 350);
+        }
+      } else {
+        numberBufferRef.current = '';
+        pendingSelectionRef.current = null;
+      }
+    },
+    { isActive: Boolean(isFocused && items.length > 0) },
+  );
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  const indicator: React.FC<IndicatorProps> = ({ isSelected }) => (
+    <Box width={2} marginRight={1} justifyContent="center">
+      <Text color={isSelected ? Colors.AccentGreen : Colors.Gray} aria-hidden>
+        {isSelected ? '●' : ' '}
+      </Text>
+    </Box>
+  );
+
+  const ItemRow: React.FC<ItemProps & { value: SelectValue<T> }> = ({
+    label,
+    isSelected,
+    value,
+  }) => {
+    const { option, index } = value;
+    const isDisabled = option.disabled;
+    const baseColor = isDisabled ? Colors.Gray : Colors.Foreground;
+    const textColor = isSelected && !isDisabled ? Colors.AccentGreen : baseColor;
+    const numberText = `${String(index + 1).padStart(totalDigits, ' ')}.`;
+
+    return (
+      <Box flexDirection="row" minWidth={1} alignItems="center">
+        {showNumbers && (
+          <Box
+            minWidth={totalDigits + 1}
+            marginRight={1}
+            aria-hidden
+            justifyContent="flex-end"
+          >
+            <Text color={isDisabled ? Colors.Gray : Colors.Comment}>{numberText}</Text>
+          </Box>
+        )}
+        {option.themeNameDisplay && option.themeTypeDisplay ? (
+          <Text color={textColor} wrap="truncate">
+            {option.themeNameDisplay}{' '}
+            <Text color={Colors.Gray}>{option.themeTypeDisplay}</Text>
+          </Text>
+        ) : (
+          <Text color={textColor} wrap="truncate">
+            {label}
+          </Text>
+        )}
+      </Box>
+    );
+  };
+
+  const effectiveLimit = Math.max(1, Math.min(maxItemsToShow, items.length));
+  const hasOverflow = items.length > effectiveLimit;
+  const approximateWindow = Math.max(effectiveLimit - 1, 1);
+  const showUpArrow =
+    showScrollArrows && hasOverflow && highlightedIndex >= approximateWindow;
+  const showDownArrow =
+    showScrollArrows && hasOverflow && highlightedIndex < items.length - 1;
+
+  const selectProps: SelectInputProps<SelectValue<T>> = {
+    key: selectKey,
+    items: selectItems,
+    initialIndex: forcedIndex ?? highlightedIndex,
+    isFocused,
+    limit: effectiveLimit,
+    onHighlight: handleHighlight,
+    onSelect: handleSelect,
+    indicatorComponent: indicator,
+    itemComponent: ItemRow as unknown as React.FC<ItemProps>,
+  };
 
   return (
     <Box flexDirection="column">
-      {showScrollArrows && (
-        <Text color={scrollOffset > 0 ? Colors.Foreground : Colors.Gray}>
+      {showUpArrow && (
+        <Text color={Colors.Gray} aria-hidden>
           ▲
         </Text>
       )}
-      {visibleItems.map((item, index) => {
-        const itemIndex = scrollOffset + index;
-        const isSelected = activeIndex === itemIndex;
-
-        let textColor = Colors.Foreground;
-        let numberColor = Colors.Foreground;
-        if (isSelected) {
-          textColor = Colors.AccentGreen;
-          numberColor = Colors.AccentGreen;
-        } else if (item.disabled) {
-          textColor = Colors.Gray;
-          numberColor = Colors.Gray;
-        }
-
-        if (!showNumbers) {
-          numberColor = Colors.Gray;
-        }
-
-        const numberColumnWidth = String(items.length).length;
-        const itemNumberText = `${String(itemIndex + 1).padStart(
-          numberColumnWidth,
-        )}.`;
-
-        return (
-          <Box key={item.label} alignItems="center">
-            <Box minWidth={2} flexShrink={0}>
-              <Text
-                color={isSelected ? Colors.AccentGreen : Colors.Foreground}
-                aria-hidden
-              >
-                {isSelected ? '●' : ' '}
-              </Text>
-            </Box>
-            <Box
-              marginRight={1}
-              flexShrink={0}
-              minWidth={itemNumberText.length}
-              aria-state={{ checked: isSelected }}
-            >
-              <Text color={numberColor}>{itemNumberText}</Text>
-            </Box>
-            {item.themeNameDisplay && item.themeTypeDisplay ? (
-              <Text color={textColor} wrap="truncate">
-                {item.themeNameDisplay}{' '}
-                <Text color={Colors.Gray}>{item.themeTypeDisplay}</Text>
-              </Text>
-            ) : (
-              <Text color={textColor} wrap="truncate">
-                {item.label}
-              </Text>
-            )}
-          </Box>
-        );
-      })}
-      {showScrollArrows && (
-        <Text
-          color={
-            scrollOffset + maxItemsToShow < items.length
-              ? Colors.Foreground
-              : Colors.Gray
-          }
-        >
+      <SelectInput {...selectProps} />
+      {showDownArrow && (
+        <Text color={Colors.Gray} aria-hidden>
           ▼
         </Text>
       )}
     </Box>
   );
 }
+
