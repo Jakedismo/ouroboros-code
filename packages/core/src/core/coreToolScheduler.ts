@@ -1101,8 +1101,13 @@ export class CoreToolScheduler {
 
       if (this.onAllToolCallsComplete) {
         this.isFinalizingToolCalls = true;
-        await this.onAllToolCallsComplete(completedCalls);
-        this.isFinalizingToolCalls = false;
+        try {
+          await this.onAllToolCallsComplete(completedCalls);
+        } catch (error) {
+          console.error('Failed during tool completion callback:', error);
+        } finally {
+          this.isFinalizingToolCalls = false;
+        }
       }
       this.notifyToolCallsUpdate();
       // After completion, process the next item in the queue.

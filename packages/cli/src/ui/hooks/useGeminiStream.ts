@@ -144,6 +144,7 @@ export const useGeminiStream = (
   const processedMemoryToolsRef = useRef<Set<string>>(new Set());
   const toolHistoryEntryRef = useRef(new Map<string, number>());
   const reasoningItemsRef = useRef<Array<{ text: string; raw?: Record<string, unknown> }>>([]);
+  const historyIdsSnapshotRef = useRef<Set<number>>(new Set());
   const { startNewPrompt, getPromptCount } = useSessionStats();
   const storage = config.storage;
   const logger = useLogger(storage);
@@ -1604,20 +1605,6 @@ export const useGeminiStream = (
           return part;
         });
 
-      const responsesToSend: GeminiPart[] = [
-        ...reasoningParts,
-        ...geminiTools.flatMap((toolCall) => toolCall.response.responseParts),
-      ];
-      const callIdsToMarkAsSubmitted = geminiTools.map(
-        (toolCall) => toolCall.request.callId,
-      );
-
-      const prompt_ids = geminiTools.map(
-        (toolCall) => toolCall.request.prompt_id,
-      );
-
-      markToolsAsSubmitted(callIdsToMarkAsSubmitted);
-
       // Don't continue if model was switched due to quota error
       if (modelSwitchedFromQuotaError) {
         reasoningItemsRef.current = [];
@@ -1635,31 +1622,81 @@ export const useGeminiStream = (
       // we need the external continuation mechanism for all providers.
 
       // External continuation mechanism for all providers (when tools are executed by UI)
+      const promptGroups = new Map<
+        string | undefined,
+        { responses: GeminiPart[]; callIds: string[] }
+      >();
+      for (const toolCall of geminiTools) {
+        const key = toolCall.request.prompt_id;
+        const existingGroup = promptGroups.get(key);
+        if (existingGroup) {
+          existingGroup.responses.push(...toolCall.response.responseParts);
+          existingGroup.callIds.push(toolCall.request.callId);
+        } else {
+          promptGroups.set(key, {
+            responses: [...toolCall.response.responseParts],
+            callIds: [toolCall.request.callId],
+          });
+        }
+      }
+
+      const submittedCallIds: string[] = [];
+      let includeReasoning = reasoningParts.length > 0;
+
       try {
-        console.log('[DEBUG] Submitting tool results as continuation with', responsesToSend.length, 'parts');
-        
-        // All providers use the same mechanism - send tool responses as continuation
-        // The Turn class will handle them appropriately based on the provider
-        const currentProvider = config.getProvider();
-        console.log('[DEBUG] Sending tool responses as continuation for provider:', currentProvider);
-        
-        await submitQuery(
-          responsesToSend,
-          {
-            isContinuation: true,
-          },
-          prompt_ids[0],
-        );
+        for (const [promptId, group] of promptGroups.entries()) {
+          const continuationParts = [
+            ...(includeReasoning ? reasoningParts : []),
+            ...group.responses,
+          ];
+
+          if (continuationParts.length === 0) {
+            markToolsAsSubmitted(group.callIds);
+            submittedCallIds.push(...group.callIds);
+            includeReasoning = false;
+            continue;
+          }
+
+          console.log(
+            '[DEBUG] Submitting tool results as continuation with',
+            continuationParts.length,
+            'parts',
+          );
+
+          const currentProvider = config.getProvider();
+          console.log('[DEBUG] Sending tool responses as continuation for provider:', currentProvider);
+
+          await submitQuery(
+            continuationParts,
+            {
+              isContinuation: true,
+            },
+            promptId,
+          );
+
+          markToolsAsSubmitted(group.callIds);
+          submittedCallIds.push(...group.callIds);
+          includeReasoning = false;
+        }
+
         console.log('[DEBUG] Tool continuation submitted successfully');
         reasoningItemsRef.current = [];
       } catch (error) {
         console.error('[DEBUG] Failed to submit tool continuation:', error);
-        // If continuation fails, ensure we reset the responding state
+        const unsentCallIds = geminiTools
+          .map((toolCall) => toolCall.request.callId)
+          .filter((callId) => !submittedCallIds.includes(callId));
+        unsentCallIds.forEach((callId) => {
+          processedCompletionCallIdsRef.current.delete(callId);
+        });
+        reasoningItemsRef.current = [];
         setIsResponding(false);
         addItem(
           {
             type: MessageType.ERROR,
-            text: `Tool continuation failed: ${error instanceof Error ? error.message : String(error)}`,
+            text: `Tool continuation failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
           },
           Date.now(),
         );
@@ -1675,10 +1712,69 @@ export const useGeminiStream = (
     ],
   );
 
-  const pendingHistoryItems = [
-    pendingHistoryItemRef.current,
-    pendingToolCallGroupDisplay,
-  ].filter((i) => i !== undefined && i !== null);
+  const manualPendingItem = pendingHistoryItemRef.current;
+  const pendingHistoryItems = useMemo(() => {
+    const items: HistoryItemWithoutId[] = [];
+    const schedulerPendingItem = pendingToolCallGroupDisplay;
+
+    if (manualPendingItem && manualPendingItem.type !== 'tool_group') {
+      items.push(manualPendingItem);
+    }
+
+    if (schedulerPendingItem) {
+      if (manualPendingItem?.type === 'tool_group') {
+        const manualToolsById = new Map(
+          manualPendingItem.tools.map((tool) => [tool.callId, tool]),
+        );
+        const mergedSchedulerTools = schedulerPendingItem.tools.map((tool) => {
+          const manualTool = manualToolsById.get(tool.callId);
+          if (!manualTool) {
+            return tool;
+          }
+          return {
+            ...tool,
+            confirmationDetails:
+              tool.confirmationDetails ?? manualTool.confirmationDetails,
+            resultDisplay: tool.resultDisplay ?? manualTool.resultDisplay,
+          };
+        });
+        const manualOnlyTools = manualPendingItem.tools.filter(
+          (manualTool) =>
+            !schedulerPendingItem.tools.some(
+              (scheduledTool) => scheduledTool.callId === manualTool.callId,
+            ),
+        );
+
+        items.push({
+          ...schedulerPendingItem,
+          tools: [...mergedSchedulerTools, ...manualOnlyTools],
+        });
+      } else {
+        items.push(schedulerPendingItem);
+      }
+    } else if (manualPendingItem?.type === 'tool_group') {
+      items.push(manualPendingItem);
+    }
+
+    return items;
+  }, [manualPendingItem, pendingToolCallGroupDisplay]);
+
+  useEffect(() => {
+    const newIds = new Set(history.map((item) => item.id));
+    const previousIds = historyIdsSnapshotRef.current;
+    const historyCleared = history.length === 0;
+    const previousSubsetOfNew = [...previousIds].every((id) => newIds.has(id));
+
+    if (historyCleared || !previousSubsetOfNew) {
+      toolHistoryEntryRef.current.clear();
+      processedCompletionCallIdsRef.current.clear();
+      if (historyCleared) {
+        setPendingHistoryItem(null);
+      }
+    }
+
+    historyIdsSnapshotRef.current = newIds;
+  }, [history, setPendingHistoryItem]);
 
   useEffect(() => {
     const saveRestorableToolCalls = async () => {
