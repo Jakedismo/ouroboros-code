@@ -5,7 +5,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { getAvailableToolNames, injectToolExamples } from './toolInjector.js';
+import {
+  getAvailableToolNames,
+  injectToolExamples,
+  buildSharedToolingAppendix,
+} from './toolInjector.js';
+import type { Config } from '../config/config.js';
 
 const BUILT_IN_TOOL_NAMES = [
   'list_directory',
@@ -38,17 +43,46 @@ describe('toolInjector', () => {
     }
   });
 
-  it('injects the tool operations playbook exactly once', () => {
+  it('injects the legacy shared appendix once when no config is provided', () => {
     const basePrompt = '# Specialist Prompt\n\nDo something smart.';
     const enhanced = injectToolExamples(basePrompt);
 
     const playbookOccurrences = enhanced.match(/# Tool Operations Playbook/g) ?? [];
     expect(playbookOccurrences.length).toBe(1);
+    expect(enhanced).toContain('Remember: you are expected to take action');
+  });
 
-    // Ensure the reminder about using all tools is present.
-    expect(enhanced).toContain('you have access to ALL tools');
-    expect(enhanced).toContain('Required keys: path (string');
-    expect(enhanced).toContain('Required keys: absolute_path (string');
-    expect(enhanced).toContain('Summarize results with source citations');
+  it('buildSharedToolingAppendix filters unavailable tools', () => {
+    const availableTools = new Set([
+      'list_directory',
+      'glob',
+      'replace',
+      'write_file',
+      'run_shell_command',
+    ]);
+
+    const stubRegistry = {
+      getTool(name: string) {
+        return availableTools.has(name) ? ({ name } as unknown) : undefined;
+      },
+      getAllTools() {
+        return [];
+      },
+    };
+
+    const config = {
+      isToolEnabled(identifiers: string[]) {
+        return identifiers.some((identifier) => availableTools.has(identifier));
+      },
+      getToolRegistry() {
+        return stubRegistry;
+      },
+    } as unknown as Config;
+
+    const appendix = buildSharedToolingAppendix(config);
+
+    expect(appendix).toContain('Tool Operations Playbook');
+    expect(appendix).toContain('list_directory');
+    expect(appendix).not.toContain('google_web_search');
   });
 });
