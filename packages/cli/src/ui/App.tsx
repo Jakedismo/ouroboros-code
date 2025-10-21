@@ -166,6 +166,16 @@ const formatMetaShortcut = (key: string): string =>
     ? `⌘${key.toUpperCase()}`
     : `Meta+${key.toUpperCase()}`;
 
+type StaticHeaderItem = { kind: 'header' };
+type StaticHistoryRenderable = HistoryItem | StaticHeaderItem;
+
+const STATIC_HEADER_ITEM: StaticHeaderItem = { kind: 'header' };
+
+const isStaticHeaderItem = (
+  item: StaticHistoryRenderable,
+): item is StaticHeaderItem =>
+  (item as StaticHeaderItem).kind === 'header';
+
 export const AppWrapper = (props: AppProps) => {
   const kittyProtocolStatus = useKittyKeyboardProtocol();
   return (
@@ -228,10 +238,17 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   }, [handleNewMessage, config]);
 
   const { stats: sessionStats } = useSessionStats();
+  const staticItemsCacheRef = useRef<StaticHistoryRenderable[]>([
+    STATIC_HEADER_ITEM,
+  ]);
+  const staticHistoryIdsRef = useRef<number[]>([]);
+  const staticResetPendingRef = useRef(false);
   const [staticNeedsRefresh, setStaticNeedsRefresh] = useState(false);
   const [staticKey, setStaticKey] = useState(0);
   const refreshStatic = useCallback(() => {
-    stdout.write(ansiEscapes.clearTerminal);
+    if (stdout) {
+      stdout.write(ansiEscapes.clearTerminal);
+    }
     setStaticKey((prev) => prev + 1);
   }, [setStaticKey, stdout]);
 
@@ -1193,6 +1210,63 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     ? "  Press 'i' for INSERT mode and 'Esc' for NORMAL mode."
     : '  Type your message or @path/to/file';
 
+  // Maintain a cached list of items fed into <Static /> so previously rendered
+  // history entries are never re-enqueued while streaming. A header sentinel
+  // stays at the front of the list to render banner/tips exactly once.
+  const staticHistoryItems = useMemo<StaticHistoryRenderable[]>(() => {
+    const previousIds = staticHistoryIdsRef.current;
+    const hadPreviousItems = previousIds.length > 0;
+    const currentIds = history.map((item) => item.id);
+
+    if (history.length === 0) {
+      staticHistoryIdsRef.current = [];
+      staticItemsCacheRef.current = [STATIC_HEADER_ITEM];
+      staticResetPendingRef.current = hadPreviousItems;
+      return staticItemsCacheRef.current;
+    }
+
+    const isContinuation =
+      !hadPreviousItems ||
+      (previousIds.length <= currentIds.length &&
+        previousIds.every((id, index) => currentIds[index] === id));
+
+    if (!isContinuation) {
+      staticHistoryIdsRef.current = currentIds;
+      staticItemsCacheRef.current = [STATIC_HEADER_ITEM, ...history];
+      staticResetPendingRef.current = hadPreviousItems;
+      return staticItemsCacheRef.current;
+    }
+
+    staticResetPendingRef.current = false;
+
+    if (currentIds.length > previousIds.length) {
+      const appendedItems = history.slice(previousIds.length);
+      staticItemsCacheRef.current = [
+        ...staticItemsCacheRef.current,
+        ...appendedItems,
+      ];
+      staticHistoryIdsRef.current = currentIds;
+      return staticItemsCacheRef.current;
+    }
+
+    if (!hadPreviousItems) {
+      staticHistoryIdsRef.current = currentIds;
+      staticItemsCacheRef.current = [STATIC_HEADER_ITEM, ...history];
+      return staticItemsCacheRef.current;
+    }
+
+    staticHistoryIdsRef.current = currentIds;
+    return staticItemsCacheRef.current;
+  }, [history]);
+
+  useEffect(() => {
+    if (!staticResetPendingRef.current) {
+      return;
+    }
+    staticResetPendingRef.current = false;
+    refreshStatic();
+  }, [staticHistoryItems, refreshStatic]);
+
   return (
     <StreamingContext.Provider value={streamingState}>
       <Box flexDirection="row" width="100%" justifyContent="center">
@@ -1229,29 +1303,30 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
          */}
         <Static
           key={staticKey}
-          items={[
-            <Box flexDirection="column" key="header">
-              {!(
-                settings.merged.ui?.hideBanner || config.getScreenReader()
-              ) && <Header version={version} nightly={nightly} />}
-              {!(settings.merged.ui?.hideTips || config.getScreenReader()) && (
-                <Tips config={config} />
-              )}
-            </Box>,
-            ...history.map((h) => (
+          items={staticHistoryItems}
+        >
+          {(item) =>
+            isStaticHeaderItem(item) ? (
+              <Box flexDirection="column" key="header">
+                {!(
+                  settings.merged.ui?.hideBanner || config.getScreenReader()
+                ) && <Header version={version} nightly={nightly} />}
+                {!(settings.merged.ui?.hideTips || config.getScreenReader()) && (
+                  <Tips config={config} />
+                )}
+              </Box>
+            ) : (
               <HistoryItemDisplay
                 terminalWidth={mainAreaWidth}
                 availableTerminalHeight={staticAreaMaxItemHeight}
-                key={h.id}
-                item={h}
+                key={item.id}
+                item={item}
                 isPending={false}
                 config={config}
                 commands={slashCommands}
               />
-            )),
-          ]}
-        >
-          {(item) => item}
+            )
+          }
         </Static>
         <OverflowProvider>
           <Box ref={pendingHistoryItemRef} flexDirection="column">
