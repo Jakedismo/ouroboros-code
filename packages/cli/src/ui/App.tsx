@@ -166,6 +166,16 @@ const formatMetaShortcut = (key: string): string =>
     ? `⌘${key.toUpperCase()}`
     : `Meta+${key.toUpperCase()}`;
 
+type StaticHeaderItem = { kind: 'header' };
+type StaticHistoryRenderable = HistoryItem | StaticHeaderItem;
+
+const STATIC_HEADER_ITEM: StaticHeaderItem = { kind: 'header' };
+
+const isStaticHeaderItem = (
+  item: StaticHistoryRenderable,
+): item is StaticHeaderItem =>
+  (item as StaticHeaderItem).kind === 'header';
+
 export const AppWrapper = (props: AppProps) => {
   const kittyProtocolStatus = useKittyKeyboardProtocol();
   return (
@@ -228,10 +238,17 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   }, [handleNewMessage, config]);
 
   const { stats: sessionStats } = useSessionStats();
+  const staticItemsCacheRef = useRef<StaticHistoryRenderable[]>([
+    STATIC_HEADER_ITEM,
+  ]);
+  const staticHistoryIdsRef = useRef<number[]>([]);
+  const staticResetPendingRef = useRef(false);
   const [staticNeedsRefresh, setStaticNeedsRefresh] = useState(false);
   const [staticKey, setStaticKey] = useState(0);
   const refreshStatic = useCallback(() => {
-    stdout.write(ansiEscapes.clearTerminal);
+    if (stdout) {
+      stdout.write(ansiEscapes.clearTerminal);
+    }
     setStaticKey((prev) => prev + 1);
   }, [setStaticKey, stdout]);
 
