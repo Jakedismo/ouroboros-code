@@ -1193,6 +1193,14 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     ? "  Press 'i' for INSERT mode and 'Esc' for NORMAL mode."
     : '  Type your message or @path/to/file';
 
+  // Precompute the data fed into <Static /> to avoid re-rendering previously
+  // rendered history items on every stream tick. The leading `null` entry is a
+  // sentinel used to render the static header/tips block exactly once.
+  const staticHistoryItems = useMemo<(HistoryItem | null)[]>(
+    () => [null, ...history],
+    [history],
+  );
+
   return (
     <StreamingContext.Provider value={streamingState}>
       <Box flexDirection="row" width="100%" justifyContent="center">
@@ -1229,29 +1237,30 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
          */}
         <Static
           key={staticKey}
-          items={[
-            <Box flexDirection="column" key="header">
-              {!(
-                settings.merged.ui?.hideBanner || config.getScreenReader()
-              ) && <Header version={version} nightly={nightly} />}
-              {!(settings.merged.ui?.hideTips || config.getScreenReader()) && (
-                <Tips config={config} />
-              )}
-            </Box>,
-            ...history.map((h) => (
+          items={staticHistoryItems}
+        >
+          {(item) =>
+            item === null ? (
+              <Box flexDirection="column" key="header">
+                {!(
+                  settings.merged.ui?.hideBanner || config.getScreenReader()
+                ) && <Header version={version} nightly={nightly} />}
+                {!(settings.merged.ui?.hideTips || config.getScreenReader()) && (
+                  <Tips config={config} />
+                )}
+              </Box>
+            ) : (
               <HistoryItemDisplay
                 terminalWidth={mainAreaWidth}
                 availableTerminalHeight={staticAreaMaxItemHeight}
-                key={h.id}
-                item={h}
+                key={item.id}
+                item={item}
                 isPending={false}
                 config={config}
                 commands={slashCommands}
               />
-            )),
-          ]}
-        >
-          {(item) => item}
+            )
+          }
         </Static>
         <OverflowProvider>
           <Box ref={pendingHistoryItemRef} flexDirection="column">
