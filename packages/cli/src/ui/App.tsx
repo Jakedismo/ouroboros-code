@@ -1210,62 +1210,13 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     ? "  Press 'i' for INSERT mode and 'Esc' for NORMAL mode."
     : '  Type your message or @path/to/file';
 
-  // Maintain a cached list of items fed into <Static /> so previously rendered
-  // history entries are never re-enqueued while streaming. A header sentinel
-  // stays at the front of the list to render banner/tips exactly once.
-  const staticHistoryItems = useMemo<StaticHistoryRenderable[]>(() => {
-    const previousIds = staticHistoryIdsRef.current;
-    const hadPreviousItems = previousIds.length > 0;
-    const currentIds = history.map((item) => item.id);
-
-    if (history.length === 0) {
-      staticHistoryIdsRef.current = [];
-      staticItemsCacheRef.current = [STATIC_HEADER_ITEM];
-      staticResetPendingRef.current = hadPreviousItems;
-      return staticItemsCacheRef.current;
-    }
-
-    const isContinuation =
-      !hadPreviousItems ||
-      (previousIds.length <= currentIds.length &&
-        previousIds.every((id, index) => currentIds[index] === id));
-
-    if (!isContinuation) {
-      staticHistoryIdsRef.current = currentIds;
-      staticItemsCacheRef.current = [STATIC_HEADER_ITEM, ...history];
-      staticResetPendingRef.current = hadPreviousItems;
-      return staticItemsCacheRef.current;
-    }
-
-    staticResetPendingRef.current = false;
-
-    if (currentIds.length > previousIds.length) {
-      const appendedItems = history.slice(previousIds.length);
-      staticItemsCacheRef.current = [
-        ...staticItemsCacheRef.current,
-        ...appendedItems,
-      ];
-      staticHistoryIdsRef.current = currentIds;
-      return staticItemsCacheRef.current;
-    }
-
-    if (!hadPreviousItems) {
-      staticHistoryIdsRef.current = currentIds;
-      staticItemsCacheRef.current = [STATIC_HEADER_ITEM, ...history];
-      return staticItemsCacheRef.current;
-    }
-
-    staticHistoryIdsRef.current = currentIds;
-    return staticItemsCacheRef.current;
-  }, [history]);
-
-  useEffect(() => {
-    if (!staticResetPendingRef.current) {
-      return;
-    }
-    staticResetPendingRef.current = false;
-    refreshStatic();
-  }, [staticHistoryItems, refreshStatic]);
+  // Precompute the data fed into <Static /> to avoid re-rendering previously
+  // rendered history items on every stream tick. The leading `null` entry is a
+  // sentinel used to render the static header/tips block exactly once.
+  const staticHistoryItems = useMemo<(HistoryItem | null)[]>(
+    () => [null, ...history],
+    [history],
+  );
 
   return (
     <StreamingContext.Provider value={streamingState}>
@@ -1306,7 +1257,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
           items={staticHistoryItems}
         >
           {(item) =>
-            isStaticHeaderItem(item) ? (
+            item === null ? (
               <Box flexDirection="column" key="header">
                 {!(
                   settings.merged.ui?.hideBanner || config.getScreenReader()
