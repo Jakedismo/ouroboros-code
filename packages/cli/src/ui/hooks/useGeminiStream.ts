@@ -143,6 +143,65 @@ export const useGeminiStream = (
     useStateAndRef<HistoryItemWithoutId | null>(null);
   const processedMemoryToolsRef = useRef<Set<string>>(new Set());
   const toolHistoryEntryRef = useRef(new Map<string, number>());
+  const deriveToolHistoryKey = useCallback(
+    (tools: HistoryItemToolGroup['tools']): string | null => {
+      if (tools.length === 0) {
+        return null;
+      }
+      const ids = tools
+        .map((tool) => tool.callId)
+        .filter((callId): callId is string => Boolean(callId));
+      if (ids.length === 0) {
+        return null;
+      }
+      return ids.slice().sort().join('|');
+    },
+    [],
+  );
+  const commitHistoryItem = useCallback(
+    (item: HistoryItemWithoutId, timestamp: number): number | undefined => {
+      if (item.type === 'tool_group') {
+        const callKey = deriveToolHistoryKey(item.tools);
+        if (!callKey) {
+          return addItem(item, timestamp);
+        }
+        const existingId = toolHistoryEntryRef.current.get(callKey);
+        if (existingId !== undefined) {
+          updateItem(existingId, (prev) => ({
+            ...(prev as HistoryItemToolGroup),
+            tools: item.tools,
+          }));
+          toolHistoryEntryRef.current.set(callKey, existingId);
+          return existingId;
+        }
+        const newId = addItem(item, timestamp);
+        toolHistoryEntryRef.current.set(callKey, newId);
+        return newId;
+      }
+      return addItem(item, timestamp);
+    },
+    [addItem, deriveToolHistoryKey, updateItem],
+  );
+  const flushPendingHistoryItem = useCallback(
+    (
+      timestamp: number,
+      transform?: (
+        item: HistoryItemWithoutId,
+      ) => HistoryItemWithoutId,
+    ): boolean => {
+      const pendingItem = pendingHistoryItemRef.current;
+      if (!pendingItem) {
+        return false;
+      }
+      const itemToCommit = transform
+        ? transform(pendingItem)
+        : pendingItem;
+      commitHistoryItem(itemToCommit, timestamp);
+      setPendingHistoryItem(null);
+      return true;
+    },
+    [commitHistoryItem, setPendingHistoryItem],
+  );
   const reasoningItemsRef = useRef<Array<{ text: string; raw?: Record<string, unknown> }>>([]);
   const historyIdsSnapshotRef = useRef<Set<number>>(new Set());
   const { startNewPrompt, getPromptCount } = useSessionStats();
@@ -534,7 +593,7 @@ export const useGeminiStream = (
     turnCancelledRef.current = true;
     abortControllerRef.current?.abort();
     if (pendingHistoryItemRef.current) {
-      addItem(pendingHistoryItemRef.current, Date.now());
+      flushPendingHistoryItem(Date.now());
     }
     addItem(
       {
@@ -550,6 +609,7 @@ export const useGeminiStream = (
     streamingState,
     pendingApprovalIds,
     addItem,
+    flushPendingHistoryItem,
     setPendingHistoryItem,
     onCancelSubmit,
     pendingHistoryItemRef,
@@ -769,13 +829,13 @@ export const useGeminiStream = (
         return '';
       }
       let newGeminiMessageBuffer = currentGeminiMessageBuffer + eventValue;
+      const pendingItem = pendingHistoryItemRef.current;
       if (
-        pendingHistoryItemRef.current?.type !== 'gemini' &&
-        pendingHistoryItemRef.current?.type !== 'gemini_content'
+        pendingItem &&
+        pendingItem.type !== 'gemini' &&
+        pendingItem.type !== 'gemini_content'
       ) {
-        if (pendingHistoryItemRef.current) {
-          addItem(pendingHistoryItemRef.current, userMessageTimestamp);
-        }
+        flushPendingHistoryItem(userMessageTimestamp);
         setPendingHistoryItem({ type: 'gemini', text: '' });
         newGeminiMessageBuffer = eventValue;
       }
@@ -813,7 +873,7 @@ export const useGeminiStream = (
       }
       return newGeminiMessageBuffer;
     },
-    [addItem, pendingHistoryItemRef, setPendingHistoryItem],
+    [addItem, flushPendingHistoryItem, pendingHistoryItemRef, setPendingHistoryItem],
   );
 
   const handleUserCancelledEvent = useCallback(
@@ -822,24 +882,25 @@ export const useGeminiStream = (
         return;
       }
       if (pendingHistoryItemRef.current) {
-        if (pendingHistoryItemRef.current.type === 'tool_group') {
-          const updatedTools = pendingHistoryItemRef.current.tools.map(
-            (tool) =>
+        flushPendingHistoryItem(
+          userMessageTimestamp,
+          (item) => {
+            if (item.type !== 'tool_group') {
+              return item;
+            }
+            const updatedTools = item.tools.map((tool) =>
               tool.status === ToolCallStatus.Pending ||
               tool.status === ToolCallStatus.Confirming ||
               tool.status === ToolCallStatus.Executing
                 ? { ...tool, status: ToolCallStatus.Canceled }
                 : tool,
-          );
-          const pendingItem: HistoryItemToolGroup = {
-            ...pendingHistoryItemRef.current,
-            tools: updatedTools,
-          };
-          addItem(pendingItem, userMessageTimestamp);
-        } else {
-          addItem(pendingHistoryItemRef.current, userMessageTimestamp);
-        }
-        setPendingHistoryItem(null);
+            );
+            return {
+              ...item,
+              tools: updatedTools,
+            };
+          },
+        );
       }
       addItem(
         { type: MessageType.INFO, text: 'User cancelled the request.' },
@@ -848,15 +909,12 @@ export const useGeminiStream = (
       setIsResponding(false);
       setThought(null); // Reset thought when user cancels
     },
-    [addItem, pendingHistoryItemRef, setPendingHistoryItem, setThought],
+    [flushPendingHistoryItem, pendingHistoryItemRef, setThought],
   );
 
   const handleErrorEvent = useCallback(
     (eventValue: GeminiErrorEventValue, userMessageTimestamp: number) => {
-      if (pendingHistoryItemRef.current) {
-        addItem(pendingHistoryItemRef.current, userMessageTimestamp);
-        setPendingHistoryItem(null);
-      }
+      flushPendingHistoryItem(userMessageTimestamp);
       addItem(
         {
           type: MessageType.ERROR,
@@ -872,7 +930,12 @@ export const useGeminiStream = (
       );
       setThought(null); // Reset thought when there's an error
     },
-    [addItem, pendingHistoryItemRef, setPendingHistoryItem, config, setThought],
+    [
+      addItem,
+      config,
+      flushPendingHistoryItem,
+      setThought,
+    ],
   );
 
   const handleToolConfirmationEvent = useCallback(
@@ -919,13 +982,10 @@ export const useGeminiStream = (
       if (!settings?.merged?.ui?.showCitations) {
         return;
       }
-      if (pendingHistoryItemRef.current) {
-        addItem(pendingHistoryItemRef.current, userMessageTimestamp);
-        setPendingHistoryItem(null);
-      }
+      flushPendingHistoryItem(userMessageTimestamp);
       addItem({ type: MessageType.INFO, text }, userMessageTimestamp);
     },
-    [addItem, pendingHistoryItemRef, setPendingHistoryItem, settings],
+    [addItem, flushPendingHistoryItem, settings],
   );
 
   const handleFinishedEvent = useCallback(
@@ -1385,10 +1445,7 @@ export const useGeminiStream = (
           return;
         }
 
-        if (pendingHistoryItemRef.current) {
-          addItem(pendingHistoryItemRef.current, userMessageTimestamp);
-          setPendingHistoryItem(null);
-        }
+        flushPendingHistoryItem(userMessageTimestamp);
         if (loopDetectedRef.current) {
           loopDetectedRef.current = false;
           handleLoopDetectedEvent();
@@ -1470,22 +1527,9 @@ export const useGeminiStream = (
       const displayGroup = mapTrackedToolCallsToDisplay(
         dedupedCompletions as TrackedToolCall[],
       ) as HistoryItemToolGroup;
-      const callKey = displayGroup.tools
-        .map((tool) => tool.callId)
-        .sort()
-        .join('|');
       const timestamp = Date.now();
 
-      if (toolHistoryEntryRef.current.has(callKey)) {
-        const existingId = toolHistoryEntryRef.current.get(callKey)!;
-        updateItem(existingId, (prev) => ({
-          ...(prev as HistoryItemToolGroup),
-          tools: displayGroup.tools,
-        }));
-      } else {
-        const newId = addItem(displayGroup, timestamp);
-        toolHistoryEntryRef.current.set(callKey, newId);
-      }
+      commitHistoryItem(displayGroup, timestamp);
 
       for (const completed of dedupedCompletions) {
         if ('response' in completed) {
@@ -1519,7 +1563,7 @@ export const useGeminiStream = (
             return false;
     },
     [
-      addItem,
+      commitHistoryItem,
       config,
       multiAgentPanelActive,
       setPendingHistoryItem,
