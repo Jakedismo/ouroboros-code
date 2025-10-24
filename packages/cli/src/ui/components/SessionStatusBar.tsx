@@ -38,6 +38,9 @@ interface Segment {
   tone: Tone;
 }
 
+const SESSION_STATUS_DEBUG =
+  process.env['OUROBOROS_DEBUG_SESSION_STATUS'] === 'true';
+
 function toneToColor(
   tone: Tone,
   palette: ReturnType<typeof useDesignSystem>['colors'],
@@ -250,7 +253,7 @@ export const SessionStatusBar = memo(
       prev.userTierLabel === next.userTierLabel &&
       prev.shellModeActive === next.shellModeActive &&
       prev.isCompact === next.isCompact;
-    if (!propsEqual) {
+    if (!propsEqual && SESSION_STATUS_DEBUG) {
       console.log('[SessionStatusBar] Props changed, re-rendering:', {
         streamingState: prev.streamingState !== next.streamingState,
         queueLength: prev.queueLength !== next.queueLength,
