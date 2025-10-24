@@ -60,6 +60,32 @@ interface AgentCardData {
   status?: 'pending' | 'planning' | 'running' | 'complete';
 }
 
+type LaneStatus = 'pending' | 'planning' | 'running' | 'complete';
+
+const resolveLaneStatus = (
+  status: AgentCardData['status'] | undefined,
+  fallback: LaneStatus,
+): LaneStatus => {
+  if (status === 'planning' || status === 'running' || status === 'complete') {
+    return status;
+  }
+  return fallback;
+};
+
+const getStatusVisual = (status: LaneStatus) => {
+  switch (status) {
+    case 'planning':
+      return { icon: '🧭', color: Colors.AccentBlue };
+    case 'running':
+      return { icon: '⚙️', color: Colors.AccentYellow };
+    case 'complete':
+      return { icon: '✅', color: Colors.AccentGreen };
+    case 'pending':
+    default:
+      return { icon: '•', color: Colors.Comment };
+  }
+};
+
 const buildAgentCards = (selection: MultiAgentSelectionDisplay): AgentCardData[] => {
   const personaLookup = new Map<string, AgentPersonaSummary>();
   selection.selectedAgents.forEach((persona) => personaLookup.set(persona.id, persona));
@@ -111,12 +137,30 @@ const buildAgentCards = (selection: MultiAgentSelectionDisplay): AgentCardData[]
   });
 };
 
+const dedupeTools = (tools: MultiAgentToolEventDisplay[]): MultiAgentToolEventDisplay[] => {
+  const unique = new Map<string, MultiAgentToolEventDisplay>();
+  for (const tool of tools) {
+    const key = JSON.stringify([
+      tool.name,
+      tool.args,
+      tool.output ?? null,
+      tool.error ?? null,
+      tool.status,
+    ]);
+    if (!unique.has(key)) {
+      unique.set(key, tool);
+    }
+  }
+  return Array.from(unique.values());
+};
+
 const renderToolList = (tools: MultiAgentToolEventDisplay[], isExpanded: boolean) => {
   if (!tools.length) return null;
-  const visibleTools = isExpanded ? tools : tools.slice(-1);
+  const deduped = dedupeTools(tools);
+  const visibleTools = isExpanded ? deduped : deduped.slice(-1);
   return (
     <Box flexDirection="column" marginTop={0}>
-      <Text wrap="wrap" color={Colors.Comment}>{`   🛠 Tools (${tools.length}):`}</Text>
+      <Text wrap="wrap" color={Colors.Comment}>{`   🛠 Tools (${deduped.length}):`}</Text>
       {visibleTools.map((tool, index) => {
         const statusIcon = tool.status === ToolCallStatus.Error ? '⚠' : '•';
         const description = `${statusIcon} ${tool.name}(${truncateText(tool.args, 80)})`;
@@ -135,8 +179,8 @@ const renderToolList = (tools: MultiAgentToolEventDisplay[], isExpanded: boolean
           </Text>
         );
       })}
-      {!isExpanded && tools.length > 1 && (
-        <Text wrap="wrap" color={Colors.Comment}>         … {tools.length - 1} more tool{tools.length - 1 === 1 ? '' : 's'}</Text>
+      {!isExpanded && deduped.length > 1 && (
+        <Text wrap="wrap" color={Colors.Comment}>         … {deduped.length - 1} more tool{deduped.length - 1 === 1 ? '' : 's'}</Text>
       )}
     </Box>
   );
@@ -272,6 +316,34 @@ export const MultiAgentStatusMessage: React.FC<MultiAgentStatusMessageProps> = (
           </Text>
         )}
       </Box>
+
+      {cards.length > 0 && (
+        <Box marginTop={1} flexDirection="column">
+          <Text color={Colors.AccentBlue}>Agent Handoff Lanes</Text>
+          <Box marginTop={1} flexDirection="row" flexWrap="wrap">
+            {cards.map((card, index) => {
+              const laneStatus = resolveLaneStatus(
+                card.status,
+                (selection.status ?? 'pending') as LaneStatus,
+              );
+              const visual = getStatusVisual(laneStatus);
+              return (
+                <Box
+                  key={card.id}
+                  marginRight={index < cards.length - 1 ? 1 : 0}
+                  flexDirection="row"
+                  alignItems="center"
+                >
+                  <Text color={visual.color}>{`${visual.icon} ${card.emoji} ${card.name}`}</Text>
+                  {index < cards.length - 1 && (
+                    <Text color={Colors.Comment}>{' → '}</Text>
+                  )}
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
+      )}
 
       {selection.execution?.aggregateReasoning && (
         <Box marginTop={1} flexDirection="column">

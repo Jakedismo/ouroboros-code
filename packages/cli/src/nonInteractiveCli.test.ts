@@ -111,7 +111,7 @@ describe('runNonInteractive', () => {
       'prompt-id-1',
     );
     expect(processStdoutSpy).toHaveBeenCalledWith('Hello World');
-    expect(processStdoutSpy).toHaveBeenCalledWith('\\n');
+    expect(processStdoutSpy).toHaveBeenCalledWith('\n');
     expect(mockShutdownTelemetry).toHaveBeenCalled();
   });
 
@@ -144,7 +144,7 @@ describe('runNonInteractive', () => {
     const secondCallArgs = mockAgentsClient.sendMessage.mock.calls[1][0];
     expect(secondCallArgs.message).toEqual(toolResponse);
     expect(processStdoutSpy).toHaveBeenCalledWith('Final answer');
-    expect(processStdoutSpy).toHaveBeenCalledWith('\\n');
+    expect(processStdoutSpy).toHaveBeenCalledWith('\n');
   });
 
   it('should handle error during tool execution and send fallback message', async () => {
@@ -276,5 +276,45 @@ describe('runNonInteractive', () => {
       'prompt-id-7',
     );
     expect(processStdoutSpy).toHaveBeenCalledWith('Summary complete.');
+  });
+
+  it('should strip ANSI codes from tool response parts', async () => {
+    mockAgentsClient.sendMessage
+      .mockResolvedValueOnce(
+        createResponse([
+          {
+            functionCall: {
+              id: 'tool-1',
+              name: 'colorTool',
+              args: {},
+            },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(createResponse([{ text: 'Tool executed successfully' }]));
+
+    // Tool response with ANSI codes
+    const toolResponse: AgentContentFragment[] = [
+      { text: '\u001b[32mGreen text\u001b[0m' },
+      { text: '\u001b[1mBold text\u001b[0m' },
+    ];
+    mockExecuteToolCall.mockResolvedValue({ responseParts: toolResponse });
+
+    await runNonInteractive(mockConfig, 'Use color tool', 'prompt-id-8');
+
+    expect(mockAgentsClient.sendMessage).toHaveBeenCalledTimes(2);
+    expect(mockExecuteToolCall).toHaveBeenCalledWith(
+      mockConfig,
+      expect.objectContaining({ name: 'colorTool' }),
+      expect.any(AbortSignal),
+    );
+
+    // Check that ANSI codes were stripped from the response parts sent back to the model
+    const secondCallArgs = mockAgentsClient.sendMessage.mock.calls[1][0];
+    expect(secondCallArgs.message).toEqual([
+      { text: 'Green text' },
+      { text: 'Bold text' },
+    ]);
+    expect(processStdoutSpy).toHaveBeenCalledWith('Tool executed successfully');
   });
 });

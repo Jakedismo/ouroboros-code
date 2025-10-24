@@ -6,7 +6,7 @@
 
 import type React from 'react';
 import { Box, Text } from 'ink';
-import Markdown from 'ink-markdown';
+import Markdown from './shared/Markdown.js';
 import chalk from 'chalk';
 import { Colors } from '../colors.js';
 import type { ConsoleMessageItem } from '../types.js';

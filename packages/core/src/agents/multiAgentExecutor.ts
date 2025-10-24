@@ -49,6 +49,13 @@ export interface MultiAgentExecutionHooks {
   }) => void | Promise<void>;
 }
 
+export class MultiAgentAbortedError extends Error {
+  constructor(message = 'Multi-agent execution aborted') {
+    super(message);
+    this.name = 'MultiAgentAbortedError';
+  }
+}
+
 interface AgentRunResult {
   agent: AgentPersona;
   analysis: string;
@@ -140,6 +147,7 @@ export class MultiAgentExecutor {
     userPrompt: string,
     seedAgents: AgentPersona[],
     hooks?: MultiAgentExecutionHooks,
+    options?: { abortSignal?: AbortSignal }
   ): Promise<MultiAgentExecutionResult> {
     if (seedAgents.length === 0) {
       throw new Error('Delegated execution requires at least one specialist agent.');
@@ -150,7 +158,7 @@ export class MultiAgentExecutor {
     }
 
     const client = this.providedClient ?? new UnifiedAgentsClient(this.config);
-    return this.executeWithDelegation(userPrompt, seedAgents, client, hooks);
+    return this.executeWithDelegation(userPrompt, seedAgents, client, hooks, options?.abortSignal);
   }
 
   private async executeWithDelegation(
@@ -158,8 +166,17 @@ export class MultiAgentExecutor {
     seedAgents: AgentPersona[],
     unifiedClient: UnifiedAgentsClient,
     hooks?: MultiAgentExecutionHooks,
+    abortSignal?: AbortSignal,
   ): Promise<MultiAgentExecutionResult> {
     const startedAt = Date.now();
+
+    const throwIfAborted = () => {
+      if (abortSignal?.aborted) {
+        throw new MultiAgentAbortedError();
+      }
+    };
+
+    throwIfAborted();
 
     const toolEventLog = new Map<string, AgentToolEvent[]>();
     const personaByAgentName = new Map<string, AgentPersona>();
@@ -179,6 +196,9 @@ export class MultiAgentExecutor {
         | { type: 'agent_end'; agent: Agent; output: string }
         | { type: 'agent_handoff'; from: Agent; to: Agent },
     ) => {
+      if (abortSignal?.aborted) {
+        return;
+      }
       if (event.type === 'agent_handoff') {
         const persona = personaByAgentName.get(event.to.name);
         if (persona) {
@@ -241,7 +261,7 @@ export class MultiAgentExecutor {
       }
     };
 
-    const { runResult } = await unifiedClient.runAgentOnce({
+    const runAgentPromise = unifiedClient.runAgentOnce({
       sessionConfig: {
         providerId: this.config.getProvider(),
         model: this.defaultModel,
@@ -267,6 +287,42 @@ export class MultiAgentExecutor {
       context: runContext,
       onAgentEvent,
     });
+
+    const abortError = new MultiAgentAbortedError();
+    let runResultWrapper: Awaited<ReturnType<typeof unifiedClient.runAgentOnce>>;
+    if (abortSignal) {
+      let abortListener: (() => void) | null = null;
+      const abortPromise = new Promise<never>((_, reject) => {
+        abortListener = () => {
+          if (!abortSignal) {
+            return;
+          }
+          abortSignal.removeEventListener('abort', abortListener!);
+          reject(abortError);
+        };
+        abortSignal.addEventListener('abort', abortListener, { once: true });
+      });
+
+      try {
+        runResultWrapper = await Promise.race([runAgentPromise, abortPromise]);
+      } catch (error) {
+        if (error === abortError) {
+          runAgentPromise.catch(() => {});
+          throw error;
+        }
+        runAgentPromise.catch(() => {});
+        throw error;
+      }
+      if (abortListener) {
+        abortSignal.removeEventListener('abort', abortListener);
+      }
+    } else {
+      runResultWrapper = await runAgentPromise;
+    }
+
+    throwIfAborted();
+
+    const { runResult } = runResultWrapper;
 
     if (agentResultsById.size === 0) {
       throw new Error('Orchestrator session finished without consulting any specialists.');
@@ -626,6 +682,19 @@ export class MultiAgentExecutor {
     toolEvents: AgentToolEvent[];
   }): AgentRunResult {
     const { persona, parsed, rawText, toolEvents } = args;
+    const dedupedToolEvents = (() => {
+      if (toolEvents.length === 0) {
+        return toolEvents;
+      }
+      const byCallId = new Map<string, AgentToolEvent>();
+      for (const event of toolEvents) {
+        const existing = byCallId.get(event.callId);
+        if (!existing || existing.timestamp <= event.timestamp) {
+          byCallId.set(event.callId, event);
+        }
+      }
+      return Array.from(byCallId.values()).sort((a, b) => a.timestamp - b.timestamp);
+    })();
     const base: SpecialistStructuredOutput = parsed ?? {
       analysis: rawText || 'No structured analysis provided.',
       solution: '',
@@ -642,7 +711,7 @@ export class MultiAgentExecutor {
         ? base.handoff.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
         : [],
       rawText: rawText || JSON.stringify(base),
-      toolEvents,
+      toolEvents: dedupedToolEvents,
     };
   }
 

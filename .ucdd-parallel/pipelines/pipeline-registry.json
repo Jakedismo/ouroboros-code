@@ -1,0 +1,112 @@
+{
+  "pipeline_registry": {
+    "version": "1.0.0",
+    "last_updated": "2025-10-16T21:20:28Z",
+    "available_pipelines": [
+      {
+        "name": "parallel-spec-test-pipeline",
+        "description": "Parallel specification and test generation",
+        "stages": [
+          {
+            "name": "specification_generation",
+            "agent": "specification-parallel-agent",
+            "parallel": true,
+            "max_workers": 3
+          },
+          {
+            "name": "test_generation",
+            "agent": "test-parallel-agent",
+            "parallel": true,
+            "max_workers": 5,
+            "dependencies": ["specification_generation"]
+          },
+          {
+            "name": "validation",
+            "agent": "evaluation-parallel-agent",
+            "parallel": false,
+            "dependencies": ["test_generation"]
+          }
+        ],
+        "estimated_duration_seconds": 120,
+        "success_rate": 0.95
+      },
+      {
+        "name": "parallel-realization-evaluation-pipeline",
+        "description": "Parallel implementation and evaluation",
+        "stages": [
+          {
+            "name": "implementation",
+            "agent": "realization-parallel-agent",
+            "parallel": true,
+            "max_workers": 4
+          },
+          {
+            "name": "evaluation",
+            "agent": "evaluation-parallel-agent",
+            "parallel": true,
+            "max_workers": 3,
+            "dependencies": ["implementation"]
+          },
+          {
+            "name": "visualization",
+            "agent": "visualization-parallel-agent",
+            "parallel": true,
+            "max_workers": 2,
+            "dependencies": ["evaluation"]
+          }
+        ],
+        "estimated_duration_seconds": 300,
+        "success_rate": 0.90
+      },
+      {
+        "name": "full-ucdd-parallel-pipeline",
+        "description": "Complete UCDD STREAM lifecycle in parallel",
+        "stages": [
+          {
+            "name": "specification",
+            "agent": "specification-parallel-agent",
+            "parallel": true,
+            "max_workers": 3
+          },
+          {
+            "name": "test",
+            "agent": "test-parallel-agent",
+            "parallel": true,
+            "max_workers": 5,
+            "dependencies": ["specification"]
+          },
+          {
+            "name": "realization",
+            "agent": "realization-parallel-agent",
+            "parallel": true,
+            "max_workers": 4,
+            "dependencies": ["test"]
+          },
+          {
+            "name": "evaluation",
+            "agent": "evaluation-parallel-agent",
+            "parallel": true,
+            "max_workers": 3,
+            "dependencies": ["realization"]
+          },
+          {
+            "name": "adaptation",
+            "agent": "adaptation-parallel-agent",
+            "parallel": true,
+            "max_workers": 2,
+            "dependencies": ["evaluation"]
+          },
+          {
+            "name": "visualization",
+            "agent": "visualization-parallel-agent",
+            "parallel": true,
+            "max_workers": 4,
+            "dependencies": ["adaptation"]
+          }
+        ],
+        "estimated_duration_seconds": 600,
+        "success_rate": 0.85
+      }
+    ]
+  }
+}

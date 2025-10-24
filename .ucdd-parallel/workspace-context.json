@@ -1,0 +1,24 @@
+{
+  "workspace_name": "ouroboros-code",
+  "workspace_path": "/Users/jokkeruokolainen/Documents/Solita/Ouroboros/ouroboros-code",
+  "initialized_at": "2025-10-16T21:20:28Z",
+  "agent": "ucdd-parallel-stream",
+  "ucdd_version": "1.0.0",
+  "parallel_version": "1.0.0",
+  "active_projects": [],
+  "storage_path": "/Users/jokkeruokolainen/Documents/Solita/Ouroboros/ouroboros-code/.ucdd-parallel",
+  "preferences": {
+    "auto_visualization": true,
+    "parallel_execution": true,
+    "detailed_logging": true,
+    "coordination_enabled": true,
+    "resource_monitoring": true,
+    "auto_backup": true
+  },
+  "parallel_capabilities": {
+    "max_concurrent_agents": 10,
+    "supported_pipelines": ["parallel-spec-test-pipeline", "parallel-realization-evaluation-pipeline", "full-ucdd-parallel-pipeline"],
+    "coordination_protocols": ["sync", "async", "pipeline"],
+    "load_balancing": true
+  }
+}

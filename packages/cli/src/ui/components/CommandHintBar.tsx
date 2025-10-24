@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type React from 'react';
+import React from 'react';
 import { Box, Text } from 'ink';
 import {
   useDesignSystem,
@@ -63,7 +63,7 @@ const formatBinding = (binding: KeyBinding | undefined): string | undefined => {
   return parts.join('+') || undefined;
 };
 
-export const CommandHintBar: React.FC<CommandHintBarProps> = ({
+export const CommandHintBar: React.FC<CommandHintBarProps> = React.memo(({
   hints,
   isCompact = false,
 }) => {
@@ -106,4 +106,4 @@ export const CommandHintBar: React.FC<CommandHintBarProps> = ({
       </Box>
     </Surface>
   );
-};
+});

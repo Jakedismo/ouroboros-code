@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type React from 'react';
+import React from 'react';
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 import { Colors } from '../colors.js';
 import process from 'node:process';
 import { formatMemoryUsage } from '../utils/formatters.js';
 
-export const MemoryUsageDisplay: React.FC = () => {
+export const MemoryUsageDisplay: React.FC = React.memo(() => {
   const [memoryUsage, setMemoryUsage] = useState<string>('');
   const [memoryUsageColor, setMemoryUsageColor] = useState<string>(Colors.Gray);
 
@@ -34,4 +34,4 @@ export const MemoryUsageDisplay: React.FC = () => {
       <Text color={memoryUsageColor}>{memoryUsage}</Text>
     </Box>
   );
-};
+});

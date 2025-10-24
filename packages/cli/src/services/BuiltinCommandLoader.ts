@@ -42,6 +42,7 @@ import {
 } from '../ui/commands/sagaCommand.js';
 import { providerCommand } from '../ui/commands/providerCommand.js';
 import { modelCommand } from '../ui/commands/modelCommand.js';
+import { layoutCommand } from '../ui/commands/layoutCommand.js';
 
 /**
  * Loads the core, hard-coded slash commands that are an integral part
@@ -92,6 +93,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
       sagaHistoryCommand,
       providerCommand,
       modelCommand,
+      layoutCommand,
     ];
 
     return allDefinitions.filter((cmd): cmd is SlashCommand => cmd !== null);

@@ -83,7 +83,9 @@ export class AgentsContentGenerator implements ContentGenerator {
     return result.stream;
   }
 
-  async countTokens(request: CountTokensParameters): Promise<CountTokensResponse> {
+  async countTokens(
+    request: CountTokensParameters,
+  ): Promise<CountTokensResponse> {
     const contentString = this.serializeContentUnion(request.contents);
     const tokenEstimate = Math.ceil(contentString.length / 4);
 
@@ -93,8 +95,12 @@ export class AgentsContentGenerator implements ContentGenerator {
     } as CountTokensResponse;
   }
 
-  async embedContent(_request: EmbedContentParameters): Promise<EmbedContentResponse> {
-    throw new Error('Embeddings are not supported in the unified Agents runtime yet.');
+  async embedContent(
+    _request: EmbedContentParameters,
+  ): Promise<EmbedContentResponse> {
+    throw new Error(
+      'Embeddings are not supported in the unified Agents runtime yet.',
+    );
   }
 
   private async runAgentsRequest(
@@ -110,9 +116,15 @@ export class AgentsContentGenerator implements ContentGenerator {
     const providerId = this.config.getProvider();
     const model = request.model || this.getDefaultModel();
     const responseStrategy = this.resolveResponseStrategy(request);
-    const systemPrompt = this.buildSystemPrompt(request, responseStrategy.schemaInstruction);
+    const systemPrompt = this.buildSystemPrompt(
+      request,
+      responseStrategy.schemaInstruction,
+    );
     let messages = this.convertContentsToMessages(request.contents);
-    messages = this.applySchemaInstruction(messages, responseStrategy.schemaInstruction);
+    messages = this.applySchemaInstruction(
+      messages,
+      responseStrategy.schemaInstruction,
+    );
     const streamOptions = this.buildStreamOptions(request);
     if (responseStrategy.structuredOutput) {
       streamOptions.structuredOutput = responseStrategy.structuredOutput;
@@ -133,7 +145,10 @@ export class AgentsContentGenerator implements ContentGenerator {
       let finalText = '';
       const functionCalls: FunctionCall[] = [];
       let usage: GenerateContentResponseUsageMetadata | undefined;
-      const reasoningSegments: Array<{ text: string; raw?: Record<string, unknown> }> = [];
+      const reasoningSegments: Array<{
+        text: string;
+        raw?: Record<string, unknown>;
+      }> = [];
 
       for await (const event of this.client.streamResponse(
         session,
@@ -173,7 +188,10 @@ export class AgentsContentGenerator implements ContentGenerator {
       }
 
       if (reasoningSegments.length > 0) {
-        const reasoningText = reasoningSegments.map((segment) => segment.text).filter(Boolean).join('\n');
+        const reasoningText = reasoningSegments
+          .map((segment) => segment.text)
+          .filter(Boolean)
+          .join('\n');
         if (reasoningText) {
           finalText = [finalText, reasoningText].filter(Boolean).join('\n\n');
         }
@@ -263,7 +281,9 @@ export class AgentsContentGenerator implements ContentGenerator {
     return { stream: streamGenerator() };
   }
 
-  private buildStreamOptions(request: GenerateContentParameters): UnifiedAgentStreamOptions {
+  private buildStreamOptions(
+    request: GenerateContentParameters,
+  ): UnifiedAgentStreamOptions {
     const config = request.config ?? {};
     const streamOptions: UnifiedAgentStreamOptions = {};
     const provider = this.config.getProvider();
@@ -282,21 +302,25 @@ export class AgentsContentGenerator implements ContentGenerator {
     if (typeof parallelOverride === 'boolean') {
       streamOptions.parallelToolCalls = parallelOverride;
     } else {
-      streamOptions.parallelToolCalls = this.shouldEnableParallelToolCalls(model, provider);
+      streamOptions.parallelToolCalls = this.shouldEnableParallelToolCalls(
+        model,
+        provider,
+      );
     }
 
     return streamOptions;
   }
 
-  private resolveResponseStrategy(
-    request: GenerateContentParameters,
-  ): {
+  private resolveResponseStrategy(request: GenerateContentParameters): {
     schemaInstruction?: string;
     structuredOutput?: StructuredOutputOptions;
   } {
     const config = request.config ?? {};
     const schema = config.responseJsonSchema;
-    const mimeType = typeof config.responseMimeType === 'string' ? config.responseMimeType : undefined;
+    const mimeType =
+      typeof config.responseMimeType === 'string'
+        ? config.responseMimeType
+        : undefined;
     const provider = this.config.getProvider();
 
     if (provider === 'openai' && (schema || mimeType === 'application/json')) {
@@ -336,11 +360,14 @@ export class AgentsContentGenerator implements ContentGenerator {
     request: GenerateContentParameters,
     schemaInstruction?: string,
   ): string | undefined {
-    const basePrompt = this.extractSystemPrompt(request.config?.systemInstruction);
+    const basePrompt = this.extractSystemPrompt(
+      request.config?.systemInstruction,
+    );
     const runtimePrimer = this.getRuntimePrimer();
 
     const segments = [basePrompt, runtimePrimer, schemaInstruction].filter(
-      (segment): segment is string => typeof segment === 'string' && segment.trim().length > 0,
+      (segment): segment is string =>
+        typeof segment === 'string' && segment.trim().length > 0,
     );
 
     if (segments.length === 0) {
@@ -383,22 +410,30 @@ export class AgentsContentGenerator implements ContentGenerator {
     const segments: string[] = [];
 
     if (mimeType) {
-      segments.push(`Respond using strictly the ${mimeType} MIME type with no surrounding prose.`);
+      segments.push(
+        `Respond using strictly the ${mimeType} MIME type with no surrounding prose.`,
+      );
     }
 
     if (schema && typeof schema === 'object') {
       try {
         const schemaJson = JSON.stringify(schema);
-        segments.push(`Your entire reply MUST be valid JSON that conforms to this schema: ${schemaJson}. Do not wrap the JSON in markdown fences.`);
+        segments.push(
+          `Your entire reply MUST be valid JSON that conforms to this schema: ${schemaJson}. Do not wrap the JSON in markdown fences.`,
+        );
       } catch {
-        segments.push('Your reply must be valid JSON matching the requested schema.');
+        segments.push(
+          'Your reply must be valid JSON matching the requested schema.',
+        );
       }
     }
 
     return segments.join('\n');
   }
 
-  private convertContentsToMessages(contents: ContentListUnion): UnifiedAgentMessage[] {
+  private convertContentsToMessages(
+    contents: ContentListUnion,
+  ): UnifiedAgentMessage[] {
     if (typeof contents === 'string') {
       return [{ role: 'user', content: contents }];
     }
@@ -575,14 +610,18 @@ export class AgentsContentGenerator implements ContentGenerator {
     return {};
   }
 
-  private mapUsage(usage: unknown): GenerateContentResponseUsageMetadata | undefined {
+  private mapUsage(
+    usage: unknown,
+  ): GenerateContentResponseUsageMetadata | undefined {
     if (!usage || typeof usage !== 'object') {
       return undefined;
     }
 
     const numericEntries: GenerateContentResponseUsageMetadata = {};
 
-    for (const [key, value] of Object.entries(usage as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(
+      usage as Record<string, unknown>,
+    )) {
       if (typeof value === 'number') {
         numericEntries[key] = value;
       }
@@ -595,14 +634,18 @@ export class AgentsContentGenerator implements ContentGenerator {
     return this.options.defaultModel || this.config.getModel();
   }
 
-  private shouldEnableParallelToolCalls(model: string | undefined, provider: string): boolean {
+  private shouldEnableParallelToolCalls(
+    model: string | undefined,
+    provider: string,
+  ): boolean {
     if (!model) {
       return false;
     }
     if (provider !== 'openai') {
       return false;
     }
-    return /^gpt-5/i.test(model);
+    // Temporarily disabled for testing the TUI rendering bug
+    return false; // /^gpt-5/i.test(model);
   }
 
   private extractSystemPrompt(value: unknown): string | undefined {
@@ -611,10 +654,12 @@ export class AgentsContentGenerator implements ContentGenerator {
     }
 
     if (Array.isArray(value)) {
-      return value
-        .map((item) => (typeof item === 'string' ? item : ''))
-        .filter(Boolean)
-        .join('\n') || undefined;
+      return (
+        value
+          .map((item) => (typeof item === 'string' ? item : ''))
+          .filter(Boolean)
+          .join('\n') || undefined
+      );
     }
 
     return undefined;
@@ -625,11 +670,15 @@ export class AgentsContentGenerator implements ContentGenerator {
       return this.runtimePrimerCache;
     }
 
-    const workspaceRoot = this.config.getTargetDir?.() ?? this.config.getProjectRoot?.() ?? process.cwd();
+    const workspaceRoot =
+      this.config.getTargetDir?.() ??
+      this.config.getProjectRoot?.() ??
+      process.cwd();
     const registry = this.config.getToolRegistry?.();
-    const tools = registry && typeof registry.getAllTools === 'function'
-      ? (registry.getAllTools() as AnyDeclarativeTool[])
-      : [];
+    const tools =
+      registry && typeof registry.getAllTools === 'function'
+        ? (registry.getAllTools() as AnyDeclarativeTool[])
+        : [];
 
     const toolSummaries = tools
       .map((tool) => this.describeTool(tool))
@@ -650,7 +699,9 @@ export class AgentsContentGenerator implements ContentGenerator {
     ];
 
     const primer = primerSections
-      .filter((section) => typeof section === 'string' && section.trim().length > 0)
+      .filter(
+        (section) => typeof section === 'string' && section.trim().length > 0,
+      )
       .join('\n');
 
     this.runtimePrimerCache = primer;
@@ -659,10 +710,10 @@ export class AgentsContentGenerator implements ContentGenerator {
 
   private describeTool(tool: AnyDeclarativeTool): string {
     const name = tool.displayName ?? tool.name;
-    const description = typeof tool.description === 'string' ? tool.description.trim() : '';
-    const schema = (tool.schema?.parametersJsonSchema ?? tool.schema?.parameters) as
-      | Record<string, unknown>
-      | undefined;
+    const description =
+      typeof tool.description === 'string' ? tool.description.trim() : '';
+    const schema = (tool.schema?.parametersJsonSchema ??
+      tool.schema?.parameters) as Record<string, unknown> | undefined;
 
     if (!schema || typeof schema !== 'object') {
       return `- ${name}${description ? ` – ${description}` : ''}`;
@@ -694,17 +745,33 @@ export class AgentsContentGenerator implements ContentGenerator {
     return segments.join('\n');
   }
 
-  private describeToolParameter(key: string, schema: unknown): string | undefined {
-    const record = schema && typeof schema === 'object' ? (schema as Record<string, unknown>) : undefined;
-    const typeValue = typeof record?.['type'] === 'string' ? (record?.['type'] as string) : undefined;
-    const description = typeof record?.['description'] === 'string' ? record?.['description'] as string : undefined;
+  private describeToolParameter(
+    key: string,
+    schema: unknown,
+  ): string | undefined {
+    const record =
+      schema && typeof schema === 'object'
+        ? (schema as Record<string, unknown>)
+        : undefined;
+    const typeValue =
+      typeof record?.['type'] === 'string'
+        ? (record?.['type'] as string)
+        : undefined;
+    const description =
+      typeof record?.['description'] === 'string'
+        ? (record?.['description'] as string)
+        : undefined;
     const type = Array.isArray(record?.['enum'])
       ? `enum(${(record?.['enum'] as unknown[])
-        .slice(0, 4)
-        .map((value) => JSON.stringify(value))
-        .join(', ')}${(record?.['enum'] as unknown[]).length > 4 ? ', …' : ''})`
-      : typeValue ?? 'value';
-    const summary = description ? `${key}: ${type} – ${description}` : `${key}: ${type}`;
+          .slice(0, 4)
+          .map((value) => JSON.stringify(value))
+          .join(
+            ', ',
+          )}${(record?.['enum'] as unknown[]).length > 4 ? ', …' : ''})`
+      : (typeValue ?? 'value');
+    const summary = description
+      ? `${key}: ${type} – ${description}`
+      : `${key}: ${type}`;
     return summary.trim();
   }
 }

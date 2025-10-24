@@ -105,7 +105,7 @@ export const WorkflowProgressDisplay: React.FC<WorkflowProgressDisplayProps> = (
     
     const interval = setInterval(() => {
       setSpinner(s => (s + 1) % spinnerChars.length);
-    }, 100);
+    }, 200);
 
     return () => clearInterval(interval);
   }, [visible, format, spinnerChars.length]);

@@ -12,6 +12,7 @@ import {
   type SlashCommand,
   CommandKind,
 } from './types.js';
+import { appEvents, AppEvent } from '../../utils/events.js';
 
 export const statsCommand: SlashCommand = {
   name: 'stats',
@@ -32,6 +33,8 @@ export const statsCommand: SlashCommand = {
       return;
     }
     const wallDuration = now.getTime() - sessionStartTime.getTime();
+
+    appEvents.emit(AppEvent.CaptureStatusSnapshot);
 
     const statsItem: HistoryItemStats = {
       type: MessageType.STATS,

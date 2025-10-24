@@ -65,6 +65,7 @@ import { Storage } from './storage.js';
 import { FileExclusions } from '../utils/ignorePatterns.js';
 import type { EventEmitter } from 'node:events';
 import { getCoreSystemPrompt } from '../core/prompts.js';
+import { ToolExecutionCache } from '../utils/toolExecutionCache.js';
 
 export enum ApprovalMode {
   DEFAULT = 'default',
@@ -323,6 +324,7 @@ export class Config {
     model: string;
     memory: string;
   };
+  private toolExecutionCache?: ToolExecutionCache;
   readonly storage: Storage;
   private readonly fileExclusions: FileExclusions;
   private readonly eventEmitter?: EventEmitter;
@@ -589,10 +591,52 @@ export class Config {
       return this.toolExecutionBridge(request, abortSignal, metadata);
     }
 
-    const { executeToolCall } = await import(
-      '../core/nonInteractiveToolExecutor.js'
-    );
-    return executeToolCall(this, request, abortSignal);
+    const cacheKey = ToolExecutionCache.buildCacheKey(request);
+    const shouldCache = Boolean(cacheKey);
+    if (cacheKey && !this.toolExecutionCache) {
+      this.toolExecutionCache = new ToolExecutionCache();
+    }
+
+    const cache = this.toolExecutionCache;
+
+    if (cacheKey && cache) {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+      const pending = cache.getPending(cacheKey);
+      if (pending) {
+        return pending.then((value) => cloneResponse(value));
+      }
+    }
+
+    const executionPromise = (async () => {
+      const { executeToolCall } = await import(
+        '../core/nonInteractiveToolExecutor.js'
+      );
+      return executeToolCall(this, request, abortSignal);
+    })();
+
+    if (cacheKey && cache) {
+      cache.trackPending(cacheKey, executionPromise);
+    }
+
+    let response: ToolCallResponseInfo;
+    try {
+      response = await executionPromise;
+    } finally {
+      // Pending entry removal handled inside ToolExecutionCache.trackPending
+    }
+
+    if (cacheKey && cache && shouldCache) {
+      cache.set(cacheKey, response);
+    }
+
+    if (ToolExecutionCache.isInvalidating(request)) {
+      cache?.clear();
+    }
+
+    return shouldCache ? cloneResponse(response) : response;
   }
 
   /**
@@ -1199,6 +1243,12 @@ export class Config {
     await registry.discoverAllTools();
     return registry;
   }
+}
+
+function cloneResponse(response: ToolCallResponseInfo): ToolCallResponseInfo {
+  return typeof structuredClone === 'function'
+    ? structuredClone(response)
+    : (JSON.parse(JSON.stringify(response)) as ToolCallResponseInfo);
 }
 // Export model constants for use in CLI
 export { DEFAULT_GEMINI_FLASH_MODEL };

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ouroboros Code — Interactive Features Map</title>
+  <style>
+    :root{
+      --bg: #0f1226;
+      --panel: #171a36;
+      --muted: #a7b0d6;
+      --text: #e9ecff;
+      --accent: #7aa2ff;
+      --link: #9fe6a0;
+      --edge: #3a3f6b;
+    }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif; }
+    .container { display: grid; grid-template-columns: 320px 1fr 360px; grid-template-rows: auto 1fr; grid-template-areas: 'header header header' 'left main right'; height: 100%; }
+    header { grid-area: header; padding: 12px 16px; background: linear-gradient(90deg, #16193a, #1b204a); border-bottom: 1px solid #222754; display:flex; gap:16px; align-items:center; }
+    header h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+    header .actions { margin-left:auto; display:flex; gap:8px; }
+    header button { background: #232751; border: 1px solid #2e3470; color: var(--text); padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+    header button:hover { filter: brightness(1.1); }
+
+    .left { grid-area: left; border-right:1px solid #222754; background: var(--panel); padding: 12px; overflow:auto; }
+    .right { grid-area: right; border-left:1px solid #222754; background: var(--panel); padding: 12px; overflow:auto; }
+    .main { grid-area: main; position: relative; }
+
+    .panel h2 { font-size: 14px; margin: 8px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .legend { display:flex; flex-wrap: wrap; gap: 8px; }
+    .legend-item { display:flex; align-items:center; gap:6px; background:#1d214a; border:1px solid #2a3066; border-radius: 999px; padding: 4px 8px; font-size: 12px; }
+    .legend-swatch { width: 12px; height: 12px; border-radius: 50%; border:1px solid #0006; }
+
+    label { display:flex; align-items:center; gap:8px; font-size: 13px; margin: 6px 0; }
+    input[type="checkbox"] { accent-color: var(--accent); }
+    .search { display:flex; gap:8px; margin: 6px 0 10px; }
+    .search input { flex:1; background:#0f1438; border:1px solid #2a3066; color: var(--text); padding:8px 10px; border-radius:8px; }
+
+    .section { margin: 10px 0 16px; padding-bottom: 10px; border-bottom: 1px dashed #2a3066; }
+
+    svg { width: 100%; height: 100%; display:block; background: radial-gradient(1000px 600px at 50% -200px, #1a1f4a, #0f1226 60%); }
+    .link { stroke: var(--edge); stroke-opacity: .55; }
+    .link.highlight { stroke: #b3baf1; stroke-opacity: .9; }
+    .node circle { stroke: #0008; stroke-width: 1px; cursor: pointer; }
+    .node text { pointer-events: none; font-size: 12px; fill: #cfd6ff; text-shadow: 0 1px 2px #000; }
+
+    .tooltip { position: absolute; pointer-events: none; background:#15183a; border:1px solid #2a3066; padding:8px 10px; border-radius:8px; color:#e9ecff; font-size: 12px; max-width: 280px; box-shadow: 0 8px 30px #0008; }
+
+    .details h3 { margin: 0 0 8px; }
+    .details .meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .details a { color: var(--link); text-decoration: none; }
+    .details a:hover { text-decoration: underline; }
+
+    .footnote { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Ouroboros Code — Interactive Features Map</h1>
+      <div class="actions">
+        <button id="resetZoom">Reset Zoom</button>
+        <button id="fitGraph">Fit Graph</button>
+      </div>
+    </header>
+
+    <aside class="left panel">
+      <div class="section">
+        <h2>Search</h2>
+        <div class="search">
+          <input id="search" placeholder="Find nodes (e.g., agents, tools, OpenAI)" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Filter by Category</h2>
+        <div id="filters"></div>
+      </div>
+
+      <div class="section">
+        <h2>Legend</h2>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <div class="section">
+        <h2>About</h2>
+        <p>This graph depicts the primary features of the Ouroboros Code project and how they interact. Click any node to see details and relevant documentation links.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <svg id="graph" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="tooltip" id="tooltip" style="display:none"></div>
+    </main>
+
+    <aside class="right panel">
+      <div class="details" id="details">
+        <h3>Welcome</h3>
+        <p>Select a node to see details, related docs, and connections.</p>
+        <p class="footnote">Tip: Shift+drag to pan, scroll to zoom. Use Fit Graph to center the layout.</p>
+      </div>
+    </aside>
+  </div>
+
+  <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+  <script>
+  // Color map per group
+  const groupPalette = {
+    Core: '#7aa2ff',
+    Architecture: '#ffd166',
+    Agents: '#f4978e',
+    Tools: '#80ed99',
+    Providers: '#9b5de5',
+    Auth: '#06d6a0',
+    Integrations: '#f9c74f',
+    Docs: '#4cc9f0',
+  };
+
+  // Nodes and links definition
+  const nodes = [
+    // Core
+    { id: 'CLI', label: 'Ouroboros Code CLI', group: 'Core', desc: 'Terminal-first interface for orchestrating multi-agent AI workflows.', docs: './cli/index.md' },
+    { id: 'UnifiedRuntime', label: 'Unified Conversation Runtime', group: 'Architecture', desc: 'Provider-neutral streaming core powering sessions across OpenAI, Anthropic, and Gemini.', docs: './architecture.md' },
+
+    // Agents
+    { id: 'AutoAgents', label: 'Dynamic Agent Selection (Auto Mode)', group: 'Agents', desc: 'GPT-5-nano selects best specialists per prompt with confidence scoring and history.', docs: './unified-agents-architecture.md' },
+    { id: 'Personas', label: 'Personas (50+)', group: 'Agents', desc: 'Predefined specialist personas across architecture, security, DevOps, AI/ML, and more.', docs: '../README.md' },
+    { id: 'Cat-Architecture', label: 'Architecture & Design', group: 'Agents', docs: '../README.md' },
+    { id: 'Cat-AIML', label: 'AI/ML Specialists', group: 'Agents', docs: '../README.md' },
+    { id: 'Cat-Security', label: 'Security & Compliance', group: 'Agents', docs: '../README.md' },
+    { id: 'Cat-Perf', label: 'Performance & Optimization', group: 'Agents', docs: '../README.md' },
+    { id: 'Cat-Data', label: 'Database & Data', group: 'Agents', docs: '../README.md' },
+    { id: 'Cat-DevOps', label: 'DevOps & Infrastructure', group: 'Agents', docs: '../README.md' },
+    { id: 'Cat-Frontend', label: 'Frontend Specialists', group: 'Agents', docs: '../README.md' },
+    { id: 'Cat-Backend', label: 'Backend Specialists', group: 'Agents', docs: '../README.md' },
+    { id: 'Cat-Special', label: 'Specialized Domains', group: 'Agents', docs: '../README.md' },
+    { id: 'Cat-Process', label: 'Process & Quality', group: 'Agents', docs: '../README.md' },
+
+    // Tools
+    { id: 'Tools', label: 'Built-in Tools', group: 'Tools', desc: '11+ provider-neutral tools for files, web, shell, and multi-file ops.', docs: './tools/index.md' },
+    { id: 'FileOps', label: 'File System Operations', group: 'Tools', docs: './tools/file-system.md' },
+    { id: 'WebOps', label: 'Web Fetch & Search', group: 'Tools', docs: './tools/web-fetch.md' },
+    { id: 'ShellOps', label: 'Shell Commands', group: 'Tools', docs: './tools/shell.md' },
+    { id: 'MultiFileOps', label: 'Multi-file Operations', group: 'Tools', docs: './tools/multi-file.md' },
+
+    // Providers
+    { id: 'Providers', label: 'Providers', group: 'Providers', docs: '../README.md' },
+    { id: 'OpenAI', label: 'OpenAI', group: 'Providers', docs: '../README.md' },
+    { id: 'Anthropic', label: 'Anthropic', group: 'Providers', docs: '../README.md' },
+    { id: 'Gemini', label: 'Gemini', group: 'Providers', docs: '../GEMINI.md' },
+
+    // Auth
+    { id: 'Auth', label: 'Authentication', group: 'Auth', docs: './cli/authentication.md' },
+    { id: 'OAuth', label: 'OAuth (Google)', group: 'Auth', docs: './cli/authentication.md#oauth-login' },
+    { id: 'APIKey', label: 'Gemini API Key', group: 'Auth', docs: './cli/authentication.md#gemini-api-key' },
+    { id: 'Vertex', label: 'Vertex AI', group: 'Auth', docs: './cli/authentication.md#vertex-ai' },
+
+    // Core Features
+    { id: 'Checkpointing', label: 'Checkpointing', group: 'Architecture', docs: './checkpointing.md' },
+    { id: 'Memory', label: 'Memory Management (GEMINI.md)', group: 'Architecture', docs: './tools/memory.md' },
+    { id: 'TokenCache', label: 'Token Caching', group: 'Architecture', docs: './cli/token-caching.md' },
+
+    // Integrations & Ops
+    { id: 'MCP', label: 'MCP Integration', group: 'Integrations', docs: './tools/mcp-server.md' },
+    { id: 'Extensions', label: 'Custom Extensions', group: 'Integrations', docs: './extension.md' },
+    { id: 'GitHubAction', label: 'GitHub Action', group: 'Integrations', docs: './../README.md' },
+    { id: 'IDE', label: 'IDE Integration (VS Code)', group: 'Integrations', docs: './ide-integration.md' },
+    { id: 'Sandbox', label: 'Sandbox & Security', group: 'Integrations', docs: './sandbox.md' },
+    { id: 'Telemetry', label: 'Telemetry & Monitoring', group: 'Integrations', docs: './telemetry.md' },
+    { id: 'Deployment', label: 'Deployment (Docker/Config)', group: 'Integrations', docs: './deployment.md' },
+
+    // Docs/Help
+    { id: 'Docs', label: 'Docs Home', group: 'Docs', docs: './index.md' },
+    { id: 'Commands', label: 'Commands Reference', group: 'Docs', docs: './cli/commands.md' },
+    { id: 'Troubleshooting', label: 'Troubleshooting & FAQ', group: 'Docs', docs: './troubleshooting.md' },
+    { id: 'Roadmap', label: 'Roadmap', group: 'Docs', docs: '../ROADMAP.md' }
+  ];
+
+  const links = [
+    // Core wiring
+    { source: 'CLI', target: 'UnifiedRuntime' },
+    { source: 'UnifiedRuntime', target: 'Providers' },
+    { source: 'Providers', target: 'OpenAI' },
+    { source: 'Providers', target: 'Anthropic' },
+    { source: 'Providers', target: 'Gemini' },
+
+    // Agents
+    { source: 'CLI', target: 'AutoAgents' },
+    { source: 'AutoAgents', target: 'Personas' },
+    { source: 'Personas', target: 'Cat-Architecture' },
+    { source: 'Personas', target: 'Cat-AIML' },
+    { source: 'Personas', target: 'Cat-Security' },
+    { source: 'Personas', target: 'Cat-Perf' },
+    { source: 'Personas', target: 'Cat-Data' },
+    { source: 'Personas', target: 'Cat-DevOps' },
+    { source: 'Personas', target: 'Cat-Frontend' },
+    { source: 'Personas', target: 'Cat-Backend' },
+    { source: 'Personas', target: 'Cat-Special' },
+    { source: 'Personas', target: 'Cat-Process' },
+
+    // Tools
+    { source: 'CLI', target: 'Tools' },
+    { source: 'Tools', target: 'FileOps' },
+    { source: 'Tools', target: 'WebOps' },
+    { source: 'Tools', target: 'ShellOps' },
+    { source: 'Tools', target: 'MultiFileOps' },
+
+    // Auth
+    { source: 'CLI', target: 'Auth' },
+    { source: 'Auth', target: 'OAuth' },
+    { source: 'Auth', target: 'APIKey' },
+    { source: 'Auth', target: 'Vertex' },
+
+    // Core features
+    { source: 'CLI', target: 'Checkpointing' },
+    { source: 'CLI', target: 'Memory' },
+    { source: 'CLI', target: 'TokenCache' },
+
+    // Integrations
+    { source: 'CLI', target: 'MCP' },
+    { source: 'CLI', target: 'Extensions' },
+    { source: 'CLI', target: 'GitHubAction' },
+    { source: 'CLI', target: 'IDE' },
+    { source: 'CLI', target: 'Sandbox' },
+    { source: 'CLI', target: 'Telemetry' },
+    { source: 'CLI', target: 'Deployment' },
+
+    // Docs
+    { source: 'CLI', target: 'Docs' },
+    { source: 'Docs', target: 'Commands' },
+    { source: 'Docs', target: 'Troubleshooting' },
+    { source: 'Docs', target: 'Roadmap' }
+  ];
+
+  // Build UI
+  const groups = Array.from(new Set(nodes.map(n => n.group)));
+
+  const filtersEl = document.getElementById('filters');
+  const legendEl = document.getElementById('legend');
+  const detailsEl = document.getElementById('details');
+  const tooltip = document.getElementById('tooltip');
+
+  const activeGroups = new Set(groups); // all enabled initially
+
+  groups.forEach(g => {
+    const id = `filter-${g}`;
+    const wrap = document.createElement('label');
+    wrap.innerHTML = `<input type="checkbox" id="${id}" checked> <span>${g}</span>`;
+    filtersEl.appendChild(wrap);
+    document.getElementById(id).addEventListener('change', (e) => {
+      if (e.target.checked) activeGroups.add(g); else activeGroups.delete(g);
+      updateVisibility();
+    });
+
+    const leg = document.createElement('div');
+    leg.className = 'legend-item';
+    leg.innerHTML = `<span class="legend-swatch" style="background:${groupPalette[g] || '#ccc'}"></span><span>${g}</span>`;
+    legendEl.appendChild(leg);
+  });
+
+  // Graph setup
+  const svg = d3.select('#graph');
+  const width = 1200, height = 800;
+
+  const container = svg.append('g');
+  const linkGroup = container.append('g').attr('stroke-width', 1.2);
+  const nodeGroup = container.append('g');
+
+  const link = linkGroup
+    .selectAll('line')
+    .data(links)
+    .enter()
+    .append('line')
+    .attr('class', 'link');
+
+  const node = nodeGroup
+    .selectAll('g')
+    .data(nodes)
+    .enter()
+    .append('g')
+    .attr('class', 'node')
+    .call(drag(simulation()));
+
+  node.append('circle')
+    .attr('r', d => radiusFor(d))
+    .attr('fill', d => groupPalette[d.group] || '#ccc');
+
+  node.append('text')
+    .attr('x', 0)
+    .attr('y', 4)
+    .attr('text-anchor', 'middle')
+    .text(d => d.label);
+
+  node.on('click', (_, d) => showDetails(d));
+  node.on('mouseover', (_, d) => showTooltip(d));
+  node.on('mouseout', hideTooltip);
+
+  // Zoom and pan
+  const zoom = d3.zoom().scaleExtent([0.25, 3]).on('zoom', (event) => {
+    container.attr('transform', event.transform);
+  });
+  svg.call(zoom);
+
+  document.getElementById('resetZoom').addEventListener('click', () => {
+    svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+  });
+  document.getElementById('fitGraph').addEventListener('click', fitGraph);
+
+  // Search
+  document.getElementById('search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    node.select('circle').classed('highlight', false);
+    link.classed('highlight', false);
+    if (!q) return;
+    node.selectAll(function() { return this; }).each(function(d){
+      const match = d.id.toLowerCase().includes(q) || d.label.toLowerCase().includes(q);
+      d3.select(this).select('circle').classed('highlight', match);
+    });
+    link.classed('highlight', l => l.source.id.toLowerCase().includes(q) || l.target.id.toLowerCase().includes(q));
+  });
+
+  function simulation(){
+    const sim = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id(d => d.id).distance(linkDistance).strength(0.9))
+      .force('charge', d3.forceManyBody().strength(-280))
+      .force('collide', d3.forceCollide().radius(d => radiusFor(d) + 6).iterations(2))
+      .force('center', d3.forceCenter(width/2, height/2))
+      .on('tick', ticked);
+    return sim;
+  }
+
+  function ticked(){
+    link
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y);
+
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  }
+
+  function drag(sim){
+    function dragstarted(event, d){
+      if (!event.active) sim.alphaTarget(0.3).restart();
+      d.fx = d.x; d.fy = d.y;
+    }
+    function dragged(event, d){ d.fx = event.x; d.fy = event.y; }
+    function dragended(event, d){ if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }
+    return d3.drag().on('start', dragstarted).on('drag', dragged).on('end', dragended);
+  }
+
+  function radiusFor(d){
+    const base = 16;
+    switch(d.group){
+      case 'Core': return base + 8;
+      case 'Architecture': return base + 2;
+      case 'Agents': return base + 0;
+      case 'Tools': return base + 0;
+      case 'Providers': return base + 0;
+      case 'Auth': return base - 2;
+      case 'Integrations': return base - 1;
+      case 'Docs': return base - 4;
+      default: return base;
+    }
+  }
+  function linkDistance(l){
+    const a = l.source.group, b = l.target.group;
+    if (a === b) return 90;
+    if ((a === 'Core' && b === 'Architecture') || (b === 'Core' && a === 'Architecture')) return 130;
+    return 120;
+  }
+
+  function updateVisibility(){
+    const visibleNode = new Set();
+    node.style('display', d => {
+      const v = activeGroups.has(d.group);
+      if (v) visibleNode.add(d.id);
+      return v ? null : 'none';
+    });
+    link.style('display', l => (visibleNode.has(l.source.id) && visibleNode.has(l.target.id)) ? null : 'none');
+  }
+
+  function showDetails(d){
+    const related = links.filter(l => l.source.id === d.id || l.target.id === d.id);
+    const neighbors = new Set([d.id]);
+    related.forEach(l => { neighbors.add(l.source.id); neighbors.add(l.target.id); });
+
+    detailsEl.innerHTML = `
+      <h3>${d.label}</h3>
+      <div class="meta">Category: ${d.group}</div>
+      ${d.desc ? `<p>${d.desc}</p>` : ''}
+      ${d.docs ? `<p><a href="${d.docs}" target="_blank" rel="noopener">Open related docs</a></p>` : ''}
+      <h4>Connected To</h4>
+      <ul>${Array.from(neighbors).filter(id => id !== d.id).map(id => `<li>${id}</li>`).join('')}</ul>
+    `;
+  }
+
+  function showTooltip(d){
+    tooltip.style.display = 'block';
+    tooltip.innerHTML = `<strong>${d.label}</strong><br/><span style="color:#b8c1ff">${d.group}</span>${d.desc ? `<br/>${d.desc}` : ''}`;
+  }
+  function hideTooltip(){ tooltip.style.display = 'none'; }
+
+  // Position tooltip near cursor
+  document.addEventListener('mousemove', (e) => {
+    const pad = 12;
+    tooltip.style.left = (e.clientX + pad) + 'px';
+    tooltip.style.top = (e.clientY + pad) + 'px';
+  });
+
+  function fitGraph(){
+    // Compute bounds of nodes
+    const xs = nodes.map(n => n.x || 0), ys = nodes.map(n => n.y || 0);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const w = (maxX - minX) || 1; const h = (maxY - minY) || 1;
+    const svgEl = svg.node();
+    const vb = svgEl.viewBox.baseVal;
+    const scale = Math.min(vb.width / (w + 150), vb.height / (h + 150));
+    const tx = (vb.width - w * scale)/2 - minX * scale;
+    const ty = (vb.height - h * scale)/2 - minY * scale;
+    const t = d3.zoomIdentity.translate(tx, ty).scale(scale);
+    svg.transition().duration(400).call(zoom.transform, t);
+  }
+
+  // Initial small delay to stabilize then fit
+  setTimeout(fitGraph, 650);
+  </script>
+</body>
+</html>

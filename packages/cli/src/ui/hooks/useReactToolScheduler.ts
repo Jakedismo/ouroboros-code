@@ -28,6 +28,14 @@ import type {
   HistoryItemWithoutId,
 } from '../types.js';
 import { ToolCallStatus } from '../types.js';
+// Simple debounce utility for performance optimization
+function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
+  let timeout: NodeJS.Timeout;
+  return ((...args: Parameters<T>) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  }) as T;
+}
 
 export type ScheduleFn = (
   request: ToolCallRequestInfo | ToolCallRequestInfo[],
@@ -74,10 +82,18 @@ export function useReactToolScheduler(
   const [toolCallsForDisplay, setToolCallsForDisplay] = useState<
     TrackedToolCall[]
   >([]);
+  const debouncedSetPendingHistoryItem = useMemo(
+    () => debounce(setPendingHistoryItem, 50),
+    [setPendingHistoryItem],
+  );
+  const debouncedSetToolCallsForDisplay = useMemo(
+    () => debounce(setToolCallsForDisplay, 50),
+    [setToolCallsForDisplay],
+  );
 
   const outputUpdateHandler: OutputUpdateHandler = useCallback(
     (toolCallId, outputChunk) => {
-      setPendingHistoryItem((prevItem) => {
+      debouncedSetPendingHistoryItem((prevItem) => {
         if (prevItem?.type === 'tool_group') {
           return {
             ...prevItem,
@@ -92,7 +108,7 @@ export function useReactToolScheduler(
         return prevItem;
       });
 
-      setToolCallsForDisplay((prevCalls) =>
+      debouncedSetToolCallsForDisplay((prevCalls) =>
         prevCalls.map((tc) => {
           if (tc.request.callId === toolCallId && tc.status === 'executing') {
             const executingTc = tc as TrackedExecutingToolCall;
@@ -102,7 +118,7 @@ export function useReactToolScheduler(
         }),
       );
     },
-    [setPendingHistoryItem],
+    [debouncedSetPendingHistoryItem, debouncedSetToolCallsForDisplay],
   );
 
   const allToolCallsCompleteHandler: AllToolCallsCompleteHandler = useCallback(
@@ -114,7 +130,7 @@ export function useReactToolScheduler(
 
   const toolCallsUpdateHandler: ToolCallsUpdateHandler = useCallback(
     (updatedCoreToolCalls: ToolCall[]) => {
-      setToolCallsForDisplay((prevTrackedCalls) =>
+      debouncedSetToolCallsForDisplay((prevTrackedCalls) =>
         updatedCoreToolCalls.map((coreTc) => {
           const existingTrackedCall = prevTrackedCalls.find(
             (ptc) => ptc.request.callId === coreTc.request.callId,
@@ -128,7 +144,7 @@ export function useReactToolScheduler(
         }),
       );
     },
-    [setToolCallsForDisplay],
+    [debouncedSetToolCallsForDisplay],
   );
 
   const scheduler = useMemo(
@@ -163,7 +179,7 @@ export function useReactToolScheduler(
 
   const markToolsAsSubmitted: MarkToolsAsSubmittedFn = useCallback(
     (callIdsToMark: string[]) => {
-      setToolCallsForDisplay((prevCalls) =>
+      debouncedSetToolCallsForDisplay((prevCalls) =>
         prevCalls.map((tc) =>
           callIdsToMark.includes(tc.request.callId)
             ? { ...tc, responseSubmittedToGemini: true }

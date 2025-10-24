@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type React from 'react';
+import React from 'react';
 import { useMemo } from 'react';
 import { Box, Text } from 'ink';
-import ProgressBar from 'ink-progress-bar';
+import ProgressBar from '../shared/ProgressBar.js';
 import type { IndividualToolCallDisplay } from '../../types.js';
 import { ToolCallStatus } from '../../types.js';
-import { ToolMessage } from './ToolMessage.js';
+import { ToolMessageMemoized } from './ToolMessage.js';
 import { ToolConfirmationMessage } from './ToolConfirmationMessage.js';
 import { Colors } from '../../colors.js';
 import type { Config } from '@ouroboros/ouroboros-code-core';
@@ -120,7 +120,7 @@ export const ToolGroupMessage: React.FC<ToolGroupMessageProps> = ({
         return (
           <Box key={tool.callId} flexDirection="column" minHeight={1}>
             <Box flexDirection="row" alignItems="center">
-              <ToolMessage
+              <ToolMessageMemoized
                 callId={tool.callId}
                 name={tool.name}
                 description={tool.description}
@@ -158,3 +158,34 @@ export const ToolGroupMessage: React.FC<ToolGroupMessageProps> = ({
     </Box>
   );
 };
+
+export const ToolGroupMessageMemoized = React.memo(
+  ToolGroupMessage,
+  (prev, next) => {
+    // Compare basic props
+    if (prev.groupId !== next.groupId) return false;
+    if (prev.availableTerminalHeight !== next.availableTerminalHeight)
+      return false;
+    if (prev.terminalWidth !== next.terminalWidth) return false;
+    if (prev.isFocused !== next.isFocused) return false;
+
+    // Compare toolCalls array
+    if (prev.toolCalls.length !== next.toolCalls.length) {
+      console.log('[ToolGroupMessage] Tool calls length changed, re-rendering');
+      return false;
+    }
+    const toolsEqual = prev.toolCalls.every((tool, index) => {
+      const nextTool = next.toolCalls[index];
+      return (
+        tool.callId === nextTool?.callId &&
+        tool.status === nextTool?.status &&
+        tool.resultDisplay === nextTool?.resultDisplay &&
+        tool.confirmationDetails === nextTool?.confirmationDetails
+      );
+    });
+    if (!toolsEqual) {
+      console.log('[ToolGroupMessage] Tool calls not equal, re-rendering');
+    }
+    return toolsEqual;
+  },
+);

@@ -5,32 +5,37 @@
  */
 
 import type { ThoughtSummary } from '@ouroboros/ouroboros-code-core';
-import type React from 'react';
-import { Box, Text } from 'ink';
+import React from 'react';
+import { Text, Box } from 'ink';
 import { Colors } from '../colors.js';
-import { useStreamingContext } from '../contexts/StreamingContext.js';
-import { StreamingState } from '../types.js';
 import { GeminiRespondingSpinner } from './GeminiRespondingSpinner.js';
 import { formatDuration } from '../utils/formatters.js';
-import { useTerminalSize } from '../hooks/useTerminalSize.js';
-import { isNarrowWidth } from '../utils/isNarrowWidth.js';
+// import { useTerminalSize } from '../hooks/useTerminalSize.js';
+// import { isNarrowWidth } from '../utils/isNarrowWidth.js';
+import { useTimer } from '../hooks/useTimer.js';
+import { StreamingState } from '../types.js';
 
 interface LoadingIndicatorProps {
   currentLoadingPhrase?: string;
-  elapsedTime: number;
+  streamingState: StreamingState;
   rightContent?: React.ReactNode;
   thought?: ThoughtSummary | null;
 }
 
-export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({
+export const LoadingIndicator = React.memo<LoadingIndicatorProps>(({
   currentLoadingPhrase,
-  elapsedTime,
+  streamingState,
   rightContent,
   thought,
 }) => {
-  const streamingState = useStreamingContext();
-  const { columns: terminalWidth } = useTerminalSize();
-  const isNarrow = isNarrowWidth(terminalWidth);
+  // Removed unused terminalWidth
+  // Removed unused isNarrow
+
+  // Use internal timer that only runs when streaming
+  const elapsedTime = useTimer(
+    streamingState === StreamingState.Responding || streamingState === StreamingState.WaitingForConfirmation,
+    streamingState // Use streamingState as reset key
+  );
 
   if (streamingState === StreamingState.Idle) {
     return null;
@@ -44,39 +49,26 @@ export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({
       : null;
 
   return (
-    <Box paddingLeft={0} flexDirection="column">
-      {/* Main loading line */}
-      <Box
-        width="100%"
-        flexDirection={isNarrow ? 'column' : 'row'}
-        alignItems={isNarrow ? 'flex-start' : 'center'}
-      >
-        <Box>
-          <Box marginRight={1}>
-            <GeminiRespondingSpinner
-              nonRespondingDisplay={
-                streamingState === StreamingState.WaitingForConfirmation
-                  ? '⠏'
-                  : ''
-              }
-            />
-          </Box>
-          {primaryText && (
-            <Text color={Colors.AccentPurple}>{primaryText}</Text>
-          )}
-          {!isNarrow && cancelAndTimerContent && (
-            <Text color={Colors.Gray}> {cancelAndTimerContent}</Text>
-          )}
+    <Box paddingLeft={0}>
+      <Box width="100%" flexDirection="row" alignItems="center">
+        <Box marginRight={1}>
+          <GeminiRespondingSpinner
+            nonRespondingDisplay={
+              streamingState === StreamingState.WaitingForConfirmation
+                ? '⠏'
+                : ''
+            }
+          />
         </Box>
-        {!isNarrow && <Box flexGrow={1}>{/* Spacer */}</Box>}
-        {!isNarrow && rightContent && <Box>{rightContent}</Box>}
+        {primaryText && (
+          <Text color={Colors.AccentPurple}>{primaryText}</Text>
+        )}
+        {cancelAndTimerContent && (
+          <Text color={Colors.Gray}> {cancelAndTimerContent}</Text>
+        )}
+        <Box flexGrow={1}>{/* Spacer */}</Box>
+        {rightContent && <Box>{rightContent}</Box>}
       </Box>
-      {isNarrow && cancelAndTimerContent && (
-        <Box>
-          <Text color={Colors.Gray}>{cancelAndTimerContent}</Text>
-        </Box>
-      )}
-      {isNarrow && rightContent && <Box>{rightContent}</Box>}
     </Box>
   );
-};
+});

@@ -1,11 +1,10 @@
-// @ts-nocheck
 /**
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import {
   Surface,
@@ -161,8 +160,8 @@ const describeItem = (item: HistoryItemWithoutId): ActivityDescriptor => {
     default:
       return {
         icon: '…',
-        label: item.type,
-        summary: truncate(item.text, 64),
+        label: (item as any).type,
+        summary: truncate((item as any).text, 64),
         tone: 'muted',
       };
   }
@@ -189,33 +188,66 @@ const toneToColor = (
   }
 };
 
-export const HistoryActivityRail: React.FC<HistoryActivityRailProps> = ({
+export const HistoryActivityRail: React.FC<HistoryActivityRailProps> = React.memo(({
   history,
   pendingItems = [],
   maxItems = 5,
   isCompact = false,
 }) => {
   const design = useDesignSystem();
-  const pendingDescriptors = pendingItems.slice(0, 2).map((item) => {
-    const base = describeItem(item);
-    const detail = base.summary ? `${base.label}: ${base.summary}` : base.label;
-    return {
-      icon: '⏳',
-      label: 'Pending',
-      summary: truncate(`Awaiting ${detail}`, 64),
-      tone: 'info' as ActivityTone,
-    };
-  });
 
-  const historyDescriptors = history
-    .slice(-maxItems)
-    .reverse()
-    .map((item) => describeItem(item));
+  // Create stable keys for items to prevent unnecessary re-renders
+  const getStableKey = useCallback((item: HistoryItemWithoutId | HistoryItem, index: number, isPending: boolean): string => {
+    const prefix = isPending ? 'pending' : 'history';
+    if (item.type === 'tool_group') {
+      const callIds = item.tools.map((tool) => tool.callId ?? tool.name ?? 'tool');
+      const unique = Array.from(new Set(callIds)).sort();
+      return `${prefix}-tool-${unique.join('|')}-${index}`;
+    }
+    if (item.type === 'multi_agent_status') {
+      const agentIds = item.selection.selectedAgents.map((agent) => agent.id).join(',');
+      return `${prefix}-multi-${agentIds}-${index}`;
+    }
+    if ('text' in item && typeof item.text === 'string') {
+      const textHash = item.text.slice(0, 20).replace(/\s+/g, '_');
+      return `${prefix}-${item.type}-${textHash}-${index}`;
+    }
+    return `${prefix}-${item.type}-${index}`;
+  }, []);
 
-  const descriptors = [...pendingDescriptors, ...historyDescriptors].slice(
-    0,
-    maxItems,
-  );
+  // Memoize descriptor creation to prevent expensive recalculations
+  const descriptors = useMemo(() => {
+    const pendingDescriptors = pendingItems.slice(0, 2).map((item, index) => {
+      const base = describeItem(item);
+      const detail = base.summary ? `${base.label}: ${base.summary}` : base.label;
+      return {
+        ...base,
+        icon: '⏳',
+        label: 'Pending',
+        summary: truncate(`Awaiting ${detail}`, 64),
+        tone: 'info' as ActivityTone,
+        key: getStableKey(item, index, true),
+      };
+    });
+
+    const historyDescriptors = history
+      .slice(-maxItems)
+      .reverse()
+      .map((item, index) => ({
+        ...describeItem(item),
+        key: getStableKey(item, index, false),
+      }));
+
+    // Ensure we show both pending and history items when possible
+    const combined = [...pendingDescriptors, ...historyDescriptors];
+    // If we have both pending and history items, ensure at least one of each is shown
+    if (pendingDescriptors.length > 0 && historyDescriptors.length > 0 && maxItems >= 2) {
+      const pendingToShow = Math.min(pendingDescriptors.length, Math.ceil(maxItems / 2));
+      const historyToShow = Math.min(historyDescriptors.length, maxItems - pendingToShow);
+      return [...pendingDescriptors.slice(0, pendingToShow), ...historyDescriptors.slice(0, historyToShow)];
+    }
+    return combined.slice(0, maxItems);
+  }, [history, pendingItems, maxItems, getStableKey]);
 
   if (!descriptors.length) {
     return null;
@@ -237,7 +269,7 @@ export const HistoryActivityRail: React.FC<HistoryActivityRailProps> = ({
       >
         {descriptors.map((descriptor, index) => (
           <Box
-            key={`${descriptor.label}-${index}`}
+            key={descriptor.key}
             flexDirection="column"
             flexGrow={1}
             marginRight={
@@ -261,4 +293,4 @@ export const HistoryActivityRail: React.FC<HistoryActivityRailProps> = ({
       </Box>
     </Surface>
   );
-};
+});

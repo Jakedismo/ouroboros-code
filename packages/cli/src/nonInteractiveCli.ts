@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Config, ToolCallRequestInfo } from '@ouroboros/ouroboros-code-core';
+import type {
+  Config,
+  ToolCallRequestInfo,
+} from '@ouroboros/ouroboros-code-core';
 import {
   executeToolCall,
   shutdownTelemetry,
@@ -14,14 +17,79 @@ import {
   FatalTurnLimitedError,
   getResponseText,
 } from '@ouroboros/ouroboros-code-core';
-import type { AgentMessage, AgentContentFragment } from './ui/types/agentContent.js';
-import type { FunctionCall, Part, PartListUnion, GenerateContentConfig } from '@ouroboros/ouroboros-code-core';
+
+// Duplicate fingerprint computation logic from CoreToolScheduler
+function stableSerialize(value: unknown): string {
+  if (value === undefined) {
+    return 'undefined';
+  }
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableSerialize(entry)).join(',')}]`;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  const entries = keys.map(
+    (key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`,
+  );
+  return `{${entries.join(',')}}`;
+}
+
+function normalizeArgsForFingerprint(args: unknown): unknown {
+  if (typeof args === 'string') {
+    try {
+      return normalizeArgsForFingerprint(JSON.parse(args));
+    } catch (_error) {
+      return args;
+    }
+  }
+  if (Array.isArray(args)) {
+    return args.map((entry) => normalizeArgsForFingerprint(entry));
+  }
+  if (args && typeof args === 'object') {
+    const record = args as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(record)) {
+      result[key] = normalizeArgsForFingerprint(record[key]);
+    }
+    return result;
+  }
+  return args;
+}
+
+function computeToolCallFingerprint(name: string, args: unknown): string {
+  const normalizedArgs = normalizeArgsForFingerprint(args);
+  return `${name}::${stableSerialize(normalizedArgs)}`;
+}
+import type {
+  AgentMessage,
+  AgentContentFragment,
+} from './ui/types/agentContent.js';
+import type {
+  FunctionCall,
+  Part,
+  PartListUnion,
+  GenerateContentConfig,
+} from '@ouroboros/ouroboros-code-core';
 import { ensureAgentContentArray } from './ui/types/agentContent.js';
 import * as fs from 'node:fs/promises';
-
 import { ConsolePatcher } from './ui/utils/ConsolePatcher.js';
+
+// Function to strip ANSI escape codes
+function stripAnsiCodes(str: string): string {
+  return str.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '');
+}
 import { handleAtCommand } from './ui/hooks/atCommandProcessor.js';
-import { ContinuousInputManager, InputCommandType, type InputCommand } from './services/continuousInputManager.js';
+import {
+  ContinuousInputManager,
+  InputCommandType,
+  type InputCommand,
+} from './services/continuousInputManager.js';
 
 async function handleInputCommand(
   command: InputCommand,
@@ -76,7 +144,9 @@ async function handleInputCommand(
           const fileContent = await fs.readFile(command.data, 'utf-8');
           currentMessages.push({
             role: 'user',
-            parts: [{ text: `[File Content from ${command.data}]:\n${fileContent}` }],
+            parts: [
+              { text: `[File Content from ${command.data}]:\n${fileContent}` },
+            ],
           });
           return 'processed';
         } catch (error) {
@@ -157,13 +227,17 @@ export async function runNonInteractive(
 
     let turnCount = 0;
     let shouldExit = false;
-    
+
     while (!shouldExit) {
       // Check for continuous input before each turn
       if (inputManager && inputManager.hasPendingCommands()) {
         const command = inputManager.getNextCommand();
         if (command) {
-          const handled = await handleInputCommand(command, messageQueue, config);
+          const handled = await handleInputCommand(
+            command,
+            messageQueue,
+            config,
+          );
           if (handled === 'exit') {
             shouldExit = true;
             break;
@@ -196,7 +270,11 @@ export async function runNonInteractive(
         if (config.isAutonomousMode() && inputManager) {
           await new Promise<void>((resolve) => {
             const checkForInput = setInterval(() => {
-              if (inputManager.hasPendingCommands() || shouldExit || messageQueue.length > 0) {
+              if (
+                inputManager.hasPendingCommands() ||
+                shouldExit ||
+                messageQueue.length > 0
+              ) {
                 clearInterval(checkForInput);
                 resolve();
               }
@@ -236,14 +314,25 @@ export async function runNonInteractive(
         .map((part) => part.functionCall)
         .filter((call): call is FunctionCall => Boolean(call));
 
+      // Deduplicate function calls based on fingerprint (name + normalized args)
+      const seenFingerprints = new Set<string>();
+      const uniqueFunctionCalls = functionCalls.filter((call) => {
+        const fingerprint = computeToolCallFingerprint(call.name ?? 'unknown', call.args);
+        if (seenFingerprints.has(fingerprint)) {
+          return false;
+        }
+        seenFingerprints.add(fingerprint);
+        return true;
+      });
+
       const responseText = getResponseText(response) ?? '';
       if (responseText) {
-        process.stdout.write(responseText);
+        process.stdout.write(stripAnsiCodes(responseText));
       }
 
-      if (functionCalls.length > 0) {
+      if (uniqueFunctionCalls.length > 0) {
         const toolResponseParts: AgentContentFragment[] = [];
-        for (const functionCall of functionCalls) {
+        for (const functionCall of uniqueFunctionCalls) {
           const requestInfo: ToolCallRequestInfo = {
             callId:
               functionCall.id ?? `${functionCall.name ?? 'tool'}-${Date.now()}`,
@@ -253,21 +342,34 @@ export async function runNonInteractive(
             prompt_id,
           };
 
-          const toolResponse = await executeToolCall(
-            config,
-            requestInfo,
-            abortController.signal,
-          );
+           const toolResponse = await executeToolCall(
+             config,
+             requestInfo,
+             abortController.signal,
+           );
 
-          if (toolResponse.error) {
-            console.error(
-              `Error executing tool ${requestInfo.name}: ${toolResponse.resultDisplay || toolResponse.error.message}`,
-            );
-          }
+           if (toolResponse.error) {
+             const displayText = typeof toolResponse.resultDisplay === 'string'
+               ? toolResponse.resultDisplay
+               : toolResponse.error.message;
+             console.error(
+               `Error executing tool ${requestInfo.name}: ${stripAnsiCodes(displayText)}`,
+             );
+           }
 
-          if (toolResponse.responseParts) {
-            toolResponseParts.push(...toolResponse.responseParts);
-          }
+           if (toolResponse.responseParts) {
+             // Strip ANSI codes from all response parts to prevent TUI rendering in plain text output
+             const strippedResponseParts = toolResponse.responseParts.map(part => {
+               if (typeof part === 'string') {
+                 return { text: stripAnsiCodes(part) };
+               }
+               if (part && typeof part === 'object' && 'text' in part && typeof part.text === 'string') {
+                 return { ...part, text: stripAnsiCodes(part.text) };
+               }
+               return part;
+             });
+             toolResponseParts.push(...strippedResponseParts);
+           }
         }
         if (toolResponseParts.length === 0) {
           toolResponseParts.push({
@@ -281,7 +383,11 @@ export async function runNonInteractive(
           // Wait for new input
           await new Promise<void>((resolve) => {
             const checkForInput = setInterval(() => {
-              if (inputManager.hasPendingCommands() || shouldExit || messageQueue.length > 0) {
+              if (
+                inputManager.hasPendingCommands() ||
+                shouldExit ||
+                messageQueue.length > 0
+              ) {
                 clearInterval(checkForInput);
                 resolve();
               }

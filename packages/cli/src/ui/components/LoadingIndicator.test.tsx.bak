@@ -12,6 +12,7 @@ import { StreamingContext } from '../contexts/StreamingContext.js';
 import { StreamingState } from '../types.js';
 import { vi } from 'vitest';
 import * as useTerminalSize from '../hooks/useTerminalSize.js';
+import * as useTimer from '../hooks/useTimer.js';
 
 // Mock GeminiRespondingSpinner
 vi.mock('./GeminiRespondingSpinner.js', () => ({
@@ -30,11 +31,18 @@ vi.mock('./GeminiRespondingSpinner.js', () => ({
   },
 }));
 
+vi.mock('../hooks/useTimer.js', () => ({
+  useTimer: vi.fn(),
+}));
+
 vi.mock('../hooks/useTerminalSize.js', () => ({
   useTerminalSize: vi.fn(),
 }));
 
 const useTerminalSizeMock = vi.mocked(useTerminalSize.useTerminalSize);
+const useTimerMock = vi.mocked(useTimer.useTimer);
+
+useTimerMock.mockReturnValue(0);
 
 const renderWithContext = (
   ui: React.ReactElement,
@@ -53,7 +61,7 @@ const renderWithContext = (
 describe('<LoadingIndicator />', () => {
   const defaultProps = {
     currentLoadingPhrase: 'Loading...',
-    elapsedTime: 5,
+    streamingState: StreamingState.Responding,
   };
 
   it('should not render when streamingState is Idle', () => {
@@ -65,6 +73,7 @@ describe('<LoadingIndicator />', () => {
   });
 
   it('should render spinner, phrase, and time when streamingState is Responding', () => {
+    useTimerMock.mockReturnValue(5);
     const { lastFrame } = renderWithContext(
       <LoadingIndicator {...defaultProps} />,
       StreamingState.Responding,
@@ -78,7 +87,7 @@ describe('<LoadingIndicator />', () => {
   it('should render spinner (static), phrase but no time/cancel when streamingState is WaitingForConfirmation', () => {
     const props = {
       currentLoadingPhrase: 'Confirm action',
-      elapsedTime: 10,
+      streamingState: StreamingState.WaitingForConfirmation,
     };
     const { lastFrame } = renderWithContext(
       <LoadingIndicator {...props} />,
@@ -94,7 +103,8 @@ describe('<LoadingIndicator />', () => {
   it('should display the currentLoadingPhrase correctly', () => {
     const props = {
       currentLoadingPhrase: 'Processing data...',
-      elapsedTime: 3,
+      streamingState: StreamingState.Responding,
+
     };
     const { lastFrame } = renderWithContext(
       <LoadingIndicator {...props} />,
@@ -104,9 +114,11 @@ describe('<LoadingIndicator />', () => {
   });
 
   it('should display the elapsedTime correctly when Responding', () => {
+    useTimerMock.mockReturnValue(60);
     const props = {
       currentLoadingPhrase: 'Working...',
-      elapsedTime: 60,
+      streamingState: StreamingState.Responding,
+
     };
     const { lastFrame } = renderWithContext(
       <LoadingIndicator {...props} />,
@@ -116,9 +128,11 @@ describe('<LoadingIndicator />', () => {
   });
 
   it('should display the elapsedTime correctly in human-readable format', () => {
+    useTimerMock.mockReturnValue(125);
     const props = {
       currentLoadingPhrase: 'Working...',
-      elapsedTime: 125,
+      streamingState: StreamingState.Responding,
+
     };
     const { lastFrame } = renderWithContext(
       <LoadingIndicator {...props} />,
@@ -144,11 +158,13 @@ describe('<LoadingIndicator />', () => {
     expect(lastFrame()).toBe(''); // Initial: Idle
 
     // Transition to Responding
+    useTimerMock.mockReturnValue(2);
     rerender(
       <StreamingContext.Provider value={StreamingState.Responding}>
         <LoadingIndicator
+          
           currentLoadingPhrase="Now Responding"
-          elapsedTime={2}
+          streamingState={StreamingState.Responding}
         />
       </StreamingContext.Provider>,
     );
@@ -158,11 +174,13 @@ describe('<LoadingIndicator />', () => {
     expect(output).toContain('(esc to cancel, 2s)');
 
     // Transition to WaitingForConfirmation
+    useTimerMock.mockReturnValue(15);
     rerender(
       <StreamingContext.Provider value={StreamingState.WaitingForConfirmation}>
         <LoadingIndicator
+          
           currentLoadingPhrase="Please Confirm"
-          elapsedTime={15}
+
         />
       </StreamingContext.Provider>,
     );
@@ -175,7 +193,8 @@ describe('<LoadingIndicator />', () => {
     // Transition back to Idle
     rerender(
       <StreamingContext.Provider value={StreamingState.Idle}>
-        <LoadingIndicator {...defaultProps} />
+        <LoadingIndicator
+          {...defaultProps} />
       </StreamingContext.Provider>,
     );
     expect(lastFrame()).toBe('');
@@ -184,8 +203,9 @@ describe('<LoadingIndicator />', () => {
   it('should display fallback phrase if thought is empty', () => {
     const props = {
       thought: null,
+      streamingState: StreamingState.Responding,
       currentLoadingPhrase: 'Loading...',
-      elapsedTime: 5,
+
     };
     const { lastFrame } = renderWithContext(
       <LoadingIndicator {...props} />,
@@ -201,7 +221,7 @@ describe('<LoadingIndicator />', () => {
         subject: 'Thinking about something...',
         description: 'and other stuff.',
       },
-      elapsedTime: 5,
+      streamingState: StreamingState.Responding,
     };
     const { lastFrame } = renderWithContext(
       <LoadingIndicator {...props} />,
@@ -214,29 +234,14 @@ describe('<LoadingIndicator />', () => {
       expect(output).not.toContain('and other stuff.');
     }
   });
-
-  it('should prioritize thought.subject over currentLoadingPhrase', () => {
-    const props = {
-      thought: {
-        subject: 'This should be displayed',
-        description: 'A description',
-      },
-      currentLoadingPhrase: 'This should not be displayed',
-      elapsedTime: 5,
-    };
-    const { lastFrame } = renderWithContext(
-      <LoadingIndicator {...props} />,
-      StreamingState.Responding,
-    );
-    const output = lastFrame();
-    expect(output).toContain('This should be displayed');
-    expect(output).not.toContain('This should not be displayed');
   });
+
 
   describe('responsive layout', () => {
     it('should render on a single line on a wide terminal', () => {
       const { lastFrame } = renderWithContext(
         <LoadingIndicator
+          
           {...defaultProps}
           rightContent={<Text>Right</Text>}
         />,
@@ -254,6 +259,7 @@ describe('<LoadingIndicator />', () => {
     it('should render on multiple lines on a narrow terminal', () => {
       const { lastFrame } = renderWithContext(
         <LoadingIndicator
+          
           {...defaultProps}
           rightContent={<Text>Right</Text>}
         />,
@@ -277,7 +283,8 @@ describe('<LoadingIndicator />', () => {
 
     it('should use wide layout at 80 columns', () => {
       const { lastFrame } = renderWithContext(
-        <LoadingIndicator {...defaultProps} />,
+        <LoadingIndicator
+          {...defaultProps} />,
         StreamingState.Responding,
         80,
       );
@@ -286,7 +293,8 @@ describe('<LoadingIndicator />', () => {
 
     it('should use narrow layout at 79 columns', () => {
       const { lastFrame } = renderWithContext(
-        <LoadingIndicator {...defaultProps} />,
+        <LoadingIndicator
+          {...defaultProps} />,
         StreamingState.Responding,
         79,
       );

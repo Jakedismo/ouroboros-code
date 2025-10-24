@@ -14,6 +14,7 @@ import {
   processSingleFileContent,
   getSpecificMimeType,
 } from '../utils/fileUtils.js';
+import { partToString } from '../utils/partUtils.js';
 import type { Config } from '../config/config.js';
 import { FileOperation } from '../telemetry/metrics.js';
 import { getProgrammingLanguage } from '../telemetry/telemetry-utils.js';
@@ -83,6 +84,11 @@ class ReadFileToolInvocation extends BaseToolInvocation<
       };
     }
 
+    // Function to strip ANSI escape codes
+    const stripAnsiCodes = (str: string): string => {
+      return str.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '');
+    };
+
     let llmContent: AgentContentFragment;
     if (result.isTruncated) {
       const [start, end] = result.linesShown!;
@@ -96,9 +102,14 @@ Status: Showing lines ${start}-${end} of ${total} total lines.
 Action: To read more of the file, you can use the 'offset' and 'limit' parameters in a subsequent 'read_file' call. For example, to read the next section of the file, use offset: ${nextOffset}.
 
 --- FILE CONTENT (truncated) ---
-${result.llmContent}`;
+${stripAnsiCodes(partToString(result.llmContent))}`;
     } else {
-      llmContent = result.llmContent || '';
+      // Only strip ANSI codes from text content, not from binary/image content
+      if (typeof result.llmContent === 'string') {
+        llmContent = stripAnsiCodes(result.llmContent);
+      } else {
+        llmContent = result.llmContent;
+      }
     }
 
     const lines =

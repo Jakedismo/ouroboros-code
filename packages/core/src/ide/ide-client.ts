@@ -405,10 +405,15 @@ export class IdeClient {
       };
       const options = fetchOptions as unknown as import('undici').RequestInit;
       const response = await fetchFn(url, options);
+      // Convert undici Headers to plain object for web Response constructor
+      const headers: Record<string, string> = {};
+      for (const [key, value] of response.headers) {
+        headers[key] = value;
+      }
       return new Response(response.body as ReadableStream<unknown> | null, {
         status: response.status,
         statusText: response.statusText,
-        headers: response.headers,
+        headers,
       });
     };
   }

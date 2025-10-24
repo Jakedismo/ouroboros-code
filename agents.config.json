@@ -1,0 +1,22 @@
+{
+	"nanocoder": {
+		"providers": [
+			{
+				"name": "Ollama",
+				"baseUrl": "http://localhost:11434/v1",
+				"models": ["gpt-oss:20b", 
+                    "hf.co/unsloth/Qwen2.5-Coder-14B-Instruct-128K-GGUF:Q4_K_M",
+                    "hf.co/unsloth/ERNIE-4.5-21B-A3B-Thinking-GGUF:Q4_K_M",
+                    "qwen3-coder:480b-cloud", 
+                    "gpt-oss:120b-cloud"]
+			},
+			{
+				"name": "LM Studio",
+				"baseUrl": "http://localhost:1234/v1",
+				"models": ["lopenai/gpt-oss-20b", 
+                    "bytedance/seed-oss-36b", 
+                    "unsloth-qwen3-coder-30b-a3b-instruct-mlx"]
+			}
+		]
+	}
+}

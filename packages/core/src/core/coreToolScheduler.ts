@@ -24,7 +24,10 @@ import {
   ToolErrorType,
   ToolCallEvent,
 } from '../index.js';
-import type { ToolResponsePart, ToolResponseParts } from '../types/toolResponses.js';
+import type {
+  ToolResponsePart,
+  ToolResponseParts,
+} from '../types/toolResponses.js';
 import { toolResponsePartsToString } from '../utils/toolResponseStringifier.js';
 import type { ModifyContext } from '../tools/modifiable-tool.js';
 import {
@@ -175,7 +178,11 @@ export function convertToFunctionResponse(
 
   if (!contentToProcess || typeof contentToProcess !== 'object') {
     return [
-      createFunctionResponsePart(callId, toolName, String(contentToProcess ?? '')),
+      createFunctionResponsePart(
+        callId,
+        toolName,
+        String(contentToProcess ?? ''),
+      ),
     ];
   }
 
@@ -184,7 +191,9 @@ export function convertToFunctionResponse(
   if ('functionResponse' in candidate) {
     const functionResponse = candidate['functionResponse'];
     if (functionResponse && typeof functionResponse === 'object') {
-      const response = (functionResponse as Record<string, unknown>)['response'];
+      const response = (functionResponse as Record<string, unknown>)[
+        'response'
+      ];
       if (Array.isArray(response)) {
         const rendered = toolResponsePartsToString(response);
         return [createFunctionResponsePart(callId, toolName, rendered)];
@@ -678,7 +687,9 @@ export class CoreToolScheduler {
           'Cannot schedule new tool calls while other tool calls are actively running (executing or awaiting approval).',
         );
       }
+
       const rawRequests = Array.isArray(request) ? request : [request];
+
       const existingCallIds = new Set(
         this.toolCalls.map((call) => call.request.callId),
       );
@@ -688,12 +699,18 @@ export class CoreToolScheduler {
         if (!reqInfo?.callId) {
           return true;
         }
-        if (existingCallIds.has(reqInfo.callId) || this.seenCallIds.has(reqInfo.callId)) {
+        if (
+          existingCallIds.has(reqInfo.callId) ||
+          this.seenCallIds.has(reqInfo.callId)
+        ) {
           return false;
         }
 
         const fingerprint = computeToolCallFingerprint(reqInfo);
-        if (this.activeFingerprints.has(fingerprint) || batchFingerprints.has(fingerprint)) {
+        if (
+          this.activeFingerprints.has(fingerprint) ||
+          batchFingerprints.has(fingerprint)
+        ) {
           return false;
         }
 
@@ -791,7 +808,8 @@ export class CoreToolScheduler {
             );
             this.setStatusInternal(reqInfo.callId, 'scheduled');
             this.config.approveToolCall(reqInfo.callId, {
-              alwaysApprove: this.config.getApprovalMode() === ApprovalMode.YOLO,
+              alwaysApprove:
+                this.config.getApprovalMode() === ApprovalMode.YOLO,
             });
             continue;
           }
@@ -807,7 +825,8 @@ export class CoreToolScheduler {
             );
             this.setStatusInternal(reqInfo.callId, 'scheduled');
             this.config.approveToolCall(reqInfo.callId, {
-              alwaysApprove: this.config.getApprovalMode() === ApprovalMode.YOLO,
+              alwaysApprove:
+                this.config.getApprovalMode() === ApprovalMode.YOLO,
             });
           } else {
             // Allow IDE to resolve confirmation

@@ -187,37 +187,6 @@ const stringifyResultDisplay = (
   }
 };
 
-const buildToolGroupDisplay = (
-  agent: AgentPersona,
-  event: StreamToolEvent['event'],
-): HistoryItemWithoutId => {
-  const description = stringifyArgs(event.arguments);
-  const resultDisplay = stringifyResultDisplay(
-    event.outputText,
-    event.resultDisplay,
-    event.errorMessage,
-  );
-  const status = event.errorMessage ? ToolCallStatus.Error : ToolCallStatus.Success;
-
-  return {
-    type: 'tool_group',
-    tools: [
-      {
-        callId: event.callId,
-        name: event.toolName,
-        description,
-        resultDisplay,
-        status,
-        confirmationDetails: undefined,
-        renderOutputAsMarkdown: true,
-        agentId: agent.id,
-        agentName: agent.name,
-        agentEmoji: agent.emoji,
-      },
-    ],
-  };
-};
-
 export const createMultiAgentHistoryItem = (
   selection: SelectionFeedbackPayload,
   status: 'planning' | 'running' | 'complete',
@@ -239,17 +208,12 @@ export const useAutomaticAgentSelection = (
   const [isInitialized, setIsInitialized] = useState(false);
   const seenToolCallIdsRef = useRef(new Set<string>());
 
-  const emitToolEventMessage = useCallback(
-    (payload: StreamToolEvent) => {
-      if (seenToolCallIdsRef.current.has(payload.event.callId)) {
-        return;
-      }
-      seenToolCallIdsRef.current.add(payload.event.callId);
-      const historyItem = buildToolGroupDisplay(payload.agent, payload.event);
-      addItem(historyItem, Date.now());
-    },
-    [addItem],
-  );
+  const emitToolEventMessage = useCallback((payload: StreamToolEvent) => {
+    if (seenToolCallIdsRef.current.has(payload.event.callId)) {
+      return;
+    }
+    seenToolCallIdsRef.current.add(payload.event.callId);
+  }, []);
 
   // Initialize the orchestrator
   useEffect(() => {
@@ -395,6 +359,14 @@ export const useAutomaticAgentSelection = (
         }
       } catch (error) {
         console.error('Streaming agent selection failed:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        addItem(
+          {
+            type: MessageType.ERROR,
+            text: `⚠️ **Automatic agent selection failed**\n\n${message}`,
+          },
+          Date.now(),
+        );
         yield { type: 'complete', shouldProceed: true };
       }
     },
@@ -459,6 +431,14 @@ export const useAutomaticAgentSelection = (
         };
       } catch (error) {
         console.error('Automatic agent selection failed:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        addItem(
+          {
+            type: MessageType.ERROR,
+            text: `⚠️ **Automatic agent selection failed**\n\n${message}`,
+          },
+          Date.now(),
+        );
         return { shouldProceed: true };
       }
     },

@@ -102,8 +102,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     [],
   );
 
-  useInput(
-    (input, key) => {
+  const handleInput = useCallback(
+    (input: string, key: any) => {
       if (!interactive) {
         return;
       }
@@ -156,8 +156,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         executeAction(actions.find((action) => action.raw === '/settings'));
       }
     },
-    { isActive: interactive },
+    [interactive, searchFocused, visibleActions, executeAction, actions],
   );
+
+  useInput(handleInput, { isActive: interactive });
 
   const hintColor = design.colors.text.muted;
   const selectedColor = design.colors.text.accent;
@@ -243,3 +245,5 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </Surface>
   );
 };
+
+export const MemoizedSidebar = React.memo(Sidebar);

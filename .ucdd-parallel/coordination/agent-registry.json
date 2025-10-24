@@ -1,0 +1,118 @@
+{
+  "agent_registry": {
+    "version": "1.0.0",
+    "last_updated": "2025-10-16T21:20:28Z",
+    "registered_agents": [
+      {
+        "name": "parallel-orchestrator-agent",
+        "type": "orchestrator",
+        "status": "available",
+        "capabilities": ["coordination", "resource_management", "pipeline_orchestration"],
+        "max_concurrent_tasks": 10,
+        "resource_requirements": {
+          "memory_mb": 256,
+          "cpu_cores": 2
+        }
+      },
+      {
+        "name": "specification-parallel-agent",
+        "type": "specialist",
+        "status": "available",
+        "capabilities": ["specification_generation", "parallel_processing", "validation"],
+        "max_concurrent_tasks": 5,
+        "resource_requirements": {
+          "memory_mb": 128,
+          "cpu_cores": 1
+        }
+      },
+      {
+        "name": "test-parallel-agent",
+        "type": "specialist",
+        "status": "available",
+        "capabilities": ["test_generation", "parallel_testing", "quality_assurance"],
+        "max_concurrent_tasks": 8,
+        "resource_requirements": {
+          "memory_mb": 192,
+          "cpu_cores": 2
+        }
+      },
+      {
+        "name": "realization-parallel-agent",
+        "type": "specialist",
+        "status": "available",
+        "capabilities": ["implementation", "parallel_realization", "code_generation"],
+        "max_concurrent_tasks": 6,
+        "resource_requirements": {
+          "memory_mb": 256,
+          "cpu_cores": 2
+        }
+      },
+      {
+        "name": "evaluation-parallel-agent",
+        "type": "specialist",
+        "status": "available",
+        "capabilities": ["evaluation", "parallel_analysis", "metrics_collection"],
+        "max_concurrent_tasks": 4,
+        "resource_requirements": {
+          "memory_mb": 160,
+          "cpu_cores": 1
+        }
+      },
+      {
+        "name": "adaptation-parallel-agent",
+        "type": "specialist",
+        "status": "available",
+        "capabilities": ["adaptation", "parallel_optimization", "refinement"],
+        "max_concurrent_tasks": 3,
+        "resource_requirements": {
+          "memory_mb": 192,
+          "cpu_cores": 1
+        }
+      },
+      {
+        "name": "visualization-parallel-agent",
+        "type": "specialist",
+        "status": "available",
+        "capabilities": ["visualization", "parallel_rendering", "multi_format_output"],
+        "max_concurrent_tasks": 4,
+        "resource_requirements": {
+          "memory_mb": 224,
+          "cpu_cores": 2
+        }
+      },
+      {
+        "name": "graph-storage-parallel-agent",
+        "type": "infrastructure",
+        "status": "available",
+        "capabilities": ["graph_storage", "parallel_data_management", "consistency"],
+        "max_concurrent_tasks": 8,
+        "resource_requirements": {
+          "memory_mb": 128,
+          "cpu_cores": 1
+        }
+      },
+      {
+        "name": "coordination-agent",
+        "type": "infrastructure",
+        "status": "available",
+        "capabilities": ["coordination", "synchronization", "conflict_resolution"],
+        "max_concurrent_tasks": 6,
+        "resource_requirements": {
+          "memory_mb": 96,
+          "cpu_cores": 1
+        }
+      },
+      {
+        "name": "pipeline-agent",
+        "type": "infrastructure",
+        "status": "available",
+        "capabilities": ["pipeline_management", "parallel_execution", "workflow_orchestration"],
+        "max_concurrent_tasks": 4,
+        "resource_requirements": {
+          "memory_mb": 160,
+          "cpu_cores": 2
+        }
+      }
+    ]
+  }
+}

@@ -5,7 +5,7 @@
  */
 
 import type React from 'react';
-import { Text, Box } from 'ink';
+import { Text } from 'ink';
 import { Colors } from '../../colors.js';
 import { RenderInline } from '../../utils/InlineMarkdownRenderer.js';
 
@@ -14,19 +14,9 @@ interface InfoMessageProps {
 }
 
 export const InfoMessage: React.FC<InfoMessageProps> = ({ text }) => {
-  const prefix = 'ℹ ';
-  const prefixWidth = prefix.length;
-
   return (
-    <Box flexDirection="row" marginTop={1}>
-      <Box width={prefixWidth}>
-        <Text color={Colors.AccentYellow}>{prefix}</Text>
-      </Box>
-      <Box flexGrow={1}>
-        <Text wrap="wrap" color={Colors.AccentYellow}>
-          <RenderInline text={text} />
-        </Text>
-      </Box>
-    </Box>
+    <Text wrap="wrap" color={Colors.AccentYellow}>
+      ℹ <RenderInline text={text} />
+    </Text>
   );
 };

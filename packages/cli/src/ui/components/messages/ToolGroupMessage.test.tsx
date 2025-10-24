@@ -16,7 +16,7 @@ import type {
 import { TOOL_STATUS } from '../../constants.js';
 
 vi.mock('./ToolMessage.js', () => ({
-  ToolMessage: function MockToolMessage({
+  ToolMessageMemoized: function MockToolMessage({
     callId,
     name,
     description,

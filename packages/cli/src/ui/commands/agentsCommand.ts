@@ -5,6 +5,7 @@
  */
 
 import { MessageType } from '../types.js';
+import { appEvents, AppEvent } from '../../utils/events.js';
 import { CommandKind, type SlashCommand } from './types.js';
 
 // Dynamic imports for agent services
@@ -33,8 +34,10 @@ async function getAgentSelectorService(config: any) {
       !!config,
     );
     try {
-      await instance.initialize(config);
-      console.log('[DEBUG] AgentSelectorService initialized successfully');
+      if (!instance.hasInitializedWith?.(config)) {
+        await instance.initialize(config);
+        console.log('[DEBUG] AgentSelectorService initialized successfully');
+      }
     } catch (error) {
       console.warn('Failed to initialize AgentSelectorService:', error);
       return null;
@@ -94,6 +97,10 @@ Please verify your API keys and optional connector packages, then try again.`,
 
         // Enable automatic mode
         selectorService.setAutoMode(true);
+        if (selectorService.cancelActiveExecution) {
+          selectorService.cancelActiveExecution('auto-mode-enabled');
+        }
+        appEvents.emit(AppEvent.ResetMultiAgentPanel);
 
         context.ui.addItem(
           {
@@ -148,6 +155,16 @@ Please verify your API keys and optional connector packages, then try again.`,
 
         // Disable automatic mode
         selectorService.setAutoMode(false);
+        if (selectorService.cancelActiveExecution) {
+          selectorService.cancelActiveExecution('auto-mode-disabled');
+        }
+        const agentManager = await getAgentManager();
+        if (agentManager) {
+          await agentManager.deactivateAllAgents().catch((error: unknown) => {
+            console.warn('Failed to deactivate agents after disabling auto mode:', error);
+          });
+        }
+        appEvents.emit(AppEvent.ResetMultiAgentPanel);
 
         context.ui.addItem(
           {

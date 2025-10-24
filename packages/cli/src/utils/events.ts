@@ -11,6 +11,7 @@ export enum AppEvent {
   LogError = 'log-error',
   // UI redesign events
   ToggleSidebar = 'toggle-sidebar',
+  ToggleActivityRail = 'toggle-activity-rail',
   ToggleContextPanel = 'toggle-context-panel',
   ToggleWorkflowProgress = 'toggle-workflow-progress',
   OpenCommandPalette = 'open-command-palette',
@@ -19,6 +20,8 @@ export enum AppEvent {
   ResetUILayout = 'reset-ui-layout',
   SetFocusRegion = 'set-focus-region',
   SetLayoutMode = 'set-layout-mode',
+  CaptureStatusSnapshot = 'capture-status-snapshot',
+  ResetMultiAgentPanel = 'reset-multi-agent-panel',
   // Provider events
   ProviderChanged = 'provider-changed',
 }

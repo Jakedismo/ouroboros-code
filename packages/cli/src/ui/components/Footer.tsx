@@ -13,7 +13,7 @@ import { ConsoleSummaryDisplay } from './ConsoleSummaryDisplay.js';
 import process from 'node:process';
 import path from 'node:path';
 import Gradient from 'ink-gradient';
-import { MemoryUsageDisplay } from './MemoryUsageDisplay.js';
+
 import { ContextUsageDisplay } from './ContextUsageDisplay.js';
 import { DebugProfiler } from './DebugProfiler.js';
 
@@ -29,7 +29,7 @@ interface FooterProps {
   corgiMode: boolean;
   errorCount: number;
   showErrorDetails: boolean;
-  showMemoryUsage?: boolean;
+
   promptTokenCount: number;
   nightly: boolean;
   vimMode?: string;
@@ -45,7 +45,7 @@ export const Footer: React.FC<FooterProps> = ({
   corgiMode,
   errorCount,
   showErrorDetails,
-  showMemoryUsage,
+
   promptTokenCount,
   nightly,
   vimMode,
@@ -152,7 +152,7 @@ export const Footer: React.FC<FooterProps> = ({
             <ConsoleSummaryDisplay errorCount={errorCount} />
           </Box>
         )}
-        {showMemoryUsage && <MemoryUsageDisplay />}
+
       </Box>
     </Box>
   );

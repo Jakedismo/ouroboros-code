@@ -5,9 +5,13 @@
  */
 
 import Ajv from 'ajv';
+import type { Ajv as AjvInstance, Options } from 'ajv';
 import * as addFormats from 'ajv-formats';
 
-const ajValidator = new Ajv();
+const AjvConstructor = (Ajv as unknown as {
+  new (options?: Options): AjvInstance;
+});
+const ajValidator = new AjvConstructor();
 const addFormatsFunc = (addFormats as any).default || addFormats;
 try {
   addFormatsFunc(ajValidator);

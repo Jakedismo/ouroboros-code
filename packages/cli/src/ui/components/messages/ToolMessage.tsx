@@ -75,7 +75,11 @@ export const ToolMessage: React.FC<ToolMessageProps> = ({
           status={status}
           description={description}
           emphasis={emphasis}
-          agentLabel={agentName ? `${agentEmoji ? agentEmoji + ' ' : ''}${agentName}` : undefined}
+          agentLabel={
+            agentName
+              ? `${agentEmoji ? agentEmoji + ' ' : ''}${agentName}`
+              : undefined
+          }
         />
         {emphasis === 'high' && <TrailingIndicator />}
       </Box>
@@ -127,7 +131,7 @@ const ToolStatusIndicator: React.FC<ToolStatusIndicatorProps> = ({
     )}
     {status === ToolCallStatus.Executing && (
       <GeminiRespondingSpinner
-        spinnerType="toggle"
+        spinnerType="dots"
         nonRespondingDisplay={TOOL_STATUS.EXECUTING}
       />
     )}
@@ -188,9 +192,7 @@ const ToolInfo: React.FC<ToolInfo> = ({
         wrap="truncate-end"
         strikethrough={status === ToolCallStatus.Canceled}
       >
-        {agentLabel && (
-          <Text color={Colors.Comment}>{`[${agentLabel}] `}</Text>
-        )}
+        {agentLabel && <Text color={Colors.Comment}>{`[${agentLabel}] `}</Text>}
         <Text color={nameColor} bold>
           {name}
         </Text>{' '}
@@ -206,3 +208,29 @@ const TrailingIndicator: React.FC = () => (
     ←
   </Text>
 );
+export const ToolMessageMemoized = React.memo(ToolMessage, (prev, next) => {
+  // Compare all props that affect rendering
+  const propsEqual =
+    prev.callId === next.callId &&
+    prev.name === next.name &&
+    prev.description === next.description &&
+    prev.resultDisplay === next.resultDisplay &&
+    prev.status === next.status &&
+    prev.availableTerminalHeight === next.availableTerminalHeight &&
+    prev.terminalWidth === next.terminalWidth &&
+    prev.emphasis === next.emphasis &&
+    prev.renderOutputAsMarkdown === next.renderOutputAsMarkdown &&
+    prev.agentName === next.agentName &&
+    prev.agentEmoji === next.agentEmoji &&
+    prev.confirmationDetails === next.confirmationDetails;
+  if (!propsEqual) {
+    console.log('[ToolMessage] Props not equal, re-rendering:', {
+      callId: prev.callId,
+      prevStatus: prev.status,
+      nextStatus: next.status,
+      prevResultDisplay: prev.resultDisplay,
+      nextResultDisplay: next.resultDisplay,
+    });
+  }
+  return propsEqual;
+});

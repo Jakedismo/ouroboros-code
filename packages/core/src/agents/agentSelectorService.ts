@@ -12,6 +12,7 @@ import { AgentManager } from './agentManager.js';
 import { AGENT_PERSONAS, getAgentById, type AgentPersona } from './personas.js';
 import {
   MultiAgentExecutor,
+  MultiAgentAbortedError,
   type MultiAgentExecutionResult,
   type MultiAgentExecutionHooks,
 } from './multiAgentExecutor.js';
@@ -78,6 +79,9 @@ export class AgentSelectorService {
   ];
   private multiAgentExecutor: MultiAgentExecutor | null = null;
   private lastExecutionSummary: MultiAgentExecutionResult | null = null;
+  private initialized = false;
+  private initializedConfigRef: Config | null = null;
+  private activeExecutionAbortController: AbortController | null = null;
 
   private getProviderDefaultModel(): string {
     const provider = this.config?.getProvider();
@@ -106,6 +110,10 @@ export class AgentSelectorService {
    * @param config - Active configuration (provides the shared AgentsClient/content generator)
    */
   async initialize(config: Config): Promise<void> {
+    if (this.initialized && this.initializedConfigRef === config) {
+      return;
+    }
+
     this.config = config;
     this.unifiedClient = new UnifiedAgentsClient(config);
 
@@ -118,6 +126,8 @@ export class AgentSelectorService {
       defaultModel,
       client: this.unifiedClient,
     });
+    this.initialized = true;
+    this.initializedConfigRef = config;
   }
 
   /**
@@ -125,6 +135,14 @@ export class AgentSelectorService {
    */
   setAutoMode(enabled: boolean): void {
     this.isAutoModeActive = enabled;
+    if (!enabled) {
+      this.cancelActiveExecution('auto-mode-disabled');
+      if (this.agentManager) {
+        void this.agentManager.deactivateAllAgents().catch(error => {
+          console.warn('Failed to deactivate agents during auto-mode shutdown:', error);
+        });
+      }
+    }
   }
 
   /**
@@ -369,26 +387,18 @@ ${userPrompt}`;
           outputType: selectionSchema,
         }),
       input: userInput,
+      parallelToolCalls: false,
     });
 
-    const finalOutput = runResult.finalOutput;
-    if (!finalOutput || typeof finalOutput !== 'object') {
-      throw new Error('Selection model did not return structured output');
-    }
-
-    const parsed = finalOutput as Record<string, unknown>;
+    const parsed = this.parseSelectionPayload(runResult.finalOutput, model);
     const rawAgentIds = parsed['agentIds'];
-    if (!Array.isArray(rawAgentIds) || rawAgentIds.length === 0) {
+
+    const candidateIds = normalizeAgentIds(rawAgentIds);
+    if (candidateIds.length === 0) {
       throw new Error(`Model ${model} returned no agent IDs`);
     }
 
-    const uniqueAgentIds = Array.from(
-      new Set(
-        rawAgentIds.filter((value): value is string =>
-          typeof value === 'string' && value.trim().length > 0,
-        ),
-      ),
-    );
+    const uniqueAgentIds = Array.from(new Set(candidateIds));
 
     let clampedAgentIds = uniqueAgentIds.slice(0, 10);
     if (clampedAgentIds.length === 0) {
@@ -408,8 +418,15 @@ ${userPrompt}`;
         ? parsed['reasoning']
         : 'No reasoning provided.';
     const confidenceValue =
-      typeof parsed['confidence'] === 'number' ? parsed['confidence'] : 0;
-    const confidence = Math.min(1, Math.max(0, confidenceValue));
+      typeof parsed['confidence'] === 'number'
+        ? parsed['confidence']
+        : typeof parsed['confidence'] === 'string'
+          ? Number.parseFloat(parsed['confidence'] as string)
+          : 0;
+    const confidence =
+      Number.isFinite(confidenceValue) && !Number.isNaN(confidenceValue)
+        ? Math.min(1, Math.max(0, confidenceValue))
+        : 0;
     const taskCategory =
       typeof parsed['taskCategory'] === 'string'
         ? parsed['taskCategory']
@@ -423,6 +440,41 @@ ${userPrompt}`;
     };
   }
 
+  private parseSelectionPayload(raw: unknown, model: string): Record<string, unknown> {
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      return raw as Record<string, unknown>;
+    }
+
+    if (raw && typeof (raw as { toJSON?: () => unknown }).toJSON === 'function') {
+      const candidate = (raw as { toJSON: () => unknown }).toJSON();
+      if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+        return candidate as Record<string, unknown>;
+      }
+    }
+
+    if (typeof raw === 'string') {
+      const attempts = [raw, extractFirstJsonObject(raw)]
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+
+      for (const attempt of attempts) {
+        try {
+          const parsed = JSON.parse(attempt);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return parsed as Record<string, unknown>;
+          }
+        } catch (_error) {
+          // proceed to next attempt
+        }
+      }
+    }
+
+    throw new Error(
+      `Selection model ${model} did not return parsable structured output`,
+    );
+  }
+
   async executeWithSelectedAgents(
     userPrompt: string,
     agents: AgentPersona[],
@@ -432,25 +484,47 @@ ${userPrompt}`;
       return null;
     }
 
-    const execution = await this.multiAgentExecutor.execute(
-      userPrompt,
-      agents,
-      hooks,
-    );
-    this.lastExecutionSummary = execution;
+    this.cancelActiveExecution('replacing-active-execution');
 
-    const latestEntry = this.selectionHistory[this.selectionHistory.length - 1];
-    if (latestEntry) {
-      latestEntry.aggregateReasoning = execution.aggregateReasoning;
-      latestEntry.toolSummary = execution.agentResults.reduce<
-        Record<string, number>
-      >((acc, result) => {
-        acc[result.agent.id] = result.toolEvents?.length ?? 0;
-        return acc;
-      }, {});
+    const controller = new AbortController();
+    this.activeExecutionAbortController = controller;
+
+    try {
+      const execution = await this.multiAgentExecutor.execute(
+        userPrompt,
+        agents,
+        hooks,
+        { abortSignal: controller.signal },
+      );
+
+      if (this.activeExecutionAbortController === controller) {
+        this.activeExecutionAbortController = null;
+      }
+
+      this.lastExecutionSummary = execution;
+
+      const latestEntry = this.selectionHistory[this.selectionHistory.length - 1];
+      if (latestEntry) {
+        latestEntry.aggregateReasoning = execution.aggregateReasoning;
+        latestEntry.toolSummary = execution.agentResults.reduce<
+          Record<string, number>
+        >((acc, result) => {
+          acc[result.agent.id] = result.toolEvents?.length ?? 0;
+          return acc;
+        }, {});
+      }
+
+      return execution;
+    } catch (error) {
+      if (error instanceof MultiAgentAbortedError) {
+        return null;
+      }
+      throw error;
+    } finally {
+      if (this.activeExecutionAbortController === controller) {
+        this.activeExecutionAbortController = null;
+      }
     }
-
-    return execution;
   }
 
   /**
@@ -509,6 +583,28 @@ ${userPrompt}`;
     timestamp: number;
   }> {
     return this.selectionHistory.slice(-limit);
+  }
+
+  cancelActiveExecution(reason?: string): void {
+    if (!this.activeExecutionAbortController) {
+      return;
+    }
+    if (reason) {
+      console.debug('[AgentSelectorService] Cancelling active execution:', reason);
+    }
+    try {
+      this.activeExecutionAbortController.abort();
+    } finally {
+      this.activeExecutionAbortController = null;
+    }
+  }
+
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  hasInitializedWith(config: Config): boolean {
+    return this.initialized && this.initializedConfigRef === config;
   }
 
   /**
@@ -744,4 +840,95 @@ Select the most appropriate agents for this user request:`;
       lastExecutionSummary: this.lastExecutionSummary,
     };
   }
+}
+
+function normalizeAgentIds(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return normalizeAgentIds(parsed);
+        }
+      } catch (_error) {
+        // fall back to delimiter parsing below
+      }
+    }
+
+    return trimmed
+      .split(/[,\n]/)
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0);
+  }
+
+  return [];
+}
+
+function extractFirstJsonObject(text: string | undefined): string | null {
+  if (!text) {
+    return null;
+  }
+
+  let depth = 0;
+  let startIndex = -1;
+  let inString = false;
+  let isEscaped = false;
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        isEscaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') {
+      if (depth === 0) {
+        startIndex = index;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}') {
+      if (depth > 0) {
+        depth -= 1;
+        if (depth === 0 && startIndex !== -1) {
+          return text.slice(startIndex, index + 1);
+        }
+      }
+      continue;
+    }
+  }
+
+  return null;
 }

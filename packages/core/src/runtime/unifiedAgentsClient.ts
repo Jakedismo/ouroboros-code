@@ -21,7 +21,10 @@ import {
   type ProviderConnectorRegistry,
 } from './providerConnectors.js';
 import { adaptToolsToAgents } from './toolAdapter.js';
-import type { ToolCallRequestInfo, ToolCallResponseInfo } from '../core/turn.js';
+import type {
+  ToolCallRequestInfo,
+  ToolCallResponseInfo,
+} from '../core/turn.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type {
   UnifiedAgentMessage,
@@ -31,7 +34,10 @@ import type {
   UnifiedAgentStreamOptions,
 } from './types.js';
 import { SessionManager, type SessionStorage } from './sessionManager.js';
-import { createHostedWebSearchTool, HOSTED_WEB_SEARCH_NAME } from '../tools/web-search-sdk.js';
+import {
+  createHostedWebSearchTool,
+  HOSTED_WEB_SEARCH_NAME,
+} from '../tools/web-search-sdk.js';
 
 export interface UnifiedAgentsClientOptions {
   connectorRegistry?: ProviderConnectorRegistry;
@@ -66,8 +72,12 @@ export class UnifiedAgentsClient {
   >();
   private readonly lastNonEmptyMessageBySession = new Map<string, string>();
 
-  constructor(private readonly config: Config, options: UnifiedAgentsClientOptions = {}) {
-    this.connectors = options.connectorRegistry ?? createDefaultConnectorRegistry();
+  constructor(
+    private readonly config: Config,
+    options: UnifiedAgentsClientOptions = {},
+  ) {
+    this.connectors =
+      options.connectorRegistry ?? createDefaultConnectorRegistry();
     this.sessionManager = options.sessionManager;
     this.options = options;
   }
@@ -103,10 +113,13 @@ export class UnifiedAgentsClient {
     return this.config.getApprovalMode?.() ?? ApprovalMode.DEFAULT;
   }
 
-  async createSession(sessionConfig: UnifiedAgentSessionConfig): Promise<UnifiedAgentSession> {
+  async createSession(
+    sessionConfig: UnifiedAgentSessionConfig,
+  ): Promise<UnifiedAgentSession> {
     const connector = this.requireConnector(sessionConfig.providerId);
 
-    const apiKeyResolver = () => this.resolveApiKey(sessionConfig.providerId, sessionConfig.metadata);
+    const apiKeyResolver = () =>
+      this.resolveApiKey(sessionConfig.providerId, sessionConfig.metadata);
     const context = { resolveApiKey: apiKeyResolver };
 
     const [modelHandle, modelProvider] = await Promise.all([
@@ -120,9 +133,10 @@ export class UnifiedAgentsClient {
 
     if (this.sessionManager) {
       // Check if session ID is provided in metadata (for session restoration)
-      const providedSessionId = typeof sessionConfig.metadata?.['sessionId'] === 'string'
-        ? (sessionConfig.metadata['sessionId'] as string)
-        : undefined;
+      const providedSessionId =
+        typeof sessionConfig.metadata?.['sessionId'] === 'string'
+          ? (sessionConfig.metadata['sessionId'] as string)
+          : undefined;
 
       if (providedSessionId) {
         // Restore existing session
@@ -173,7 +187,11 @@ export class UnifiedAgentsClient {
       const persistedItems = await sessionStorage.getItems();
 
       // Convert only NEW incoming messages (not already in session)
-      const newItems = this.convertMessagesToInput(messages, session.id, session.systemPrompt);
+      const newItems = this.convertMessagesToInput(
+        messages,
+        session.id,
+        session.systemPrompt,
+      );
 
       // Combine: existing history + new user input for this turn
       inputItems = [...persistedItems, ...newItems];
@@ -185,8 +203,16 @@ export class UnifiedAgentsClient {
       );
     } else {
       // No session storage - legacy ephemeral mode
-      inputItems = this.convertMessagesToInput(messages, session.id, session.systemPrompt);
-      this.debugLog('session-ephemeral', session.id, `Ephemeral mode: ${inputItems.length} items`);
+      inputItems = this.convertMessagesToInput(
+        messages,
+        session.id,
+        session.systemPrompt,
+      );
+      this.debugLog(
+        'session-ephemeral',
+        session.id,
+        `Ephemeral mode: ${inputItems.length} items`,
+      );
     }
 
     const modelSettings = this.buildModelSettings(session, options);
@@ -197,12 +223,11 @@ export class UnifiedAgentsClient {
     const runner = this.getRunnerForSession(session, modelSettings);
 
     if (this.isDebugEnabled('OUROBOROS_DEBUG_PROMPT')) {
-      this.debugLog(
-        'prompt',
-        session.providerId,
-        session.model,
-        (session.systemPrompt ?? '').slice(0, 800),
+      const prompt = session.systemPrompt ?? '';
+      console.log(
+        `[SYSTEM_PROMPT] Provider: ${session.providerId}, Model: ${session.model}, Length: ${prompt.length}`,
       );
+      console.log(`[SYSTEM_PROMPT] Full content:\n${prompt}`);
     }
 
     const streamResult = (await runner.run(agent, inputItems, {
@@ -227,7 +252,8 @@ export class UnifiedAgentsClient {
     this.clearPendingApprovalsForSession(session.id);
 
     const finalText =
-      this.extractFinalOutputText(streamResult) || streamedChunks.filter(Boolean).join('\n');
+      this.extractFinalOutputText(streamResult) ||
+      streamedChunks.filter(Boolean).join('\n');
 
     // Persist conversation state to session storage after turn completes
     if (sessionStorage) {
@@ -241,7 +267,11 @@ export class UnifiedAgentsClient {
         await sessionStorage.clearSession();
         await sessionStorage.addItems(completeState);
 
-        this.debugLog('session-persist', session.id, `Session updated: ${completeState.length} total items`);
+        this.debugLog(
+          'session-persist',
+          session.id,
+          `Session updated: ${completeState.length} total items`,
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`Failed to persist session ${session.id}:`, message);
@@ -265,8 +295,14 @@ export class UnifiedAgentsClient {
     return connector;
   }
 
-  private resolveApiKey(providerId: string, metadata?: Record<string, unknown>): string | undefined {
-    const metadataApiKey = typeof metadata?.['apiKey'] === 'string' ? (metadata['apiKey'] as string) : undefined;
+  private resolveApiKey(
+    providerId: string,
+    metadata?: Record<string, unknown>,
+  ): string | undefined {
+    const metadataApiKey =
+      typeof metadata?.['apiKey'] === 'string'
+        ? (metadata['apiKey'] as string)
+        : undefined;
     if (metadataApiKey) return metadataApiKey;
 
     if (providerId === this.config.getProvider()) {
@@ -311,15 +347,18 @@ export class UnifiedAgentsClient {
     modelSettings: Partial<ModelSettings>,
   ): Agent {
     const registry = this.config.getToolRegistry();
-    const agentId = typeof session.metadata?.['agentId'] === 'string'
-      ? (session.metadata['agentId'] as string)
-      : undefined;
-    const agentName = typeof session.metadata?.['agentName'] === 'string'
-      ? (session.metadata['agentName'] as string)
-      : undefined;
-    const agentEmoji = typeof session.metadata?.['agentEmoji'] === 'string'
-      ? (session.metadata['agentEmoji'] as string)
-      : undefined;
+    const agentId =
+      typeof session.metadata?.['agentId'] === 'string'
+        ? (session.metadata['agentId'] as string)
+        : undefined;
+    const agentName =
+      typeof session.metadata?.['agentName'] === 'string'
+        ? (session.metadata['agentName'] as string)
+        : undefined;
+    const agentEmoji =
+      typeof session.metadata?.['agentEmoji'] === 'string'
+        ? (session.metadata['agentEmoji'] as string)
+        : undefined;
     const adaptedTools = adaptToolsToAgents({
       registry,
       config: this.config,
@@ -327,18 +366,20 @@ export class UnifiedAgentsClient {
       agentId,
       agentName,
       agentEmoji,
-      onToolExecuted:
-        this.options.onToolExecuted
-          ? ({ request, response }) =>
-              this.options.onToolExecuted?.({ session, request, response })
-          : undefined,
+      onToolExecuted: this.options.onToolExecuted
+        ? ({ request, response }) =>
+            this.options.onToolExecuted?.({ session, request, response })
+        : undefined,
     });
 
     const hostedTools = this.getHostedToolsForSession(session, registry);
 
     let tools: AgentsTool[] = adaptedTools;
 
-    if (Array.isArray(options.toolsOverride) && options.toolsOverride.length > 0) {
+    if (
+      Array.isArray(options.toolsOverride) &&
+      options.toolsOverride.length > 0
+    ) {
       tools = options.toolsOverride;
     } else if (
       Array.isArray(options.toolsAugmentation) &&
@@ -375,7 +416,8 @@ export class UnifiedAgentsClient {
 
     const agentOptions: AgentOptions<any, any> = {
       name: 'ouroboros-unified-agent',
-      instructions: session.systemPrompt ?? 'You are the Ouroboros unified assistant.',
+      instructions:
+        session.systemPrompt ?? 'You are the Ouroboros unified assistant.',
       model: session.modelHandle!,
       modelSettings,
       tools,
@@ -456,35 +498,39 @@ export class UnifiedAgentsClient {
     ].join('::');
   }
 
-  async runAgentOnce(
-    options: {
-      sessionConfig: UnifiedAgentSessionConfig & { systemPrompt?: string };
-      buildAgent: (args: {
-        session: UnifiedAgentSession;
-        modelSettings: Partial<ModelSettings>;
-      }) => Agent<any, any>;
-      input: string | AgentInputItem[];
-      context?: unknown;
-      onAgentEvent?: (event:
+  async runAgentOnce(options: {
+    sessionConfig: UnifiedAgentSessionConfig & { systemPrompt?: string };
+    buildAgent: (args: {
+      session: UnifiedAgentSession;
+      modelSettings: Partial<ModelSettings>;
+    }) => Agent<any, any>;
+    input: string | AgentInputItem[];
+    context?: unknown;
+    parallelToolCalls?: boolean;
+    onAgentEvent?: (
+      event:
         | { type: 'agent_start'; agent: Agent<any, any> }
         | { type: 'agent_end'; agent: Agent<any, any>; output: string }
         | {
             type: 'agent_handoff';
             from: Agent<any, any>;
             to: Agent<any, any>;
-          }
-      ) => void;
-    },
-  ): Promise<{
+          },
+    ) => void;
+  }): Promise<{
     session: UnifiedAgentSession;
     runResult: Awaited<ReturnType<Runner['run']>>;
   }> {
     const session = await this.createSession(options.sessionConfig);
-    const modelSettings = this.buildModelSettings(session, {});
+    const modelSettings = this.buildModelSettings(session, {
+      parallelToolCalls: options.parallelToolCalls,
+    });
     const agent = options.buildAgent({ session, modelSettings });
     const runner = this.getRunnerForSession(session, modelSettings);
 
-    const handlers: Array<[Parameters<Runner['on']>[0], (...args: unknown[]) => void]> = [];
+    const handlers: Array<
+      [Parameters<Runner['on']>[0], (...args: unknown[]) => void]
+    > = [];
 
     if (options.onAgentEvent) {
       const forward = options.onAgentEvent;
@@ -508,7 +554,11 @@ export class UnifiedAgentsClient {
       runner.on('agent_start', startHandler);
       runner.on('agent_end', endHandler);
       runner.on('agent_handoff', handoffHandler);
-      handlers.push(['agent_start', startHandler], ['agent_end', endHandler], ['agent_handoff', handoffHandler]);
+      handlers.push(
+        ['agent_start', startHandler],
+        ['agent_end', endHandler],
+        ['agent_handoff', handoffHandler],
+      );
     }
 
     try {
@@ -522,7 +572,6 @@ export class UnifiedAgentsClient {
       }
     }
   }
-
 
   private toSignatureString(value: unknown): string {
     if (value === null || value === undefined) {
@@ -554,7 +603,11 @@ export class UnifiedAgentsClient {
     if (sessionId) {
       if (firstNonEmpty && firstNonEmpty.length > 0) {
         this.lastNonEmptyMessageBySession.set(sessionId, firstNonEmpty);
-      } else if (initialPrompt && initialPrompt.trim().length > 0 && !this.lastNonEmptyMessageBySession.has(sessionId)) {
+      } else if (
+        initialPrompt &&
+        initialPrompt.trim().length > 0 &&
+        !this.lastNonEmptyMessageBySession.has(sessionId)
+      ) {
         this.lastNonEmptyMessageBySession.set(sessionId, initialPrompt.trim());
       }
     }
@@ -575,11 +628,14 @@ export class UnifiedAgentsClient {
     }
 
     if (converted.length === 0) {
-      let fallbackText = sessionId ? this.lastNonEmptyMessageBySession.get(sessionId) : undefined;
+      let fallbackText = sessionId
+        ? this.lastNonEmptyMessageBySession.get(sessionId)
+        : undefined;
       if (!fallbackText || fallbackText.trim().length === 0) {
-        fallbackText = firstNonEmpty && firstNonEmpty.length > 0
-          ? firstNonEmpty
-          : initialPrompt?.trim();
+        fallbackText =
+          firstNonEmpty && firstNonEmpty.length > 0
+            ? firstNonEmpty
+            : initialPrompt?.trim();
       }
       if (!fallbackText || fallbackText.trim().length === 0) {
         fallbackText = 'Please continue the task based on prior context.';
@@ -588,7 +644,10 @@ export class UnifiedAgentsClient {
       if (sessionId) {
         this.lastNonEmptyMessageBySession.set(sessionId, fallbackText);
       }
-      if (this.isDebugEnabled('OUROBOROS_DEBUG_PROMPT') || process.env['OUROBOROS_DEBUG']) {
+      if (
+        this.isDebugEnabled('OUROBOROS_DEBUG_PROMPT') ||
+        process.env['OUROBOROS_DEBUG']
+      ) {
         this.debugLog('fallback-input', fallbackText);
       }
     }
@@ -616,14 +675,17 @@ export class UnifiedAgentsClient {
         return text.length > 0 ? assistant(text) : null;
       }
       case 'tool': {
-        const functionResponse = message.metadata?.['functionResponse'] as Record<string, unknown> | undefined;
+        const functionResponse = message.metadata?.['functionResponse'] as
+          | Record<string, unknown>
+          | undefined;
         if (!functionResponse) {
           return null;
         }
 
-        const statusRaw = typeof functionResponse['status'] === 'string'
-          ? (functionResponse['status'] as string)
-          : undefined;
+        const statusRaw =
+          typeof functionResponse['status'] === 'string'
+            ? (functionResponse['status'] as string)
+            : undefined;
         const status = statusRaw ? statusRaw.toLowerCase() : 'completed';
         const terminalStatuses = new Set([
           'completed',
@@ -637,11 +699,12 @@ export class UnifiedAgentsClient {
           return null;
         }
 
-        const callId = typeof functionResponse['callId'] === 'string'
-          ? (functionResponse['callId'] as string)
-          : typeof functionResponse['id'] === 'string'
-            ? (functionResponse['id'] as string)
-            : message.toolCallId ?? 'tool-call';
+        const callId =
+          typeof functionResponse['callId'] === 'string'
+            ? (functionResponse['callId'] as string)
+            : typeof functionResponse['id'] === 'string'
+              ? (functionResponse['id'] as string)
+              : (message.toolCallId ?? 'tool-call');
         if (callId && options.seenToolResults?.has(callId)) {
           return null;
         }
@@ -649,9 +712,10 @@ export class UnifiedAgentsClient {
           options.seenToolResults?.add(callId);
         }
 
-        const name = typeof functionResponse['name'] === 'string'
-          ? (functionResponse['name'] as string)
-          : 'tool';
+        const name =
+          typeof functionResponse['name'] === 'string'
+            ? (functionResponse['name'] as string)
+            : 'tool';
         const rawOutput = functionResponse['response'];
         let outputText: string;
         if (typeof rawOutput === 'string') {
@@ -702,7 +766,9 @@ export class UnifiedAgentsClient {
     if (typeof options.parallelToolCalls === 'boolean') {
       settings.parallelToolCalls = options.parallelToolCalls;
     } else if (providerId === 'openai') {
-      settings.parallelToolCalls = this.shouldEnableParallelToolCalls(session.model);
+      settings.parallelToolCalls = this.shouldEnableParallelToolCalls(
+        session.model,
+      );
     }
 
     if (providerId !== 'openai') {
@@ -720,7 +786,8 @@ export class UnifiedAgentsClient {
     if (!model) {
       return false;
     }
-    return /^gpt-5/i.test(model);
+    // Temporarily disabled for testing the TUI rendering bug
+    return false; // /^gpt-5/i.test(model);
   }
 
   private getRunnerForSession(
@@ -844,7 +911,10 @@ export class UnifiedAgentsClient {
       stream: streamResult,
     });
     const rawItem = approvalItem.rawItem as Record<string, unknown> | undefined;
-    const name = typeof rawItem?.['name'] === 'string' ? (rawItem['name'] as string) : 'unknown_tool';
+    const name =
+      typeof rawItem?.['name'] === 'string'
+        ? (rawItem['name'] as string)
+        : 'unknown_tool';
     const { args } = this.parseToolArguments(rawItem?.['arguments']);
 
     return {
@@ -905,8 +975,12 @@ export class UnifiedAgentsClient {
     }
   }
 
-  private extractApprovalCallId(approvalItem: RunToolApprovalItem): string | undefined {
-    const rawItem = approvalItem?.rawItem as Record<string, unknown> | undefined;
+  private extractApprovalCallId(
+    approvalItem: RunToolApprovalItem,
+  ): string | undefined {
+    const rawItem = approvalItem?.rawItem as
+      | Record<string, unknown>
+      | undefined;
     if (!rawItem) {
       return undefined;
     }
@@ -927,10 +1001,16 @@ export class UnifiedAgentsClient {
       return null;
     }
 
-    const name = typeof raw['name'] === 'string' ? (raw['name'] as string) : 'unknown_tool';
-    const callId = typeof raw['callId'] === 'string'
-      ? (raw['callId'] as string)
-      : (typeof raw['id'] === 'string' ? (raw['id'] as string) : undefined);
+    const name =
+      typeof raw['name'] === 'string'
+        ? (raw['name'] as string)
+        : 'unknown_tool';
+    const callId =
+      typeof raw['callId'] === 'string'
+        ? (raw['callId'] as string)
+        : typeof raw['id'] === 'string'
+          ? (raw['id'] as string)
+          : undefined;
     if (!callId) {
       return null;
     }
@@ -953,16 +1033,25 @@ export class UnifiedAgentsClient {
     };
   }
 
-  private parseToolArguments(value: unknown): { args: Record<string, unknown>; complete: boolean } {
+  private parseToolArguments(value: unknown): {
+    args: Record<string, unknown>;
+    complete: boolean;
+  } {
     if (typeof value === 'string') {
       try {
         const parsed = JSON.parse(value);
         if (parsed && typeof parsed === 'object') {
           return { args: parsed as Record<string, unknown>, complete: true };
         }
-        return { args: { value: parsed } as Record<string, unknown>, complete: true };
+        return {
+          args: { value: parsed } as Record<string, unknown>,
+          complete: true,
+        };
       } catch {
-        return { args: { raw: value } as Record<string, unknown>, complete: false };
+        return {
+          args: { raw: value } as Record<string, unknown>,
+          complete: false,
+        };
       }
     }
 
@@ -982,7 +1071,7 @@ export class UnifiedAgentsClient {
     const content = (rawItem as Record<string, unknown>)['content'];
     if (Array.isArray(content)) {
       return content
-        .map(part => this.extractTextFromPart(part))
+        .map((part) => this.extractTextFromPart(part))
         .filter(Boolean)
         .join('\n');
     }
@@ -1033,7 +1122,9 @@ export class UnifiedAgentsClient {
     return undefined;
   }
 
-  private extractReasoningSegments(item: any): Array<{ text: string; raw?: Record<string, unknown> }> {
+  private extractReasoningSegments(
+    item: any,
+  ): Array<{ text: string; raw?: Record<string, unknown> }> {
     const rawItem = this.getRawItem(item);
     if (!rawItem || typeof rawItem !== 'object') {
       return [];
@@ -1054,7 +1145,8 @@ export class UnifiedAgentsClient {
       if (!entry || typeof entry !== 'object') {
         continue;
       }
-      const text = typeof entry['text'] === 'string' ? entry['text'].trim() : '';
+      const text =
+        typeof entry['text'] === 'string' ? entry['text'].trim() : '';
       if (text.length > 0) {
         segments.push({ text, raw: record });
       }
@@ -1065,7 +1157,8 @@ export class UnifiedAgentsClient {
         ? (record['rawContent'] as Array<Record<string, unknown>>)
         : [];
       for (const entry of rawContent) {
-        const text = typeof entry?.['text'] === 'string' ? entry['text'].trim() : '';
+        const text =
+          typeof entry?.['text'] === 'string' ? entry['text'].trim() : '';
         if (text.length > 0) {
           segments.push({ text, raw: record });
         }
@@ -1101,7 +1194,11 @@ export class UnifiedAgentsClient {
     const outputParts = Array.isArray(result?.output) ? result.output : [];
     for (let i = outputParts.length - 1; i >= 0; i -= 1) {
       const part = outputParts[i];
-      if (part && typeof part.text === 'string' && part.text.trim().length > 0) {
+      if (
+        part &&
+        typeof part.text === 'string' &&
+        part.text.trim().length > 0
+      ) {
         return part.text;
       }
     }

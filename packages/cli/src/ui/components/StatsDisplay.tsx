@@ -7,7 +7,6 @@
 import type React from 'react';
 import { Box, Text } from 'ink';
 import Gradient from 'ink-gradient';
-import Table from 'ink-table';
 import chalk from 'chalk';
 import { theme } from '../semantic-colors.js';
 import { formatDuration } from '../utils/formatters.js';
@@ -22,6 +21,8 @@ import {
 } from '../utils/displayUtils.js';
 import { computeSessionStats } from '../utils/computeStats.js';
 import { SectionHeading } from '../design-system/index.js';
+import stripAnsi from 'strip-ansi';
+import stringWidth from 'string-width';
 
 // A more flexible and powerful StatRow component
 interface StatRowProps {
@@ -112,20 +113,52 @@ const ModelUsageTable: React.FC<{
     ),
   }));
 
+  const columns = [
+    { key: 'model', label: 'Model' },
+    { key: 'requests', label: 'Reqs' },
+    { key: 'inputTokens', label: 'Input Tokens' },
+    { key: 'outputTokens', label: 'Output Tokens' },
+    { key: 'cacheHitRate', label: 'Cache Hit %' },
+  ] as const;
+
+  const columnWidths = columns.map((column) =>
+    Math.max(
+      stringWidth(column.label),
+      ...tableData.map((row) => stringWidth(stripAnsi(row[column.key]))),
+    ),
+  );
+
+  const padValue = (value: string, width: number): string => {
+    const visibleWidth = stringWidth(stripAnsi(value));
+    return visibleWidth < width
+      ? `${value}${' '.repeat(width - visibleWidth)}`
+      : value;
+  };
+
   return (
     <Box flexDirection="column" marginTop={1}>
       <SectionHeading icon="📈" text="Model Usage" tone="muted" />
       <Box marginTop={1}>
-        <Table
-          data={tableData}
-          columns={[
-            { key: 'model', label: 'Model' },
-            { key: 'requests', label: 'Reqs' },
-            { key: 'inputTokens', label: 'Input Tokens' },
-            { key: 'outputTokens', label: 'Output Tokens' },
-            { key: 'cacheHitRate', label: 'Cache Hit %' },
-          ]}
-        />
+        <Box flexDirection="column">
+          <Box flexDirection="row">
+            {columns.map((column, index) => (
+              <Box key={column.key} marginRight={1}>
+                <Text color={theme.text.secondary}>
+                  {padValue(column.label, columnWidths[index])}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+          {tableData.map((row, rowIndex) => (
+            <Box key={`${row.model}-${rowIndex}`} flexDirection="row">
+              {columns.map((column, index) => (
+                <Box key={`${column.key}-${row.model}`} marginRight={1}>
+                  <Text>{padValue(row[column.key], columnWidths[index])}</Text>
+                </Box>
+              ))}
+            </Box>
+          ))}
+        </Box>
       </Box>
       {cacheEfficiency > 0 && (
         <Box flexDirection="column" marginTop={1}>

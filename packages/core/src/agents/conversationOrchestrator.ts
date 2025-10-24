@@ -301,7 +301,7 @@ export class ConversationOrchestrator {
                   errorMessage: event.errorMessage,
                   errorType: event.errorType,
                   timestamp: event.timestamp,
-                }));
+                })).sort((a, b) => a.timestamp - b.timestamp);
                 emitProgress({
                   type: 'progress',
                   message: `✅ ${result.agent.emoji} ${result.agent.name} completed (wave ${wave})`,
@@ -345,7 +345,18 @@ export class ConversationOrchestrator {
                   timestamp: toolEvent.timestamp,
                 };
                 entry.status = 'running';
-                entry.toolEvents = [...entry.toolEvents, snapshot];
+                const existingIndex = entry.toolEvents.findIndex(
+                  (candidate) => candidate.callId === snapshot.callId,
+                );
+                if (existingIndex >= 0) {
+                  const next = [...entry.toolEvents];
+                  next[existingIndex] = snapshot;
+                  entry.toolEvents = next.sort((a, b) => a.timestamp - b.timestamp);
+                } else {
+                  entry.toolEvents = [...entry.toolEvents, snapshot].sort(
+                    (a, b) => a.timestamp - b.timestamp,
+                  );
+                }
                 emitProgress({
                   type: 'progress',
                   toolEvent: { agent, event: snapshot },

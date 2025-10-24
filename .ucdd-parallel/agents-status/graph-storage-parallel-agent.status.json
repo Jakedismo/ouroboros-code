@@ -1,0 +1,15 @@
+{
+  "agent_name": "graph-storage-parallel-agent",
+  "status": "idle",
+  "last_heartbeat": "2025-10-16T21:20:28Z",
+  "current_tasks": [],
+  "completed_tasks": 0,
+  "failed_tasks": 0,
+  "resource_usage": {
+    "memory_mb": 0,
+    "cpu_percent": 0,
+    "active_connections": 0
+  },
+  "capabilities": [],
+  "availability": "available"
+}

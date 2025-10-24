@@ -1,0 +1,50 @@
+{
+  "monitoring_config": {
+    "enabled": true,
+    "collection_interval_seconds": 30,
+    "retention_days": 30,
+    "metrics": [
+      {
+        "name": "cpu_usage_percent",
+        "type": "system",
+        "threshold": 80,
+        "alert_enabled": true
+      },
+      {
+        "name": "memory_usage_mb",
+        "type": "system",
+        "threshold": 1024,
+        "alert_enabled": true
+      },
+      {
+        "name": "disk_usage_percent",
+        "type": "system",
+        "threshold": 90,
+        "alert_enabled": true
+      },
+      {
+        "name": "active_agents_count",
+        "type": "application",
+        "threshold": 20,
+        "alert_enabled": false
+      },
+      {
+        "name": "parallel_operations_per_second",
+        "type": "application",
+        "threshold": 10,
+        "alert_enabled": false
+      },
+      {
+        "name": "coordination_queue_size",
+        "type": "application",
+        "threshold": 50,
+        "alert_enabled": true
+      }
+    ],
+    "alerts": {
+      "enabled": true,
+      "notification_methods": ["log"],
+      "cooldown_minutes": 5
+    }
+  }
+}
